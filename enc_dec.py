@@ -18,13 +18,12 @@ class SpeechEncoderDecoder(Chain):
         #--------------------------------------------------------------------
         # add encoder layers
         #--------------------------------------------------------------------
-
+        scale = 2
         # add LSTM layers
         self.lstm_enc = ["L{0:d}_enc".format(i) for i in range(nlayers_enc)]
         # first LSTM layer takes speech features
         self.add_link(self.lstm_enc[0], L.LSTM(n_speech_dim, n_units))
         # add remaining layers
-        scale = 2
         for lstm_name in self.lstm_enc[1:]:
             self.add_link(lstm_name, L.LSTM(n_units*scale, n_units))
 
@@ -32,7 +31,7 @@ class SpeechEncoderDecoder(Chain):
         self.lstm_rev_enc = ["L{0:d}_rev_enc".format(i) for i in range(nlayers_enc)]
         self.add_link(self.lstm_rev_enc[0], L.LSTM(n_speech_dim, n_units))
         for lstm_name in self.lstm_rev_enc[1:]:
-            self.add_link(lstm_name, L.LSTM(n_units, n_units))
+            self.add_link(lstm_name, L.LSTM(n_units*scale, n_units))
 
         #--------------------------------------------------------------------
         # add decoder layers
@@ -58,8 +57,6 @@ class SpeechEncoderDecoder(Chain):
         # Store GPU id
         self.gpuid = gpuid
         self.n_units = n_units
-
-        xp = cuda.cupy if self.gpuid >= 0 else np
 
         # create masking array for pad id
         if gpuid >= 0:
@@ -108,8 +105,6 @@ class SpeechEncoderDecoder(Chain):
         # the output is scaled by the scale factor
         n_out_states = feat_in.shape[0] // scale
         out_dim = self[lstm_layer].state_size
-        out_states = xp.empty((0, out_dim*scale), dtype=xp.float32)
-        print(n_out_states)
 
         for i in range(0, n_out_states):
             lateral_states = self[lstm_layer](feat_in[(i*scale)])
@@ -117,27 +112,28 @@ class SpeechEncoderDecoder(Chain):
                 out = self[lstm_layer](feat_in[(i*scale)+j])
                 lateral_states = F.concat((lateral_states, out), axis=1)
             # concatenate and append lateral states into out states
-            out_states = F.concat((out_states, lateral_states), axis=0)
+            if i > 0:
+                out_states = F.concat((out_states, lateral_states), axis=0)
+            else:
+                out_states = lateral_states
         return F.expand_dims(out_states,1)
 
-    def encode_speech_lstm(self, speech_feat, train=True):
+    def encode_speech_lstm(self, speech_feat, lstm_layer_list, train=True):
         # pad the speech feat and adjust dims
 
         # _TODO_ can optimize the loops to save memory. Using nested loops for every successive LSTM layer. Feed 8 units to L0 at a time.
 
         # initialize layer 0 input as speech features
-        L_states = Variable(self.xp.expand_dims(speech_feat, 1))
+        L_states = Variable(xp.expand_dims(speech_feat, 1))
         print("speech", L_states.shape)
         # initial scale values, for every layer 
         # except the final, scale down by 2
-        scale = [2]*len(self.lstm_enc[:-1]) + [1]
+        scale = [2]*len(lstm_layer_list[:-1]) + [1]
         # feed LSTM layer
-        for i, lstm_layer in enumerate(self.lstm_enc):
+        for i, lstm_layer in enumerate(lstm_layer_list):
             print(lstm_layer, "before", L_states.shape)
             L_states = self.feed_pyramidal_lstm(L_states, lstm_layer=lstm_layer, scale=scale[i], train=train)
             print(lstm_layer, "out", L_states.shape)
-        return L_states
-
 
         return L_states
 
@@ -154,27 +150,15 @@ class SpeechEncoderDecoder(Chain):
     def encode_list(self, speech_feat, train=True):
         xp = cuda.cupy if self.gpuid >= 0 else np
         
-        # create chainer variable for forward LSTM
-        enc_in = Variable(xp.expand_dims(speech_feat,0), volatile=not train)
-        # flip the speech features row-wise for reverse LSTM
-        enc_rev_in = Variable(xp.expand_dims(xp.flipud(speech_feat),0), volatile=not train)
+        # forward LSTM
+        L_FWD_STATES = self.encode_speech_lstm(speech_feat, self.lstm_enc, train)
 
-        first_entry = True
+        L_REV_STATES = self.encode_speech_lstm(xp.flip(speech_feat, axis=0), self.lstm_rev_enc, train)
 
-        # encode tokens
-        for f_word, r_word in zip(var_en, var_rev_en):
-            self.encode(f_word, self.lstm_enc, train)
-            self.encode(r_word, self.lstm_rev_enc, train)
+        # reverse the states to align them with forward encoder
+        L_REV_STATES = xp.flip(L_REV_STATES, axis=0)
 
-            if first_entry == False:
-                forward_states = F.concat((forward_states, self[self.lstm_enc[-1]].h), axis=0)
-                backward_states = F.concat((self[self.lstm_rev_enc[-1]].h, backward_states), axis=0)
-            else:
-                forward_states = self[self.lstm_enc[-1]].h
-                backward_states = self[self.lstm_rev_enc[-1]].h
-                first_entry = False
-
-        self.enc_states = F.concat((forward_states, backward_states), axis=1)
+        self.enc_states = F.concat((L_FWD_STATES, L_REV_STATES), axis=1)
 
     def compute_context_vector(self, batches=True):
         xp = cuda.cupy if self.gpuid >= 0 else np
@@ -326,9 +310,9 @@ class SpeechEncoderDecoder(Chain):
         seq_len, batch_size = var_en.shape
 
         if self.attn:
-            self.mask = self.xp.expand_dims(fwd_encoder_batch != 0, -1)
-            self.minf = Variable(self.xp.full((batch_size, seq_len, 1), -1000.,
-                                 dtype=self.xp.float32), volatile=not train)
+            self.mask = xp.expand_dims(fwd_encoder_batch != 0, -1)
+            self.minf = Variable(xp.full((batch_size, seq_len, 1), -1000.,
+                                 dtype=xp.float32), volatile=not train)
 
         # for all sequences in the batch, feed the characters one by one
         for i in range(seq_len):
