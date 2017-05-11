@@ -76,6 +76,6 @@ if os.path.exists(w2i_path):
 num_layers_enc = 4
 num_layers_dec = 4
 use_attn = SOFT_ATTN
-hidden_units = 512
+hidden_units = 128
 
 gpuid = -1

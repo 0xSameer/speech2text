@@ -69,16 +69,13 @@ def make_npz(path, set_type):
     y_word = np.empty((N,), dtype=np.int32)
 
     for i, sp_fil in tqdm(enumerate(sp_files)):
-        print(sp_fil)
+        #print(sp_fil)
         temp_arr = np.load(sp_fil)
         frame_lengths.append(temp_arr.shape[0])
 
     print(np.mean(frame_lengths), np.std(frame_lengths), np.max(frame_lengths))
 
     return frame_lengths
-
-
-
 
 
     # with gzip.open(x_path, 'rb') as fx, gzip.open(y_path, 'rb') as fy:

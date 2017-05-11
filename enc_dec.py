@@ -24,8 +24,9 @@ class SpeechEncoderDecoder(Chain):
         # first LSTM layer takes speech features
         self.add_link(self.lstm_enc[0], L.LSTM(n_speech_dim, n_units))
         # add remaining layers
+        scale = 2
         for lstm_name in self.lstm_enc[1:]:
-            self.add_link(lstm_name, L.LSTM(n_units, n_units))
+            self.add_link(lstm_name, L.LSTM(n_units*scale, n_units))
 
         # reverse LSTM layer
         self.lstm_rev_enc = ["L{0:d}_rev_enc".format(i) for i in range(nlayers_enc)]
@@ -103,23 +104,13 @@ class SpeechEncoderDecoder(Chain):
 
     def feed_pyramidal_lstm(self, feat_in, lstm_layer, scale, train=True):
         xp = cuda.cupy if self.gpuid >= 0 else np
-
         # create empty array to store the output
         # the output is scaled by the scale factor
-        n_out_states = len(feat_in) // scale
+        n_out_states = feat_in.shape[0] // scale
         out_dim = self[lstm_layer].state_size
         out_states = xp.empty((0, out_dim*scale), dtype=xp.float32)
+        print(n_out_states)
 
-        # # feed each input from the sequence
-        # for i in range(0, n_out_states):
-        #     lateral_states = self[lstm_layer](xp.expand_dims(feat_in[(i*scale)],0))
-        #     for j in range(1, scale):
-        #         out = self[lstm_layer](xp.expand_dims(feat_in[(i*scale)+j],0))
-        #         lateral_states = F.concat((lateral_states, out), axis=1)
-        #     # concatenate and append lateral states into out states
-        #     out_states = F.concat((out_states, lateral_states), axis=0)
-        # return out_states
-        # feed each input from the sequence
         for i in range(0, n_out_states):
             lateral_states = self[lstm_layer](feat_in[(i*scale)])
             for j in range(1, scale):
@@ -127,9 +118,28 @@ class SpeechEncoderDecoder(Chain):
                 lateral_states = F.concat((lateral_states, out), axis=1)
             # concatenate and append lateral states into out states
             out_states = F.concat((out_states, lateral_states), axis=0)
-        return out_states
+        return F.expand_dims(out_states,1)
+
+    def encode_speech_lstm(self, speech_feat, train=True):
+        # pad the speech feat and adjust dims
+
+        # _TODO_ can optimize the loops to save memory. Using nested loops for every successive LSTM layer. Feed 8 units to L0 at a time.
+
+        # initialize layer 0 input as speech features
+        L_states = Variable(self.xp.expand_dims(speech_feat, 1))
+        print("speech", L_states.shape)
+        # initial scale values, for every layer 
+        # except the final, scale down by 2
+        scale = [2]*len(self.lstm_enc[:-1]) + [1]
+        # feed LSTM layer
+        for i, lstm_layer in enumerate(self.lstm_enc):
+            print(lstm_layer, "before", L_states.shape)
+            L_states = self.feed_pyramidal_lstm(L_states, lstm_layer=lstm_layer, scale=scale[i], train=train)
+            print(lstm_layer, "out", L_states.shape)
+        return L_states
 
 
+        return L_states
 
     def encode(self, speech_in, lstm_layer_list, train):
         self.feed_lstm(speech_in, lstm_layer_list, train)
