@@ -27,6 +27,7 @@ print("callhome es-en word level configuration")
 input_dir = "../../corpora/callhome/uttr_fa_vad_wavs"
 
 speech_dir = os.path.join(input_dir, "mfb_std")
+SPEECH_DIM = 120
 text_data_dict = os.path.join(input_dir, "text_split.dict")
 
 speech_extn = "_fa_vad.std.mfb"
@@ -53,7 +54,7 @@ w2i_path = os.path.join(input_dir, "w2i.dict" if not CHAR_LEVEL else "char_w2i.d
 i2w_path = os.path.join(input_dir, "i2w.dict" if not CHAR_LEVEL else "char_i2w.dict")
 
 print("translating es to en")
-model_dir = "es_en_model_char"
+model_dir = "es_speech_to_en_char_model"
 
 text_fname = {"en": os.path.join(input_dir, "train.en"), "fr": os.path.join(input_dir, "speech_train.es")}
 
@@ -78,6 +79,25 @@ num_layers_dec = 2
 use_attn = SOFT_ATTN
 hidden_units = 128
 
-gpuid = 0
+gpuid = -1
 
 xp = cuda.cupy if gpuid >= 0 else np
+
+name_to_log = "{0:d}sen_{1:d}-{2:d}layers_{3:d}units_{4:s}_{5:d}".format(
+                                                            NUM_SENTENCES,
+                                                            num_layers_enc,
+                                                            num_layers_dec,
+                                                            hidden_units,
+                                                            EXP_NAME,
+                                                            use_attn)
+
+log_train_fil_name = os.path.join(model_dir, "train_{0:s}.log".format(name_to_log))
+log_dev_fil_name = os.path.join(model_dir, "dev_{0:s}.log".format(name_to_log))
+model_fil = os.path.join(model_dir, "seq2seq_{0:s}.model".format(name_to_log))
+
+if not os.path.exists(model_dir):
+    os.makedirs(model_dir)
+
+if not os.path.exists(input_dir):
+    print("Input folder not found".format(input_dir))
+

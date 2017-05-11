@@ -151,14 +151,18 @@ class SpeechEncoderDecoder(Chain):
         xp = cuda.cupy if self.gpuid >= 0 else np
         
         # forward LSTM
-        L_FWD_STATES = self.encode_speech_lstm(speech_feat, self.lstm_enc, train)
+        self.L_FWD_STATES = self.encode_speech_lstm(speech_feat, self.lstm_enc, train)
 
-        L_REV_STATES = self.encode_speech_lstm(xp.flip(speech_feat, axis=0), self.lstm_rev_enc, train)
+        self.L_REV_STATES = self.encode_speech_lstm(xp.flip(speech_feat, axis=0), self.lstm_rev_enc, train)
 
         # reverse the states to align them with forward encoder
-        L_REV_STATES = xp.flip(L_REV_STATES, axis=0)
+        self.L_REV_STATES = xp.flip(self.L_REV_STATES, axis=0)
 
-        self.enc_states = F.concat((L_FWD_STATES, L_REV_STATES), axis=1)
+        return_shape = self.L_FWD_STATES.shape
+
+        self.enc_states = F.concat((self.L_FWD_STATES, self.L_REV_STATES), axis=1)
+
+        self.enc_states = F.reshape(self.enc_states, shape=(return_shape[0], 2*return_shape[2]))
 
     def compute_context_vector(self, batches=True):
         xp = cuda.cupy if self.gpuid >= 0 else np
@@ -191,18 +195,18 @@ class SpeechEncoderDecoder(Chain):
     #--------------------------------------------------------------------
     # For SGD - Batch size = 1
     #--------------------------------------------------------------------
-    def encode_decode_train(self, in_word_list, out_word_list, train=True):
+    def encode_decode_train(self, speech_feat, out_word_list, train=True):
         xp = cuda.cupy if self.gpuid >= 0 else np
         self.reset_state()
         # Add GO_ID, EOS_ID to decoder input
         decoder_word_list = [GO_ID] + out_word_list + [EOS_ID]
         # encode list of words/tokens
-        self.encode_list(in_word_list, train=train)
+        self.encode_list(speech_feat, train=train)
         # initialize decoder LSTM to final encoder state
         self.set_decoder_state()
         # decode and compute loss
         # convert list of tokens into chainer variable list
-        var_dec = (Variable(xp.asarray(decoder_word_list, dtype=np.int32).reshape((-1,1)),
+        var_dec = (Variable(xp.asarray(decoder_word_list, dtype=xp.int32).reshape((-1,1)),
                             volatile=not train))
         # Initialise first decoded word to GOID
         # pred_word = Variable(xp.asarray([GO_ID], dtype=np.int32), volatile=not train)
@@ -235,7 +239,7 @@ class SpeechEncoderDecoder(Chain):
         # return list of predicted words
         predicted_sent = []
         # load start symbol
-        prev_word = Variable(xp.asarray([start_word], dtype=np.int32), volatile=True)
+        prev_word = Variable(xp.asarray([start_word], dtype=xp.int32), volatile=True)
         pred_count = 0
         pred_word = None
 
@@ -263,20 +267,20 @@ class SpeechEncoderDecoder(Chain):
             #pred_word = np.random.choice(range(len(prob)), p=prob)
             pred_word = np.argmax(prob)
             predicted_sent.append(pred_word)
-            prev_word = Variable(xp.asarray([pred_word], dtype=np.int32), volatile=True)
+            prev_word = Variable(xp.asarray([pred_word], dtype=xp.int32), volatile=True)
             pred_count += 1
         return predicted_sent, alpha_arr
 
     #--------------------------------------------------------------------
     # For SGD - Batch size = 1
     #--------------------------------------------------------------------
-    def encode_decode_predict(self, in_word_list, max_predict_len=MAX_PREDICT_LEN):
+    def encode_decode_predict(self, speech_feat, max_predict_len=MAX_PREDICT_LEN):
         xp = cuda.cupy if self.gpuid >= 0 else np
         self.reset_state()
         # encode list of words/tokens
-        in_word_list_no_padding = [w for w in in_word_list if w != PAD_ID]
+        # in_word_list_no_padding = [w for w in in_word_list if w != PAD_ID]
         # enc_states = self.encode_list(in_word_list, train=False)
-        self.encode_list(in_word_list, train=False)
+        self.encode_list(speech_feat, train=False)
         # initialize decoder LSTM to final encoder state
         self.set_decoder_state()
         # decode starting with GO_ID
