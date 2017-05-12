@@ -28,6 +28,7 @@ input_dir = "../../corpora/callhome/uttr_fa_vad_wavs"
 
 speech_dir = os.path.join(input_dir, "mfb_std")
 SPEECH_DIM = 120
+MAX_SPEECH_LEN = 600
 text_data_dict = os.path.join(input_dir, "text_split.dict")
 
 speech_extn = "_fa_vad.std.mfb"
@@ -74,12 +75,12 @@ if os.path.exists(w2i_path):
     vocab_size_fr = min(len(i2w["fr"]), max_vocab_size["fr"])
     print("vocab size, en={0:d}, fr={1:d}".format(vocab_size_en, vocab_size_fr))
 
-num_layers_enc = 5
+num_layers_enc = 4
 num_layers_dec = 2
 use_attn = SOFT_ATTN
 hidden_units = 128
 
-gpuid = -1
+gpuid = 0
 
 xp = cuda.cupy if gpuid >= 0 else np
 

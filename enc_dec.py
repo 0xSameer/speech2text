@@ -14,7 +14,14 @@ class SpeechEncoderDecoder(Chain):
         nlayers: # layers
         attn:    if True, use attention
         '''
+        # Store GPU id
+        self.gpuid = gpuid
+        if gpuid >= 0:
+            # print("here")
+            cuda.get_device(gpuid).use()
+
         super(SpeechEncoderDecoder, self).__init__()
+        # create masking array for pad id
         #--------------------------------------------------------------------
         # add encoder layers
         #--------------------------------------------------------------------
@@ -54,13 +61,7 @@ class SpeechEncoderDecoder(Chain):
         # add output layer
         self.add_link("out", L.Linear(2*n_units, vsize_dec))
 
-        # Store GPU id
-        self.gpuid = gpuid
         self.n_units = n_units
-
-        # create masking array for pad id
-        if gpuid >= 0:
-            cuda.get_device(self.gpuid).use()
 
         # create masking array for pad id
         self.mask_pad_id = xp.ones(vsize_dec, dtype=xp.float32)
@@ -125,15 +126,15 @@ class SpeechEncoderDecoder(Chain):
 
         # initialize layer 0 input as speech features
         L_states = Variable(xp.expand_dims(speech_feat, 1), volatile=not train)
-        print("speech", L_states.shape)
+        # print("speech", L_states.shape)
         # initial scale values, for every layer 
         # except the final, scale down by 2
         scale = [2]*len(lstm_layer_list[:-1]) + [1]
         # feed LSTM layer
         for i, lstm_layer in enumerate(lstm_layer_list):
-            print(lstm_layer, "before", L_states.shape)
+            # print(lstm_layer, "before", L_states.shape)
             L_states = self.feed_pyramidal_lstm(L_states, lstm_layer=lstm_layer, scale=scale[i], train=train)
-            print(lstm_layer, "out", L_states.shape)
+            # print(lstm_layer, "out", L_states.shape)
 
         return L_states
 
@@ -201,7 +202,7 @@ class SpeechEncoderDecoder(Chain):
         # Add GO_ID, EOS_ID to decoder input
         decoder_word_list = [GO_ID] + out_word_list + [EOS_ID]
         # encode list of words/tokens
-        self.encode_list(speech_feat, train=train)
+        self.encode_list(speech_feat[:MAX_SPEECH_LEN], train=train)
         # initialize decoder LSTM to final encoder state
         self.set_decoder_state()
         # decode and compute loss
