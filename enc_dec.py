@@ -124,7 +124,7 @@ class SpeechEncoderDecoder(Chain):
         # _TODO_ can optimize the loops to save memory. Using nested loops for every successive LSTM layer. Feed 8 units to L0 at a time.
 
         # initialize layer 0 input as speech features
-        L_states = Variable(xp.expand_dims(speech_feat, 1))
+        L_states = Variable(xp.expand_dims(speech_feat, 1), volatile=not train)
         print("speech", L_states.shape)
         # initial scale values, for every layer 
         # except the final, scale down by 2
