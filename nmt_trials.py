@@ -293,20 +293,21 @@ def train_loop(num_training, num_epochs, log_mode="a", last_epoch_id=0):
 
                 it = (epoch * num_training) + i
 
-                # compute loss
-                loss = model.encode_decode_train(speech_feat, en_ids, train=True)
+                if len(speech_feat) > 16:
+                    # compute loss
+                    loss = model.encode_decode_train(speech_feat, en_ids, train=True)
 
-                # set up for backprop
-                model.cleargrads()
-                loss.backward()
-                # update parameters
-                optimizer.update()
-                # store loss value for display
-                loss_val = float(loss.data)
-                loss_per_epoch += loss_val
+                    # set up for backprop
+                    model.cleargrads()
+                    loss.backward()
+                    # update parameters
+                    optimizer.update()
+                    # store loss value for display
+                    loss_val = float(loss.data)
+                    loss_per_epoch += loss_val
 
-                out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, loss_val, (loss_per_epoch / i))
-                pbar.set_description(out_str)
+                    out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, loss_val, (loss_per_epoch / i))
+                    pbar.set_description(out_str)
                 pbar.update(1)
             # end for num_training
         # end with pbar
