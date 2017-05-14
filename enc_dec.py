@@ -342,6 +342,11 @@ class SpeechEncoderDecoder(Chain):
             w = var_en[i]
             rev_w = var_rev_en[i]
 
+
+            self.L_FWD_STATES = self.encode_speech_lstm(speech_feat, self.lstm_enc, train)
+
+            self.L_REV_STATES = self.encode_speech_lstm(xp.flip(speech_feat, axis=0), self.lstm_rev_enc, train)
+
             self.encode(w, self.lstm_enc, train)
             self.encode(rev_w, self.lstm_rev_enc, train)
 
@@ -403,28 +408,31 @@ class SpeechEncoderDecoder(Chain):
         xp = cuda.cupy if self.gpuid >= 0 else np
         self.reset_state()
 
-        fwd_encoder_batch = xp.empty((0, src_lim), dtype=xp.int32)
-        rev_encoder_batch = xp.empty((0, src_lim), dtype=xp.int32)
+        fwd_encoder_batch = xp.empty((0, src_lim), dtype=xp.float32)
+        rev_encoder_batch = xp.empty((0, src_lim), dtype=xp.float32)
         decoder_batch = xp.empty((0, tar_lim+2), dtype=xp.int32)
 
         for src, tar in batch_data:
-            fwd_encoder_batch = xp.vstack((fwd_encoder_batch, self.pad_list(src, src_lim)))
-            rev_encoder_batch = xp.vstack((rev_encoder_batch, self.pad_list(src[::-1], src_lim)))
+            fwd_encoder_batch = xp.vstack((fwd_encoder_batch, self.pad_array(src, src_lim)))
+            rev_encoder_batch = xp.vstack((rev_encoder_batch, self.pad_array(xp.flip(src, axis=0), src_lim)))
 
             tar_data = [GO_ID] + tar + [EOS_ID]
             decoder_batch = xp.vstack((decoder_batch, self.pad_list(tar_data,
                                                                     tar_lim+2, at_start=False)))
 
+        print()
+
         # encode list of words/tokens
-        self.encode_batch(fwd_encoder_batch, rev_encoder_batch, train=train)
+        # self.encode_batch(fwd_encoder_batch, rev_encoder_batch, train=train)
 
 
-        # initialize decoder LSTM to final encoder state
-        self.set_decoder_state()
-        # decode and compute loss
-        self.loss = self.decode_batch(decoder_batch, train=train)
+        # # initialize decoder LSTM to final encoder state
+        # self.set_decoder_state()
+        # # decode and compute loss
+        # self.loss = self.decode_batch(decoder_batch, train=train)
 
-        return self.loss
+        # return self.loss
+        return 0
 
 
 # In[ ]:
