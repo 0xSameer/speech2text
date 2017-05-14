@@ -380,82 +380,29 @@ def batch_training(self, num_training,
 
         total_trained = 0
 
-        while total_trained < num_training:
-
-            for buck_indx in range(len(buckets)):
-                left_to_train = num_training - total_trained
-                items_in_bucket = bucket_lengths[buck_indx][0]
-                pad_size_speech = (buck_indx+1) * width_b
-                pad_size_en = bucket_lengths[buck_indx][3]
-
-                items_to_train_in_bucket = min(left_to_train, items_in_bucket)
-
-                for i in range(0, items_to_train_in_bucket, batch_size):
-                    batch_data = [t[0] for t in buckets[buck_indx][i:i+batch_size]]
-                    loss = model.encode_decode_train_batch(batch_data, pad_size_speech, pad_size_en)
-
-                    total_trained += len(batch_data)
-
-                    # set up for backprop
-                    model.cleargrads()
-                    loss.backward()
-                    # update parameters
-                    optimizer.update()
-                    # store loss value for display
-                    loss_val = float(loss.data)
-                    loss_per_epoch += loss_val
-
-                    out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, loss_val, (loss_per_epoch / i))
-                    pbar.set_description(out_str)
-                    pbar.update(batch_size)
-
-
-
-            if total_trained
-            for j in range(0, bucket_lengths)
-
         for buck_indx in range(len(buckets)):
-            for i in range(0, len(buckets[buck_indx]), batch_size):
-                if train_count >= num_training:
-                    break
-                next_batch_end = min(batch_size, (num_training-train_count))
-                # print("current batch")
-                # print(bucket_data[i:i+next_batch_end])
-                # print("bucket limit", buck_pad_lim)
-                curr_len = len(bucket_data[i:i+next_batch_end])
-                loss = model.encode_decode_train_batch(buckets[buck_indx][i:i+next_batch_end],)
+            if total_trained >= num_training:
+                break
+            left_to_train = num_training - total_trained
+            items_in_bucket = bucket_lengths[buck_indx][0]
+            pad_size_speech = (buck_indx+1) * width_b
+            pad_size_en = bucket_lengths[buck_indx][3]
 
-        if curr_batch >= num_batches:
-            break
+            items_to_train_in_bucket = min(left_to_train, items_in_bucket)
 
-        if curr_batch >= (prev_buckets_len+len(buckets[curr_bucket])):
-            prev_buckets_len = len(buckets[curr_bucket])
-            curr_bucket += 1
+            for i in range(0, items_to_train_in_bucket, batch_size):
+                sp_files_in_batch = [t[0] for t in buckets[buck_indx][i:i+batch_size]]
 
-        # get batch data:
-        batch_indx = curr_batch-prev_buckets_len
-        batch_data = buckets[curr_bucket][prev_buckets_len]
+                # get the word/character ids
+                batch_data = []
+                for sp_fil in sp_files_in_batch:
+                    _, en_ids, speech_feat = get_data_item(sp_fil, cat="train")
+                    batch_data.apend((speech_feat, en_ids))
 
 
+                loss = model.encode_decode_train_batch(batch_data, pad_size_speech, pad_size_en, train=True)
 
-        # get bucket index
-
-
-
-
-        for i, sp_fil in enumerate(sorted(list(text_data["train"].keys()))[:num_training], start=1):
-            loss_per_epoch = 0
-            out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, 0, 0)
-            pbar.set_description(out_str)
-            
-            # get the word/character ids
-            fr_ids, en_ids, speech_feat = get_data_item(sp_fil, cat="train")
-
-            it = (epoch * num_training) + i
-
-            if len(speech_feat) >= MIN_SPEECH_LEN:
-                # compute loss
-                loss = model.encode_decode_train(speech_feat, en_ids, train=True)
+                total_trained += len(batch_data)
 
                 # set up for backprop
                 model.cleargrads()
@@ -468,8 +415,9 @@ def batch_training(self, num_training,
 
                 out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, loss_val, (loss_per_epoch / i))
                 pbar.set_description(out_str)
-            pbar.update(1)
-        # end for num_training
+                pbar.update(len(batch_data))
+            # end for current bucket
+        # end for all buckets
     # end with pbar
 
 # In[ ]:
