@@ -19,7 +19,7 @@ UNK_ID = 3
 NO_ATTN = 0
 SOFT_ATTN = 1
 
-EXP_NAME_PREFIX="es_en_speech2text"
+EXP_NAME_PREFIX="es_en_speech2text_batches"
 
 
 print("callhome es-en word level configuration")
@@ -28,7 +28,8 @@ input_dir = "../../corpora/callhome/uttr_fa_vad_wavs"
 
 speech_dir = os.path.join(input_dir, "mfb_std")
 SPEECH_DIM = 120
-MAX_SPEECH_LEN = 600
+MAX_SPEECH_LEN = 400
+MIN_SPEECH_LEN = 16
 text_data_dict = os.path.join(input_dir, "text_split.dict")
 
 speech_extn = "_fa_vad.std.mfb"
@@ -37,17 +38,28 @@ CHAR_LEVEL = True
 
 NUM_SENTENCES = 17394
 # use 90% of the data for training
+
 NUM_TRAINING_SENTENCES = 13137
-# NUM_TRAINING_SENTENCES = 1000
-NUM_MINI_DEV_SENTENCES = 1
-ITERS_TO_SAVE = 5
+NUM_MINI_TRAINING_SENTENCES = 10
+
+ITERS_TO_SAVE = 1
+
 NUM_DEV_SENTENCES = 2476
+NUM_MINI_DEV_SENTENCES = 2
+
 NUM_TEST_SENTENCES = 1781
 BATCH_SIZE = 20
 # A total of 11 buckets, with a length range of 7 each, giving total
 # BUCKET_WIDTH * NUM_BUCKETS = 77 for e.g.
 BUCKET_WIDTH = 3 if not CHAR_LEVEL else 3
 NUM_BUCKETS = 14 if not CHAR_LEVEL else 30
+TEXT_BUCKETS = [[] for i in range(NUM_BUCKETS)]
+# speech bucket width = 25, num_buckets = 32, for a max length of 800
+SPEECH_BUCKET_WIDTH = 25
+SPEECH_NUM_BUCKETS = 32
+SPEECH_BUCKETS = [[] for i in range(SPEECH_NUM_BUCKETS)]
+
+# create separate widths for input and output, speech and english words/chars
 MAX_PREDICT_LEN = BUCKET_WIDTH*NUM_BUCKETS
 
 vocab_path = os.path.join(input_dir, "vocab.dict" if not CHAR_LEVEL else "char_vocab.dict")
@@ -65,6 +77,8 @@ test_fname = {"en": os.path.join(input_dir, "test.en"), "fr": os.path.join(input
 
 EXP_NAME= "{0:s}_callhome_es_en".format(EXP_NAME_PREFIX)
 
+speech_bucket_data_fname = os.path.join(model_dir, "speech_buckets.dict")
+
 bucket_data_fname = os.path.join(model_dir, "buckets_{0:d}.list" if not CHAR_LEVEL else "buckets_{0:d}_char.list")
 
 if os.path.exists(w2i_path):
@@ -80,7 +94,11 @@ num_layers_dec = 2
 use_attn = SOFT_ATTN
 hidden_units = 128
 
+NUM_EPOCHS = 10
+
 gpuid = 0
+
+load_existing_model = True
 
 xp = cuda.cupy if gpuid >= 0 else np
 

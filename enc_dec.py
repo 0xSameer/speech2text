@@ -292,6 +292,23 @@ class SpeechEncoderDecoder(Chain):
     #--------------------------------------------------------------------
     # For batch size > 1
     #--------------------------------------------------------------------
+    def pad_array(self, data, lim, at_start=True):
+        xp = cuda.cupy if self.gpuid >= 0 else np
+        r, c = data.shape
+        if r >= lim:
+            return data[:lim]
+
+        rows_to_pad = lim-r
+        zero_arr = xp.zeros((rows_to_pad, c), dtype=xp.float32)
+        if at_start:
+            ret_data = xp.concatenate((zero_arr, data), axis=0)
+        else:
+            ret_data = xp.concatenate((data, zero_arr), axis=0)
+        return ret_data
+
+    #--------------------------------------------------------------------
+    # For batch size > 1
+    #--------------------------------------------------------------------
     def pad_list(self, data, lim, at_start=True):
         xp = cuda.cupy if self.gpuid >= 0 else np
         if at_start:

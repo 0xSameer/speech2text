@@ -98,4 +98,13 @@ def make_npz(path, set_type):
     # return {'x': x, 'y': y}
 
 
-make_npz("haha", "train")
+frame_lengths = make_npz("haha", "train")
+
+def compute_buckets(buck_width, num_buckets):
+    buckets = {i:[] for i in range(0,num_buckets)}
+    _ = [buckets[min(num_buckets-1, l // buck_width)].append(l) for l in frame_lengths]
+    bucket_lengths = {i:len(l) for i, l in buckets.items()}
+    return buckets, bucket_lengths
+
+
+

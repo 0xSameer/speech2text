@@ -28,9 +28,9 @@ if gpuid >= 0:
 
 # In[ ]:
 
-optimizer = optimizers.Adam()
-# optimizer = optimizers.Adam(alpha=0.0005, beta1=0.9, beta2=0.999, eps=1e-08)
-# optimizer = optimizers.SGD(lr=0.0005)
+# optimizer = optimizers.Adam()
+optimizer = optimizers.Adam(alpha=0.0001, beta1=0.9, beta2=0.999, eps=1e-08)
+# optimizer = optimizers.SGD(lr=0.0001)
 optimizer.setup(model)
 # gradient clipping
 optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
@@ -40,6 +40,59 @@ optimizer.add_hook(chainer.optimizer.WeightDecay(0.0001))
 # In[ ]:
 
 log_train_fil_name, text_fname, dev_fname, test_fname
+
+# In[ ]:
+
+def create_speech_buckets():
+    pass
+
+# In[ ]:
+def display_buckets(self, bucket_lengths, width_b = SPEECH_BUCKET_WIDTH):
+    headings = ("ix", "len b", "num", "max fr", "avg fr", "max en", "avg en")
+    print("{0:3s} | {1:5s} | {2:5s} | {3:6s} | {4:8s} | {5:6s} | {6:8s}".format(*headings))
+    print("\n".join(["{0:3d} | {1:5d} | {2:5d} | {3:6d} | {4:8.0f} | {5:6d} | {6:8.0f}".format(i[0], (i[0]+1)*width_b, *i[1]) for i in list(bucket_lengths.items())]))
+
+
+def populate_buckets(self, 
+                     width_b = SPEECH_BUCKET_WIDTH, 
+                     num_b = SPEECH_NUM_BUCKETS, 
+                     speech=True, 
+                     num_sent=NUM_TRAINING_SENTENCES,
+                     filname_b=speech_bucket_data_fname,
+                     cat="train", display=False):
+    
+    buckets = [[] for i in range(num_b)]
+    
+    print("Splitting data into {0:d} buckets, each of width={1:d}".format(num_b, width_b))
+
+    with tqdm(total=num_sent) as pbar:
+        for i, sp_fil in enumerate(sorted(list(text_data[cat].keys()))[:num_sent]):
+
+            fr_ids, en_ids, speech_feat = get_data_item(sp_fil, cat=cat)
+
+            len_en = len(en_ids)
+            len_fr = len(fr_ids)
+            len_speech = len(speech_feat)
+            
+            indx_b = min(num_b-1, len_speech // width_b)
+
+            buckets[indx_b].append((sp_fil, len_speech, len_fr, len_en))
+
+            pbar.update(1)
+
+    bucket_lengths = {i:(len(l), 
+                    max(l, key=lambda t:t[2])[2],
+                    np.mean([i[2]for i in l]),
+                    max(l, key=lambda t:t[3])[3],
+                    np.mean([i[3]for i in l]))
+                     for i, l in enumerate(buckets)}
+    if display:
+        display_buckets(bucket_lengths, width_b)
+
+    # Saving bucket data
+    print("Saving bucket data")
+    pickle.dump(buckets, open(filname_b, "wb"))
+    return buckets, bucket_lengths
 
 
 # In[ ]:
@@ -134,14 +187,14 @@ def count_match(list1, list2):
 def compute_pplx(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES):
     loss = 0
     num_words = 0
-    for i, sp_fil in enumerate(sorted(list(text_data[cat].keys()))[:num_sent]):
-        with tqdm(total=num_sent) as pbar:
+    with tqdm(total=num_sent) as pbar:
+        for i, sp_fil in enumerate(sorted(list(text_data[cat].keys()))[:num_sent]):
             sys.stderr.flush()
             out_str = "loss={0:.6f}".format(0)
             pbar.set_description(out_str)
             fr_ids, en_ids, speech_feat = get_data_item(sp_fil, cat=cat)
 
-            if len(fr_ids) > 0 and len(en_ids) > 0:
+            if len(speech_feat) >= MIN_SPEECH_LEN and len(en_ids) > 0:
                 # compute loss
                 curr_loss = float(model.encode_decode_train(speech_feat, en_ids, train=False).data)
                 loss += curr_loss
@@ -188,8 +241,8 @@ def bleu(stats):
 def compute_bleu(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES):
     list_of_references = []
     list_of_hypotheses = []
-    for i, sp_fil in enumerate(sorted(list(text_data[cat].keys()))[:num_sent]):
-        with tqdm(total=num_sent) as pbar:
+    with tqdm(total=num_sent) as pbar:
+        for i, sp_fil in enumerate(sorted(list(text_data[cat].keys()))[:num_sent]):
             sys.stderr.flush()
             out_str = "predicting sentence={0:d}".format(i)
             pbar.update(1)
@@ -201,8 +254,8 @@ def compute_bleu(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES):
             reference_words = en_line.strip().split()
             list_of_references.append(reference_words)
             
-            if len(fr_ids) > 0 and len(en_sent) > 0:
-                pred_sent, _ = model.encode_decode_predict(fr_ids)
+            if len(speech_feat) >= MIN_SPEECH_LEN and len(en_ids) > 0:
+                pred_ids, _ = model.encode_decode_predict(speech_feat)
                 pred_words = [i2w["en"][w].decode() if w != EOS_ID else "" for w in pred_ids]
                 if CHAR_LEVEL:
                     pred_words = "".join(pred_words)
@@ -267,35 +320,81 @@ def get_data_item(sp_fil, cat="train"):
 
 
 # In[ ]:
+def single_instance_training(self, num_training, epoch):
+    with tqdm(total=num_training) as pbar:
+        sys.stderr.flush()
+        for i, sp_fil in enumerate(sorted(list(text_data["train"].keys()))[:num_training], start=1):
+            loss_per_epoch = 0
+            out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, 0, 0)
+            pbar.set_description(out_str)
+            
+            # get the word/character ids
+            fr_ids, en_ids, speech_feat = get_data_item(sp_fil, cat="train")
 
-def train_loop(num_training, num_epochs, log_mode="a", last_epoch_id=0):
-    # Set up log file for loss
-    log_dev_fil = open(log_dev_fil_name, mode=log_mode)
-    log_dev_csv = csv.writer(log_dev_fil, lineterminator="\n")
-    bleu_score = 0
+            it = (epoch * num_training) + i
 
-    # initialize perplexity on dev set
-    # save model when new epoch value is lower than previous
-    pplx = float("inf")
+            if len(speech_feat) >= MIN_SPEECH_LEN:
+                # compute loss
+                loss = model.encode_decode_train(speech_feat, en_ids, train=True)
 
-    sys.stderr.flush()
+                # set up for backprop
+                model.cleargrads()
+                loss.backward()
+                # update parameters
+                optimizer.update()
+                # store loss value for display
+                loss_val = float(loss.data)
+                loss_per_epoch += loss_val
 
-    for epoch in range(num_epochs):
-        with tqdm(total=num_training) as pbar:
-            sys.stderr.flush()
-            for i, sp_fil in enumerate(sorted(list(text_data["train"].keys()))[:num_training], start=1):
-                loss_per_epoch = 0
-                out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, 0, 0)
+                out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, loss_val, (loss_per_epoch / i))
                 pbar.set_description(out_str)
-                
-                # get the word/character ids
-                fr_ids, en_ids, speech_feat = get_data_item(sp_fil, cat="train")
+            pbar.update(1)
+        # end for num_training
+    # end with pbar
 
-                it = (epoch * num_training) + i
+# In[ ]:
+def get_batch_data(self, batch_indx, buckets):
+    batches_so_far = 0
+    for l in buckets:
+        if batch_indx <= batches_so_far+len(l):
+            # in this bucket
 
-                if len(speech_feat) > 16:
-                    # compute loss
-                    loss = model.encode_decode_train(speech_feat, en_ids, train=True)
+
+def batch_training(self, num_training, 
+                   batch_size, 
+                   buckets, 
+                   bucket_lengths, 
+                   width_b
+                   epoch):
+
+    num_batches = num_training // batch_size
+
+    curr_batch = 0
+    curr_bucket = 0
+    prev_buckets_len = 0
+
+    train_count = 0
+
+    with tqdm(total=(num_training)) as pbar:
+        sys.stderr.flush()
+
+        total_trained = 0
+
+        while total_trained < num_training:
+
+            for buck_indx in range(len(buckets)):
+                left_to_train = num_training - total_trained
+                items_in_bucket = bucket_lengths[buck_indx][0]
+                pad_size_speech = (buck_indx+1) * width_b
+                pad_size_en = bucket_lengths[buck_indx][3]
+
+                items_to_train_in_bucket = min(left_to_train, items_in_bucket)
+
+                for i in range(0, items_to_train_in_bucket, batch_size):
+                    batch_data = [t[0] for t in buckets[buck_indx][i:i+batch_size]]
+                    loss = model.encode_decode_train_batch(batch_data, pad_size_speech, pad_size_en)
+
+                    total_trained += len(batch_data)
 
                     # set up for backprop
                     model.cleargrads()
@@ -308,8 +407,95 @@ def train_loop(num_training, num_epochs, log_mode="a", last_epoch_id=0):
 
                     out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, loss_val, (loss_per_epoch / i))
                     pbar.set_description(out_str)
-                pbar.update(1)
-            # end for num_training
+                    pbar.update(batch_size)
+
+
+
+            if total_trained
+            for j in range(0, bucket_lengths)
+
+        for buck_indx in range(len(buckets)):
+            for i in range(0, len(buckets[buck_indx]), batch_size):
+                if train_count >= num_training:
+                    break
+                next_batch_end = min(batch_size, (num_training-train_count))
+                # print("current batch")
+                # print(bucket_data[i:i+next_batch_end])
+                # print("bucket limit", buck_pad_lim)
+                curr_len = len(bucket_data[i:i+next_batch_end])
+                loss = model.encode_decode_train_batch(buckets[buck_indx][i:i+next_batch_end],)
+
+        if curr_batch >= num_batches:
+            break
+
+        if curr_batch >= (prev_buckets_len+len(buckets[curr_bucket])):
+            prev_buckets_len = len(buckets[curr_bucket])
+            curr_bucket += 1
+
+        # get batch data:
+        batch_indx = curr_batch-prev_buckets_len
+        batch_data = buckets[curr_bucket][prev_buckets_len]
+
+
+
+        # get bucket index
+
+
+
+
+        for i, sp_fil in enumerate(sorted(list(text_data["train"].keys()))[:num_training], start=1):
+            loss_per_epoch = 0
+            out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, 0, 0)
+            pbar.set_description(out_str)
+            
+            # get the word/character ids
+            fr_ids, en_ids, speech_feat = get_data_item(sp_fil, cat="train")
+
+            it = (epoch * num_training) + i
+
+            if len(speech_feat) >= MIN_SPEECH_LEN:
+                # compute loss
+                loss = model.encode_decode_train(speech_feat, en_ids, train=True)
+
+                # set up for backprop
+                model.cleargrads()
+                loss.backward()
+                # update parameters
+                optimizer.update()
+                # store loss value for display
+                loss_val = float(loss.data)
+                loss_per_epoch += loss_val
+
+                out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, loss_val, (loss_per_epoch / i))
+                pbar.set_description(out_str)
+            pbar.update(1)
+        # end for num_training
+    # end with pbar
+
+# In[ ]:
+
+def train_loop(num_training, num_epochs, log_mode="a", last_epoch_id=0, batches=False):
+    # Set up log file for loss
+    log_dev_fil = open(log_dev_fil_name, mode=log_mode)
+    log_dev_csv = csv.writer(log_dev_fil, lineterminator="\n")
+    bleu_score = 0
+
+    # initialize perplexity on dev set
+    # save model when new epoch value is lower than previous
+    pplx = float("inf")
+
+    sys.stderr.flush()
+
+    if batches == True:
+        print("creating buckets")
+        buckets, bucket_lengths = populate_buckets(display=False)
+
+    # start epochs
+    for epoch in range(num_epochs):
+        if not batches:
+            self.single_instance_training(num_training, epoch)
+        else:
+            self.batch_training(num_training, BATCH_SIZE , buckets, bucket_lengths, epoch)
         # end with pbar
 
         print("finished training on {0:d} sentences".format(num_training))
@@ -366,21 +552,37 @@ def train_loop(num_training, num_epochs, log_mode="a", last_epoch_id=0):
 
 
 # In[ ]:
+def start_here(num_training=1000, num_epochs=1):
+    max_epoch_id = 0
+    if os.path.exists(model_fil):
+        # check last saved epoch model:
+        for fname in [f for f in os.listdir(model_dir) if f.endswith("")]:
+            if model_fil != os.path.join(model_dir, fname) and model_fil.replace(".model", "") in os.path.join(model_dir, fname):
+                try:
+                    epoch_id = int(fname.split("_")[-1].replace(".model", ""))
+                    if epoch_id > max_epoch_id:
+                        max_epoch_id = epoch_id
+                except:
+                    print("{0:s} not a valid model file".format(fname))
+        print("last saved epoch model={0:d}".format(max_epoch_id))
 
-train_loop(num_training=1000, num_epochs=1)
+        if load_existing_model:
+            print("loading model ...")
+            serializers.load_npz(model_fil, model)
+            print("finished loading: {0:s}".format(model_fil))
+        else:
+            print("""model file already exists!!
+                Delete before continuing, or enable load_existing flag""".format(model_fil))
+            return
+    train_loop(num_training=num_training, 
+               num_epochs=num_epochs,
+               last_epoch_id=max_epoch_id)
 
 
 # In[ ]:
+print("Starting experiment")
+print("num sentences={0:d} and num epochs={1:d}".format(NUM_MINI_TRAINING_SENTENCES, NUM_EPOCHS))
 
-
-
-
-# In[ ]:
-
-
-
+start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS)
 
 # In[ ]:
-
-
-
