@@ -377,7 +377,7 @@ def batch_training(num_training,
         total_trained = 0
         loss_per_epoch = 0
 
-        for buck_indx in range(len(buckets)-4,len(buckets)-3):
+        for buck_indx in range(len(buckets)):
             if total_trained >= num_training:
                 break
             left_to_train = num_training - total_trained
