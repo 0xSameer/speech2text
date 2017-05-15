@@ -19,7 +19,10 @@ UNK_ID = 3
 NO_ATTN = 0
 SOFT_ATTN = 1
 
-EXP_NAME_PREFIX="es_en_speech2text_batches"
+print("translating es to en")
+
+model_dir = "es_speech_to_en_char_batches"
+EXP_NAME_PREFIX="es_en_batches_v1"
 
 
 print("callhome es-en word level configuration")
@@ -40,15 +43,15 @@ NUM_SENTENCES = 17394
 # use 90% of the data for training
 
 NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = 1000
+NUM_MINI_TRAINING_SENTENCES = NUM_TRAINING_SENTENCES
 
 ITERS_TO_SAVE = 1
 
 NUM_DEV_SENTENCES = 2476
-NUM_MINI_DEV_SENTENCES = 2
+NUM_MINI_DEV_SENTENCES = 100
 
 NUM_TEST_SENTENCES = 1781
-BATCH_SIZE = 10
+BATCH_SIZE = 50
 # A total of 11 buckets, with a length range of 7 each, giving total
 # BUCKET_WIDTH * NUM_BUCKETS = 77 for e.g.
 BUCKET_WIDTH = 3 if not CHAR_LEVEL else 3
@@ -65,9 +68,6 @@ MAX_PREDICT_LEN = BUCKET_WIDTH*NUM_BUCKETS
 vocab_path = os.path.join(input_dir, "vocab.dict" if not CHAR_LEVEL else "char_vocab.dict")
 w2i_path = os.path.join(input_dir, "w2i.dict" if not CHAR_LEVEL else "char_w2i.dict")
 i2w_path = os.path.join(input_dir, "i2w.dict" if not CHAR_LEVEL else "char_i2w.dict")
-
-print("translating es to en")
-model_dir = "es_speech_to_en_char_model"
 
 text_fname = {"en": os.path.join(input_dir, "train.en"), "fr": os.path.join(input_dir, "speech_train.es")}
 
@@ -94,7 +94,7 @@ num_layers_dec = 2
 use_attn = SOFT_ATTN
 hidden_units = 128
 
-NUM_EPOCHS = 10
+NUM_EPOCHS = 5
 
 gpuid = 0
 

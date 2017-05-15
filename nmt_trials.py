@@ -29,12 +29,12 @@ if gpuid >= 0:
 # In[ ]:
 
 # optimizer = optimizers.Adam()
-# optimizer = optimizers.Adam(alpha=0.0001, beta1=0.9, beta2=0.999, eps=1e-08)
-optimizer = optimizers.SGD(lr=0.0001)
+optimizer = optimizers.Adam(alpha=0.0001, beta1=0.9, beta2=0.999, eps=1e-08)
+# optimizer = optimizers.SGD(lr=0.0001)
 optimizer.setup(model)
 # gradient clipping
 optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
-# optimizer.add_hook(chainer.optimizer.WeightDecay(0.0001))
+optimizer.add_hook(chainer.optimizer.WeightDecay(0.0001))
 
 
 # In[ ]:
@@ -429,7 +429,11 @@ def batch_training(num_training,
 
 # In[ ]:
 
-def train_loop(num_training, num_epochs, log_mode="a", last_epoch_id=0, batches=False):
+def train_loop(num_training, 
+               num_epochs, 
+               log_mode="a", 
+               last_epoch_id=0, 
+               batches=False):
     # Set up log file for loss
     log_dev_fil = open(log_dev_fil_name, mode=log_mode)
     log_dev_csv = csv.writer(log_dev_fil, lineterminator="\n")
@@ -450,7 +454,7 @@ def train_loop(num_training, num_epochs, log_mode="a", last_epoch_id=0, batches=
         if not batches:
             single_instance_training(num_training, epoch)
         else:
-            batch_training(num_training, BATCH_SIZE , buckets, bucket_lengths, epoch)
+            batch_training(num_training, BATCH_SIZE , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, epoch)
         # end with pbar
 
         print("finished training on {0:d} sentences".format(num_training))
@@ -469,8 +473,7 @@ def train_loop(num_training, num_epochs, log_mode="a", last_epoch_id=0, batches=
         if (epoch+1) % ITERS_TO_SAVE == 0:
             bleu_score = compute_bleu(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES)
             print("Saving model")
-            serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch_id+epoch+1)), 
-                                 model)
+            serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch_id+epoch+1)), model)
             print("Finished saving model")
 
         # log pplx and bleu score
@@ -507,7 +510,7 @@ def train_loop(num_training, num_epochs, log_mode="a", last_epoch_id=0, batches=
 
 
 # In[ ]:
-def start_here(num_training=1000, num_epochs=1):
+def start_here(num_training=1000, num_epochs=1, batches=False):
     max_epoch_id = 0
     if os.path.exists(model_fil):
         # check last saved epoch model:
@@ -529,15 +532,17 @@ def start_here(num_training=1000, num_epochs=1):
             print("""model file already exists!!
                 Delete before continuing, or enable load_existing flag""".format(model_fil))
             return
+
     train_loop(num_training=num_training, 
                num_epochs=num_epochs,
-               last_epoch_id=max_epoch_id)
+               last_epoch_id=max_epoch_id,
+               batches=batches)
 
 
 # In[ ]:
 print("Starting experiment")
 print("num sentences={0:d} and num epochs={1:d}".format(NUM_MINI_TRAINING_SENTENCES, NUM_EPOCHS))
 
-# start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS)
+start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS, batches=True)
 
 # In[ ]:
