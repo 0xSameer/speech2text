@@ -29,12 +29,12 @@ if gpuid >= 0:
 # In[ ]:
 
 # optimizer = optimizers.Adam()
-optimizer = optimizers.Adam(alpha=0.0001, beta1=0.9, beta2=0.999, eps=1e-08)
-# optimizer = optimizers.SGD(lr=0.0001)
+# optimizer = optimizers.Adam(alpha=0.0001, beta1=0.9, beta2=0.999, eps=1e-08)
+optimizer = optimizers.SGD(lr=0.0001)
 optimizer.setup(model)
 # gradient clipping
 optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
-optimizer.add_hook(chainer.optimizer.WeightDecay(0.0001))
+# optimizer.add_hook(chainer.optimizer.WeightDecay(0.0001))
 
 
 # In[ ]:
@@ -72,10 +72,14 @@ def populate_buckets(width_b = SPEECH_BUCKET_WIDTH,
             len_en = len(en_ids)
             len_fr = len(fr_ids)
             len_speech = len(speech_feat)
-            
-            indx_b = min(num_b-1, len_speech // width_b)
 
-            buckets[indx_b].append((sp_fil, len_speech, len_fr, len_en))
+            # check if speech features are valid
+            if xp.isnan(xp.sum(speech_feat)) == True:
+                print("file={0:s} has a nan value, fr len={1:d}, en len={2:d}".format(sp_fil, len_fr, len_en))
+            else:
+                # add to buckets
+                indx_b = min(num_b-1, len_speech // width_b)
+                buckets[indx_b].append((sp_fil, len_speech, len_fr, len_en))
 
             pbar.update(1)
 
@@ -371,8 +375,9 @@ def batch_training(num_training,
         sys.stderr.flush()
 
         total_trained = 0
+        loss_per_epoch = 0
 
-        for buck_indx in range(len(buckets)):
+        for buck_indx in range(len(buckets)-4,len(buckets)-3):
             if total_trained >= num_training:
                 break
             left_to_train = num_training - total_trained
@@ -385,14 +390,20 @@ def batch_training(num_training,
             for i in range(0, items_to_train_in_bucket, batch_size):
                 sp_files_in_batch = [t[0] for t in buckets[buck_indx][i:i+batch_size]]
 
-                # get the word/character ids
+                # print("L0 before", model.L0_enc.lateral.W.data[:2,:5])
+
+                # get the next batch of data
                 batch_data = []
                 for sp_fil in sp_files_in_batch:
                     _, en_ids, speech_feat = get_data_item(sp_fil, cat="train")
                     batch_data.append((speech_feat, en_ids))
 
-
+                # compute loss
                 loss = model.encode_decode_train_batch(batch_data, pad_size_speech, pad_size_en, train=True)
+
+                # store loss values for printing
+                loss_val = float(loss.data)
+                loss_per_epoch += loss_val
 
                 total_trained += len(batch_data)
 
@@ -402,10 +413,14 @@ def batch_training(num_training,
                 # update parameters
                 optimizer.update()
                 # store loss value for display
-                loss_val = float(loss.data)
-                loss_per_epoch += loss_val
+                # print(sp_files_in_batch)
+                # print(loss.data, math.isnan(loss.data))
+                # print("L0 after", model.L0_enc.lateral.W.data[:2,:5])
 
-                out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, loss_val, (loss_per_epoch / i))
+                # print(batch_data)
+
+
+                out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, loss_val, (loss_per_epoch / total_trained))
                 pbar.set_description(out_str)
                 pbar.update(len(batch_data))
             # end for current bucket
