@@ -383,7 +383,7 @@ def batch_training(num_training,
             left_to_train = num_training - total_trained
             items_in_bucket = bucket_lengths[buck_indx][0]
             pad_size_speech = (buck_indx+1) * width_b
-            pad_size_en = bucket_lengths[buck_indx][3]
+            pad_size_en = min(bucket_lengths[buck_indx][3], MAX_EN_LEN)
 
             items_to_train_in_bucket = min(left_to_train, items_in_bucket)
 

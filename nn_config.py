@@ -57,6 +57,8 @@ NUM_TEST_SENTENCES = 1781
 BUCKET_WIDTH = 3 if not CHAR_LEVEL else 3
 NUM_BUCKETS = 14 if not CHAR_LEVEL else 30
 TEXT_BUCKETS = [[] for i in range(NUM_BUCKETS)]
+
+MAX_EN_LEN = 100 if not CHAR_LEVEL else 200
 # speech bucket width = 25, num_buckets = 32, for a max length of 800
 SPEECH_BUCKET_WIDTH = 24
 SPEECH_NUM_BUCKETS = 34
