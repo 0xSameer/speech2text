@@ -138,6 +138,7 @@ class SpeechEncoderDecoder(Chain):
 
         return L_states
 
+
     def encode(self, speech_in, lstm_layer_list, train):
         self.feed_lstm(speech_in, lstm_layer_list, train)
 
@@ -320,16 +321,61 @@ class SpeechEncoderDecoder(Chain):
     #--------------------------------------------------------------------
     # For batch size > 1
     #--------------------------------------------------------------------
-    def encode_batch(self, fwd_encoder_batch, rev_encoder_batch, train=True):
-        #xp = cuda.cupy if self.gpuid >= 0 else np
-        # convert list of tokens into chainer variable list
-        var_en = (Variable(fwd_encoder_batch.T, volatile=(not train)))
+    def batch_feed_pyramidal_lstm(self, feat_in, lstm_layer, scale, train=True):
+        xp = cuda.cupy if self.gpuid >= 0 else np
+        # create empty array to store the output
+        # the output is scaled by the scale factor
+        in_size, batch_size, in_dim = feat_in.shape
+        n_out_states = in_size // scale
+        # out_dim = self[lstm_layer].state_size
+        # out_states = Variable(xp.zeros((n_out_states, batch_size, in_dim), dtype=xp.float32), volatile=not train)
 
-        var_rev_en = (Variable(rev_encoder_batch.T, volatile=(not train)))
+
+        print(n_out_states, feat_in.shape, scale)
+
+        for i in range(0, n_out_states):
+            lateral_states = self[lstm_layer](feat_in[(i*scale)])
+            print("lat", lateral_states.shape)
+            for j in range(1, scale):
+                out = self[lstm_layer](feat_in[(i*scale)+j])
+                print("out", out.shape)
+                lateral_states = F.concat((lateral_states, out), axis=1)
+                print("lat concat", lateral_states.shape)
+            # out_states[i] = lateral_states
+            # concatenate and append lateral states into out states
+            if i > 0:
+                print(out_states.shape, lateral_states.shape)
+                out_states = F.concat((out_states, F.expand_dims(lateral_states, 0)), axis=0)
+            else:
+                out_states = F.expand_dims(lateral_states, 0)
+        return out_states
+
+    def encode_speech_batch_lstm(self, speech_feat_batch, lstm_layer_list, train=True):
+        # pad the speech feat and adjust dims
+
+        # _TODO_ can optimize the loops to save memory. Using nested loops for every successive LSTM layer. Feed 8 units to L0 at a time.
+
+        # initialize layer 0 input as speech features
+        L_states = Variable(speech_feat_batch, volatile=not train)
+        # print("speech", L_states.shape)
+        # initial scale values, for every layer 
+        # except the final, scale down by 2
+        scale = [2]*len(lstm_layer_list[:-1]) + [1]
+        # feed LSTM layer
+        for i, lstm_layer in enumerate(lstm_layer_list):
+            print(lstm_layer, "before", L_states.shape)
+            L_states = self.batch_feed_pyramidal_lstm(L_states, lstm_layer=lstm_layer, scale=scale[i], train=train)
+            print(lstm_layer, "out", L_states.shape)
+
+        return L_states
+
+    def encode_batch(self, fwd_encoder_batch, rev_encoder_batch, train=True):
+        # convert list of tokens into chainer variable list
+        self.encode_speech_batch_lstm(fwd_encoder_batch, self.lstm_enc, train)
 
         first_entry = True
 
-        seq_len, batch_size = var_en.shape
+        seq_len, batch_size, in_dim = fwd_encoder_batch.shape
 
         if self.attn:
             self.mask = xp.expand_dims(fwd_encoder_batch != 0, -1)
@@ -337,39 +383,22 @@ class SpeechEncoderDecoder(Chain):
                                  dtype=xp.float32), volatile=not train)
 
         # for all sequences in the batch, feed the characters one by one
-        for i in range(seq_len):
-            # encode tokens
-            w = var_en[i]
-            rev_w = var_rev_en[i]
+        self.L_FWD_STATES = self.encode_speech_batch_lstm(fwd_encoder_batch, self.lstm_enc, train)
 
+        self.L_REV_STATES = self.encode_speech_batch_lstm(rev_encoder_batch, self.lstm_rev_enc, train)
 
-            self.L_FWD_STATES = self.encode_speech_lstm(speech_feat, self.lstm_enc, train)
+        # reverse the states to align them with forward encoder
+        self.L_REV_STATES = xp.flip(self.L_REV_STATES, axis=0)
 
-            self.L_REV_STATES = self.encode_speech_lstm(xp.flip(speech_feat, axis=0), self.lstm_rev_enc, train)
+        return_shape = self.L_FWD_STATES.shape
 
-            self.encode(w, self.lstm_enc, train)
-            self.encode(rev_w, self.lstm_rev_enc, train)
+        self.enc_states = F.concat((self.L_FWD_STATES, self.L_REV_STATES), axis=2)
 
-            if first_entry == False:
+        print("L_FWD_STATES", self.L_FWD_STATES.shape)
+        print("L_REV_STATES", self.L_REV_STATES.shape)
+        print("enc_states", self.enc_states.shape)
 
-                self.forward_states = F.concat((self.forward_states,
-                                                F.reshape(self[self.lstm_enc[-1]].h,
-                                                shape=(batch_size, 1, self.n_units))), axis=1)
-
-                self.backward_states = F.concat((F.reshape(self[self.lstm_rev_enc[-1]].h,
-                                                shape=(batch_size, 1, self.n_units)),
-                                                self.backward_states), axis=1)
-            else:
-                self.forward_states = F.reshape(self[self.lstm_enc[-1]].h,
-                                                shape=(batch_size, 1, self.n_units))
-
-                self.backward_states = F.reshape(self[self.lstm_rev_enc[-1]].h,
-                                                shape=(batch_size, 1, self.n_units))
-
-
-                first_entry = False
-
-        self.enc_states = F.concat((self.forward_states, self.backward_states), axis=2)
+        # self.enc_states = F.reshape(self.enc_states, shape=(return_shape[0], 2*return_shape[2]))
 
 
     #--------------------------------------------------------------------
@@ -378,7 +407,7 @@ class SpeechEncoderDecoder(Chain):
     def decode_batch(self, decoder_batch, train=True):
         xp = cuda.cupy if self.gpuid >= 0 else np
         # convert list of tokens into chainer variable list
-        var_dec = (Variable(decoder_batch.T, volatile=(not train)))
+        var_dec = (Variable(decoder_batch, volatile=(not train)))
 
         loss = 0
 
@@ -408,31 +437,56 @@ class SpeechEncoderDecoder(Chain):
         xp = cuda.cupy if self.gpuid >= 0 else np
         self.reset_state()
 
-        fwd_encoder_batch = xp.empty((0, src_lim), dtype=xp.float32)
-        rev_encoder_batch = xp.empty((0, src_lim), dtype=xp.float32)
-        decoder_batch = xp.empty((0, tar_lim+2), dtype=xp.int32)
+        batch_size = len(batch_data)
 
-        for src, tar in batch_data:
-            fwd_encoder_batch = xp.vstack((fwd_encoder_batch, self.pad_array(src, src_lim)))
-            rev_encoder_batch = xp.vstack((rev_encoder_batch, self.pad_array(xp.flip(src, axis=0), src_lim)))
+        in_shape_r, in_shape_c = batch_data[0][0].shape
+        # print(len(batch_data), in_shape_r, in_shape_c)
+
+        fwd_encoder_batch = xp.full((batch_size, src_lim, in_shape_c), PAD_ID, dtype=xp.float32)
+        rev_encoder_batch = xp.full((batch_size, src_lim, in_shape_c), PAD_ID, dtype=xp.float32)
+        decoder_batch = xp.full((batch_size, tar_lim+2), PAD_ID, dtype=xp.int32)
+
+        for i, (src, tar) in enumerate(batch_data):
+            fwd_encoder_batch[i] = self.pad_array(src, src_lim)
+            rev_encoder_batch[i] = self.pad_array(xp.flip(src, axis=0), src_lim)
 
             tar_data = [GO_ID] + tar + [EOS_ID]
-            decoder_batch = xp.vstack((decoder_batch, self.pad_list(tar_data,
-                                                                    tar_lim+2, at_start=False)))
+            decoder_batch[i] = self.pad_list(tar_data, tar_lim+2, at_start=False)
 
-        print()
+        print(fwd_encoder_batch.shape, rev_encoder_batch.shape, decoder_batch.shape)
+
+        # swap axes for batch and total rows
+        fwd_encoder_batch = xp.swapaxes(fwd_encoder_batch, 0,1)
+        rev_encoder_batch = xp.swapaxes(rev_encoder_batch, 0,1)
+        decoder_batch = xp.swapaxes(decoder_batch, 0,1)
+
+        print(fwd_encoder_batch.shape, rev_encoder_batch.shape, decoder_batch.shape)
+
+        print("trying encode")
+
+        self.encode_batch(fwd_encoder_batch, rev_encoder_batch, train)
+
+
+
+        # hahahaha = self.encode_speech_batch_lstm(fwd_encoder_batch[0], self.lstm_enc, train)
+        # print(hahahaha.shape)
+        # L0_out = self[self.lstm_enc[0]](fwd_encoder_batch[0])
+        # print("L0_out shape", L0_out.shape)
+
+        # self.encode_speech_batch_lstm(fwd_encoder_batch, self.lstm_enc, train)
+        # encode_speech_batch_lstm(w, self.lstm_enc, train)
+
 
         # encode list of words/tokens
         # self.encode_batch(fwd_encoder_batch, rev_encoder_batch, train=train)
 
 
-        # # initialize decoder LSTM to final encoder state
-        # self.set_decoder_state()
-        # # decode and compute loss
-        # self.loss = self.decode_batch(decoder_batch, train=train)
+        # initialize decoder LSTM to final encoder state
+        self.set_decoder_state()
+        # decode and compute loss
+        self.loss = self.decode_batch(decoder_batch, train=train)
 
-        # return self.loss
-        return 0
+        return self.loss
 
 
 # In[ ]:

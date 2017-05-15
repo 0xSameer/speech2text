@@ -40,7 +40,7 @@ NUM_SENTENCES = 17394
 # use 90% of the data for training
 
 NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = 10
+NUM_MINI_TRAINING_SENTENCES = 4
 
 ITERS_TO_SAVE = 1
 
@@ -48,15 +48,15 @@ NUM_DEV_SENTENCES = 2476
 NUM_MINI_DEV_SENTENCES = 2
 
 NUM_TEST_SENTENCES = 1781
-BATCH_SIZE = 20
+BATCH_SIZE = 4
 # A total of 11 buckets, with a length range of 7 each, giving total
 # BUCKET_WIDTH * NUM_BUCKETS = 77 for e.g.
 BUCKET_WIDTH = 3 if not CHAR_LEVEL else 3
 NUM_BUCKETS = 14 if not CHAR_LEVEL else 30
 TEXT_BUCKETS = [[] for i in range(NUM_BUCKETS)]
 # speech bucket width = 25, num_buckets = 32, for a max length of 800
-SPEECH_BUCKET_WIDTH = 25
-SPEECH_NUM_BUCKETS = 32
+SPEECH_BUCKET_WIDTH = 24
+SPEECH_NUM_BUCKETS = 35
 SPEECH_BUCKETS = [[] for i in range(SPEECH_NUM_BUCKETS)]
 
 # create separate widths for input and output, speech and english words/chars

@@ -19,6 +19,7 @@ import time
 import matplotlib.gridspec as gridspec
 import importlib
 from collections import namedtuple
+import cupy
 
 Align = namedtuple('Align', ['word', 'start', 'end'])
 
