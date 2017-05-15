@@ -387,6 +387,9 @@ def batch_training(num_training,
 
             items_to_train_in_bucket = min(left_to_train, items_in_bucket)
 
+            if buck_indx >= SWITCH_BATCH_SIZE_INDEX:
+                batch_size = SMALL_BATCH_SIZE
+
             for i in range(0, items_to_train_in_bucket, batch_size):
                 sp_files_in_batch = [t[0] for t in buckets[buck_indx][i:i+batch_size]]
 
