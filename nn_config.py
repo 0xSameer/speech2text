@@ -21,7 +21,7 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-model_dir = "es_speech_to_en_char_batches"
+model_dir = "es_speech_to_en_char_db2"
 EXP_NAME_PREFIX="es_en_batches_v1"
 
 
@@ -43,7 +43,7 @@ NUM_SENTENCES = 17394
 # use 90% of the data for training
 
 NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = 10000
+NUM_MINI_TRAINING_SENTENCES = 13137
 
 ITERS_TO_SAVE = 1
 
@@ -61,12 +61,12 @@ TEXT_BUCKETS = [[] for i in range(NUM_BUCKETS)]
 MAX_EN_LEN = 100 if not CHAR_LEVEL else 200
 # speech bucket width = 25, num_buckets = 32, for a max length of 800
 SPEECH_BUCKET_WIDTH = 24
-SPEECH_NUM_BUCKETS = 30
+SPEECH_NUM_BUCKETS = 28
 SPEECH_BUCKETS = [[] for i in range(SPEECH_NUM_BUCKETS)]
 
 BATCH_SIZE = 25
 SMALL_BATCH_SIZE = 5
-SWITCH_BATCH_SIZE_INDEX = 17 if SPEECH_NUM_BUCKETS > 10 else SPEECH_NUM_BUCKETS-1
+SWITCH_BATCH_SIZE_INDEX = 11 if SPEECH_NUM_BUCKETS > 10 else SPEECH_NUM_BUCKETS-1
 
 # create separate widths for input and output, speech and english words/chars
 MAX_PREDICT_LEN = BUCKET_WIDTH*NUM_BUCKETS
@@ -102,7 +102,7 @@ hidden_units = 512
 
 NUM_EPOCHS = 5
 
-gpuid = 0
+gpuid = 1
 
 load_existing_model = True
 

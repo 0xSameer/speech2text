@@ -19,12 +19,11 @@ text_data = pickle.load(open(text_data_dict, "rb"))
 
 # In[ ]:
 
-model = SpeechEncoderDecoder(SPEECH_DIM, vocab_size_en, num_layers_enc, num_layers_dec,
-                               hidden_units, gpuid, attn=use_attn)
+model = SpeechEncoderDecoder(SPEECH_DIM, vocab_size_en, num_layers_enc, num_layers_dec, hidden_units, gpuid, attn=use_attn)
+
 if gpuid >= 0:
     cuda.get_device(gpuid).use()
     model.to_gpu()
-
 
 # In[ ]:
 
@@ -400,8 +399,6 @@ def batch_training(num_training,
                 sp_files_in_batch = [t[0] for t in buckets[buck_indx][i:i+batch_size]]
 
                 # print(pad_size_speech, pad_size_en, batch_size)
-
-                # print("L0 before", model.L0_enc.lateral.W.data[:2,:5])
                 # print("in bucket={0:d}, indx={1:d} to {2:d}".format(buck_indx, i, i+batch_size))
 
                 # get the next batch of data
@@ -432,7 +429,7 @@ def batch_training(num_training,
                 # print(batch_data)
 
 
-                out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, loss_val, (loss_per_epoch / total_trained))
+                out_str = "epoch={0:d}, bucket={1:d}, i={2:d}, loss={3:.4f}, mean loss={4:.4f}".format((epoch+1), (buck_indx+1), i,loss_val, (loss_per_epoch / total_trained))
                 pbar.set_description(out_str)
                 pbar.update(len(batch_data))
             # end for current bucket

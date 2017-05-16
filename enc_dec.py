@@ -153,16 +153,16 @@ class SpeechEncoderDecoder(Chain):
         xp = cuda.cupy if self.gpuid >= 0 else np
 
         # forward LSTM
-        self.L_FWD_STATES = self.encode_speech_lstm(speech_feat, self.lstm_enc, train)
+        L_FWD_STATES = self.encode_speech_lstm(speech_feat, self.lstm_enc, train)
 
-        self.L_REV_STATES = self.encode_speech_lstm(xp.flip(speech_feat, axis=0), self.lstm_rev_enc, train)
+        L_REV_STATES = self.encode_speech_lstm(xp.flip(speech_feat, axis=0), self.lstm_rev_enc, train)
 
         # reverse the states to align them with forward encoder
-        self.L_REV_STATES = xp.flip(self.L_REV_STATES, axis=0)
+        L_REV_STATES = xp.flip(L_REV_STATES, axis=0)
 
-        return_shape = self.L_FWD_STATES.shape
+        return_shape = L_FWD_STATES.shape
 
-        self.enc_states = F.concat((self.L_FWD_STATES, self.L_REV_STATES), axis=1)
+        self.enc_states = F.concat((L_FWD_STATES, L_REV_STATES), axis=1)
 
         self.enc_states = F.reshape(self.enc_states, shape=(return_shape[0], 2*return_shape[2]))
 
@@ -173,15 +173,6 @@ class SpeechEncoderDecoder(Chain):
         # attention weights for the hidden states of each word in the input list
 
         if batches:
-            # masking pad ids for attention
-            # temp_enc_states = F.swapaxes(self.enc_states, 0, 1)
-            # weights = F.batch_matmul(temp_enc_states, self[self.lstm_dec[-1]].h)
-            # # weights = F.where(self.mask, weights, self.minf)
-            # alphas = F.softmax(weights)
-            # # compute context vector
-            # cv = F.squeeze(F.batch_matmul(F.swapaxes(temp_enc_states, 2, 1), alphas), axis=2)
-
-
             weights = F.batch_matmul(self.enc_states, self[self.lstm_dec[-1]].h)
             # weights = F.where(self.mask, weights, self.minf)
             alphas = F.softmax(weights)
@@ -381,21 +372,21 @@ class SpeechEncoderDecoder(Chain):
                                  dtype=xp.float32), volatile=not train)
 
         # for all sequences in the batch, feed the characters one by one
-        self.L_FWD_STATES = self.encode_speech_batch_lstm(fwd_encoder_batch, self.lstm_enc, train)
+        L_FWD_STATES = self.encode_speech_batch_lstm(fwd_encoder_batch, self.lstm_enc, train)
 
-        self.L_REV_STATES = self.encode_speech_batch_lstm(rev_encoder_batch, self.lstm_rev_enc, train)
+        L_REV_STATES = self.encode_speech_batch_lstm(rev_encoder_batch, self.lstm_rev_enc, train)
 
         # reverse the states to align them with forward encoder
-        self.L_REV_STATES = xp.flip(self.L_REV_STATES, axis=0)
+        L_REV_STATES = xp.flip(L_REV_STATES, axis=0)
 
-        return_shape = self.L_FWD_STATES.shape
+        return_shape = L_FWD_STATES.shape
 
-        self.enc_states = F.concat((self.L_FWD_STATES, self.L_REV_STATES), axis=2)
+        self.enc_states = F.concat((L_FWD_STATES, L_REV_STATES), axis=2)
 
         self.enc_states = F.swapaxes(self.enc_states, 0, 1)
 
-        # print("L_FWD_STATES", self.L_FWD_STATES.shape)
-        # print("L_REV_STATES", self.L_REV_STATES.shape)
+        # prL_FWD_STATES", L_FWD_STATES.shape)
+        # prL_REV_STATES", L_REV_STATES.shape)
         # print("enc_states", self.enc_states.shape)
 
 
