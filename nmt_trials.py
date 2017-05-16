@@ -380,6 +380,9 @@ def batch_training(num_training,
         for buck_indx in range(len(buckets)):
             if total_trained >= num_training:
                 break
+
+            # buck_indx=18
+
             left_to_train = num_training - total_trained
             items_in_bucket = bucket_lengths[buck_indx][0]
             pad_size_speech = (buck_indx+1) * width_b
@@ -392,8 +395,14 @@ def batch_training(num_training,
 
             for i in range(0, items_to_train_in_bucket, batch_size):
                 sp_files_in_batch = [t[0] for t in buckets[buck_indx][i:i+batch_size]]
+                
+                # i=50
+                sp_files_in_batch = [t[0] for t in buckets[buck_indx][i:i+batch_size]]
+
+                # print(pad_size_speech, pad_size_en, batch_size)
 
                 # print("L0 before", model.L0_enc.lateral.W.data[:2,:5])
+                # print("in bucket={0:d}, indx={1:d} to {2:d}".format(buck_indx, i, i+batch_size))
 
                 # get the next batch of data
                 batch_data = []
@@ -547,5 +556,8 @@ print("Starting experiment")
 print("num sentences={0:d} and num epochs={1:d}".format(NUM_MINI_TRAINING_SENTENCES, NUM_EPOCHS))
 
 start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS, batches=True)
+
+# buckets, bucket_lengths = populate_buckets(display=True)
+# batch_training(100, 10 , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, 0)
 
 # In[ ]:

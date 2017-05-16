@@ -43,7 +43,7 @@ NUM_SENTENCES = 17394
 # use 90% of the data for training
 
 NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = NUM_TRAINING_SENTENCES
+NUM_MINI_TRAINING_SENTENCES = 10000
 
 ITERS_TO_SAVE = 1
 
@@ -61,12 +61,12 @@ TEXT_BUCKETS = [[] for i in range(NUM_BUCKETS)]
 MAX_EN_LEN = 100 if not CHAR_LEVEL else 200
 # speech bucket width = 25, num_buckets = 32, for a max length of 800
 SPEECH_BUCKET_WIDTH = 24
-SPEECH_NUM_BUCKETS = 34
+SPEECH_NUM_BUCKETS = 30
 SPEECH_BUCKETS = [[] for i in range(SPEECH_NUM_BUCKETS)]
 
-BATCH_SIZE = 50
-SMALL_BATCH_SIZE = 20
-SWITCH_BATCH_SIZE_INDEX = (SPEECH_NUM_BUCKETS - 2) if SPEECH_NUM_BUCKETS > 10 else SPEECH_NUM_BUCKETS-1
+BATCH_SIZE = 25
+SMALL_BATCH_SIZE = 5
+SWITCH_BATCH_SIZE_INDEX = 17 if SPEECH_NUM_BUCKETS > 10 else SPEECH_NUM_BUCKETS-1
 
 # create separate widths for input and output, speech and english words/chars
 MAX_PREDICT_LEN = BUCKET_WIDTH*NUM_BUCKETS
@@ -98,7 +98,7 @@ if os.path.exists(w2i_path):
 num_layers_enc = 4
 num_layers_dec = 2
 use_attn = SOFT_ATTN
-hidden_units = 128
+hidden_units = 512
 
 NUM_EPOCHS = 5
 

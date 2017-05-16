@@ -127,7 +127,7 @@ class SpeechEncoderDecoder(Chain):
         # initialize layer 0 input as speech features
         L_states = Variable(xp.expand_dims(speech_feat, 1), volatile=not train)
         # print("speech", L_states.shape)
-        # initial scale values, for every layer 
+        # initial scale values, for every layer
         # except the final, scale down by 2
         scale = [2]*len(lstm_layer_list[:-1]) + [1]
         # feed LSTM layer
@@ -151,7 +151,7 @@ class SpeechEncoderDecoder(Chain):
     #--------------------------------------------------------------------
     def encode_list(self, speech_feat, train=True):
         xp = cuda.cupy if self.gpuid >= 0 else np
-        
+
         # forward LSTM
         self.L_FWD_STATES = self.encode_speech_lstm(speech_feat, self.lstm_enc, train)
 
@@ -174,19 +174,20 @@ class SpeechEncoderDecoder(Chain):
 
         if batches:
             # masking pad ids for attention
-            self.temp_enc_states = F.swapaxes(self.enc_states, 0, 1)
-            # print("enc_states in attn", self.temp_enc_states.shape)
+            # temp_enc_states = F.swapaxes(self.enc_states, 0, 1)
+            # weights = F.batch_matmul(temp_enc_states, self[self.lstm_dec[-1]].h)
+            # # weights = F.where(self.mask, weights, self.minf)
+            # alphas = F.softmax(weights)
+            # # compute context vector
+            # cv = F.squeeze(F.batch_matmul(F.swapaxes(temp_enc_states, 2, 1), alphas), axis=2)
 
-            # self.enc_states = F.swapaxes(self.enc_states, 0, 1)
-            # print("enc_states", self.enc_states.shape)
 
-            weights = F.batch_matmul(self.temp_enc_states, self[self.lstm_dec[-1]].h)
+            weights = F.batch_matmul(self.enc_states, self[self.lstm_dec[-1]].h)
             # weights = F.where(self.mask, weights, self.minf)
-
             alphas = F.softmax(weights)
-
             # compute context vector
-            cv = F.squeeze(F.batch_matmul(F.swapaxes(self.temp_enc_states, 2, 1), alphas), axis=2)
+            cv = F.squeeze(F.batch_matmul(F.swapaxes(self.enc_states, 2, 1), alphas), axis=2)
+
         else:
             # without batches
             alphas = F.softmax(F.matmul(self[self.lstm_dec[-1]].h, self.enc_states, transb=True))
@@ -355,7 +356,7 @@ class SpeechEncoderDecoder(Chain):
         # initialize layer 0 input as speech features
         L_states = Variable(speech_feat_batch, volatile=not train)
         # print("speech", L_states.shape)
-        # initial scale values, for every layer 
+        # initial scale values, for every layer
         # except the final, scale down by 2
         scale = [2]*len(lstm_layer_list[:-1]) + [1]
         # feed LSTM layer
@@ -390,6 +391,8 @@ class SpeechEncoderDecoder(Chain):
         return_shape = self.L_FWD_STATES.shape
 
         self.enc_states = F.concat((self.L_FWD_STATES, self.L_REV_STATES), axis=2)
+
+        self.enc_states = F.swapaxes(self.enc_states, 0, 1)
 
         # print("L_FWD_STATES", self.L_FWD_STATES.shape)
         # print("L_REV_STATES", self.L_REV_STATES.shape)
@@ -463,6 +466,8 @@ class SpeechEncoderDecoder(Chain):
         self.set_decoder_state()
         # decode and compute loss
         self.loss = self.decode_batch(decoder_batch, train=train)
+
+        self.enc_states = 0
 
         return self.loss
 
