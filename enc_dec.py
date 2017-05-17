@@ -308,11 +308,14 @@ class SpeechEncoderDecoder(Chain):
     # For batch size > 1
     #--------------------------------------------------------------------
     def pad_list(self, data, lim, at_start=True):
-        xp = cuda.cupy if self.gpuid >= 0 else np
-        if at_start:
-            ret_data = [PAD_ID]*(lim - len(data)) + data
+        if len(data) >= lim:
+            ret_data = data[:lim]
         else:
-            ret_data = data + [PAD_ID]*(lim - len(data))
+            rows_to_pad = lim-len(data)
+            if at_start:
+                ret_data = [PAD_ID]*(rows_to_pad) + data
+            else:
+                ret_data = data + [PAD_ID]*(rows_to_pad)
         return xp.asarray(ret_data, dtype=xp.int32)
 
     #--------------------------------------------------------------------
@@ -443,6 +446,7 @@ class SpeechEncoderDecoder(Chain):
             decoder_batch[i] = self.pad_list(tar_data, tar_lim+2, at_start=False)
 
         # print(fwd_encoder_batch.shape, rev_encoder_batch.shape, decoder_batch.shape)
+        batch_data = 0
 
         # swap axes for batch and total rows
         fwd_encoder_batch = xp.swapaxes(fwd_encoder_batch, 0,1)

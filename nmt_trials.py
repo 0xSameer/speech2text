@@ -357,12 +357,11 @@ def single_instance_training(num_training, epoch):
 # In[ ]:
 
 def batch_training(num_training, 
-                   batch_size, 
+                   BATCH_SIZE_LOOKUP, 
                    buckets, 
                    bucket_lengths, 
                    width_b,
                    epoch):
-    num_batches = num_training // batch_size
 
     curr_batch = 0
     curr_bucket = 0
@@ -380,7 +379,8 @@ def batch_training(num_training,
             if total_trained >= num_training:
                 break
 
-            # buck_indx=18
+            # buck_indx=28
+            # BATCH_SIZE_LOOKUP[buck_indx] = 5
 
             left_to_train = num_training - total_trained
             items_in_bucket = bucket_lengths[buck_indx][0]
@@ -389,8 +389,7 @@ def batch_training(num_training,
 
             items_to_train_in_bucket = min(left_to_train, items_in_bucket)
 
-            if buck_indx >= SWITCH_BATCH_SIZE_INDEX:
-                batch_size = SMALL_BATCH_SIZE
+            batch_size = BATCH_SIZE_LOOKUP[buck_indx]
 
             for i in range(0, items_to_train_in_bucket, batch_size):
                 sp_files_in_batch = [t[0] for t in buckets[buck_indx][i:i+batch_size]]
@@ -405,7 +404,8 @@ def batch_training(num_training,
                 batch_data = []
                 for sp_fil in sp_files_in_batch:
                     _, en_ids, speech_feat = get_data_item(sp_fil, cat="train")
-                    batch_data.append((speech_feat, en_ids))
+                    # print(speech_feat.shape, len(en_ids))
+                    batch_data.append((speech_feat[:pad_size_speech], en_ids[:pad_size_en]))
 
                 # compute loss
                 loss = model.encode_decode_train_batch(batch_data, pad_size_speech, pad_size_en, train=True)
@@ -427,6 +427,7 @@ def batch_training(num_training,
                 # print("L0 after", model.L0_enc.lateral.W.data[:2,:5])
 
                 # print(batch_data)
+                # return
 
 
                 out_str = "epoch={0:d}, bucket={1:d}, i={2:d}, loss={3:.4f}, mean loss={4:.4f}".format((epoch+1), (buck_indx+1), i,loss_val, (loss_per_epoch / total_trained))
@@ -463,7 +464,7 @@ def train_loop(num_training,
         if not batches:
             single_instance_training(num_training, epoch)
         else:
-            batch_training(num_training, BATCH_SIZE , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, epoch)
+            batch_training(num_training, BATCH_SIZE_LOOKUP , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, epoch)
         # end with pbar
 
         print("finished training on {0:d} sentences".format(num_training))
@@ -555,6 +556,6 @@ print("num sentences={0:d} and num epochs={1:d}".format(NUM_MINI_TRAINING_SENTEN
 start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS, batches=True)
 
 # buckets, bucket_lengths = populate_buckets(display=True)
-# batch_training(100, 10 , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, 0)
+# batch_training(20, BATCH_SIZE_LOOKUP , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, 0)
 
 # In[ ]:

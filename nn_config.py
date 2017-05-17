@@ -21,7 +21,7 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-model_dir = "es_speech_to_en_char_db2"
+model_dir = "es_speech_to_en_char_batches"
 EXP_NAME_PREFIX="es_en_batches_v1"
 
 
@@ -61,12 +61,27 @@ TEXT_BUCKETS = [[] for i in range(NUM_BUCKETS)]
 MAX_EN_LEN = 100 if not CHAR_LEVEL else 200
 # speech bucket width = 25, num_buckets = 32, for a max length of 800
 SPEECH_BUCKET_WIDTH = 24
-SPEECH_NUM_BUCKETS = 28
+SPEECH_NUM_BUCKETS = 32
 SPEECH_BUCKETS = [[] for i in range(SPEECH_NUM_BUCKETS)]
 
-BATCH_SIZE = 25
-SMALL_BATCH_SIZE = 5
-SWITCH_BATCH_SIZE_INDEX = 11 if SPEECH_NUM_BUCKETS > 10 else SPEECH_NUM_BUCKETS-1
+# BATCH_SIZE = 30
+# SMALL_BATCH_SIZE = 5
+# SWITCH_BATCH_SIZE_INDEX = 11 if SPEECH_NUM_BUCKETS > 10 else SPEECH_NUM_BUCKETS-1
+
+BATCH_SIZE_LOOKUP = {}
+
+for i in range(SPEECH_NUM_BUCKETS):
+    if i < 7:
+        BATCH_SIZE_LOOKUP[i] = 50
+    elif i >= 7 and i<13:
+        BATCH_SIZE_LOOKUP[i] = 20
+    elif i >= 13 and i<20:
+        BATCH_SIZE_LOOKUP[i] = 10
+    elif i>=20 and i<26:
+        BATCH_SIZE_LOOKUP[i] = 2
+    else:
+        BATCH_SIZE_LOOKUP[i] = 2
+
 
 # create separate widths for input and output, speech and english words/chars
 MAX_PREDICT_LEN = BUCKET_WIDTH*NUM_BUCKETS
