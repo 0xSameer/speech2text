@@ -342,7 +342,7 @@ class SpeechEncoderDecoder(Chain):
                 out_states = F.expand_dims(lateral_states, 0)
         return out_states
 
-    def encode_speech_batch_lstm(self, speech_feat_batch, lstm_layer_list, train=True):
+    def encode_speech_batch_lstm_seg(self, speech_feat_batch, lstm_layer_list, train=True):
         # pad the speech feat and adjust dims
 
         # _TODO_ can optimize the loops to save memory. Using nested loops for every successive LSTM layer. Feed 8 units to L0 at a time.
@@ -357,15 +357,29 @@ class SpeechEncoderDecoder(Chain):
         for i, lstm_layer in enumerate(lstm_layer_list):
             # print(lstm_layer, "before", L_states.shape)
             L_states = self.batch_feed_pyramidal_lstm(L_states, lstm_layer=lstm_layer, scale=scale[i], train=train)
+            # print(i, lstm_layer, L_states.shape)
             # print(lstm_layer, "out", L_states.shape)
 
         return L_states
 
+    def encode_speech_batch_lstm(self, speech_feat_batch, lstm_layer_list, train=True):
+        in_size, batch_size, in_dim = speech_feat_batch.shape
+        # print("speech", speech_feat_batch.shape)
+        # step size to process input
+        step_size = 2**len(lstm_layer_list[:-1])
+        for s in range(0,in_size,step_size):
+            if s == 0:
+                out_states = self.encode_speech_batch_lstm_seg(speech_feat_batch[s:s+step_size], lstm_layer_list, train=train)
+            else:
+                out_states = F.concat((out_states, self.encode_speech_batch_lstm_seg(speech_feat_batch[s:s+step_size], lstm_layer_list, train=train)), axis=0)
+            # print(s, s+step_size, out_states.shape)
+        # end for step_size
+        return out_states
+
+
     def encode_batch(self, fwd_encoder_batch, rev_encoder_batch, train=True):
         # convert list of tokens into chainer variable list
-        self.encode_speech_batch_lstm(fwd_encoder_batch, self.lstm_enc, train)
-
-        first_entry = True
+        # self.encode_speech_batch_lstm(fwd_encoder_batch, self.lstm_enc, train)
 
         seq_len, batch_size, in_dim = fwd_encoder_batch.shape
 

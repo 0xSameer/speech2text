@@ -379,8 +379,8 @@ def batch_training(num_training,
             if total_trained >= num_training:
                 break
 
-            # buck_indx=28
-            # BATCH_SIZE_LOOKUP[buck_indx] = 5
+            # buck_indx = 26
+            # BATCH_SIZE_LOOKUP[buck_indx] = 25
 
             left_to_train = num_training - total_trained
             items_in_bucket = bucket_lengths[buck_indx][0]
@@ -392,9 +392,6 @@ def batch_training(num_training,
             batch_size = BATCH_SIZE_LOOKUP[buck_indx]
 
             for i in range(0, items_to_train_in_bucket, batch_size):
-                sp_files_in_batch = [t[0] for t in buckets[buck_indx][i:i+batch_size]]
-                
-                # i=50
                 sp_files_in_batch = [t[0] for t in buckets[buck_indx][i:i+batch_size]]
 
                 # print(pad_size_speech, pad_size_en, batch_size)
@@ -421,14 +418,11 @@ def batch_training(num_training,
                 loss.backward()
                 # update parameters
                 optimizer.update()
-                # store loss value for display
+
                 # print(sp_files_in_batch)
                 # print(loss.data, math.isnan(loss.data))
                 # print("L0 after", model.L0_enc.lateral.W.data[:2,:5])
-
                 # print(batch_data)
-                # return
-
 
                 out_str = "epoch={0:d}, bucket={1:d}, i={2:d}, loss={3:.4f}, mean loss={4:.4f}".format((epoch+1), (buck_indx+1), i,loss_val, (loss_per_epoch / total_trained))
                 pbar.set_description(out_str)
@@ -472,23 +466,23 @@ def train_loop(num_training,
         print("computing perplexity")
         pplx_new = compute_pplx(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES)
 
-        if pplx_new > pplx:
-            print("perplexity went up during training, breaking out of loop")
-            break
-        
-        pplx = pplx_new
-        print(log_dev_fil_name)
-        print(model_fil.replace(".model", "_{0:d}.model".format(epoch+1)))
-
         if (epoch+1) % ITERS_TO_SAVE == 0:
             bleu_score = compute_bleu(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES)
             print("Saving model")
             serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch_id+epoch+1)), model)
             print("Finished saving model")
 
+
         # log pplx and bleu score
         log_dev_csv.writerow([(last_epoch_id+epoch+1), pplx_new, bleu_score])
         log_dev_fil.flush()
+
+        if pplx_new > pplx:
+            print("perplexity went up during training, breaking out of loop")
+            break
+        pplx = pplx_new
+        print(log_dev_fil_name)
+        print(model_fil.replace(".model", "_{0:d}.model".format(epoch+1)))
     
     print("Simple predictions (╯°□°）╯︵ ┻━┻")
     print("training set predictions")
@@ -542,6 +536,8 @@ def start_here(num_training=1000, num_epochs=1, batches=False):
             print("""model file already exists!!
                 Delete before continuing, or enable load_existing flag""".format(model_fil))
             return
+    else:
+        print("model not found")
 
     train_loop(num_training=num_training, 
                num_epochs=num_epochs,
@@ -556,6 +552,6 @@ print("num sentences={0:d} and num epochs={1:d}".format(NUM_MINI_TRAINING_SENTEN
 start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS, batches=True)
 
 # buckets, bucket_lengths = populate_buckets(display=True)
-# batch_training(20, BATCH_SIZE_LOOKUP , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, 0)
+# batch_training(100, BATCH_SIZE_LOOKUP , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, 0)
 
 # In[ ]:

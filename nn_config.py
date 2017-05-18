@@ -21,8 +21,8 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-model_dir = "es_speech_to_en_char_batches"
-EXP_NAME_PREFIX="es_en_batches_v1"
+model_dir = "es_speech_to_en_char_better"
+EXP_NAME_PREFIX="callhome"
 
 
 print("callhome es-en word level configuration")
@@ -61,7 +61,7 @@ TEXT_BUCKETS = [[] for i in range(NUM_BUCKETS)]
 MAX_EN_LEN = 100 if not CHAR_LEVEL else 200
 # speech bucket width = 25, num_buckets = 32, for a max length of 800
 SPEECH_BUCKET_WIDTH = 24
-SPEECH_NUM_BUCKETS = 32
+SPEECH_NUM_BUCKETS = 34
 SPEECH_BUCKETS = [[] for i in range(SPEECH_NUM_BUCKETS)]
 
 # BATCH_SIZE = 30
@@ -70,17 +70,29 @@ SPEECH_BUCKETS = [[] for i in range(SPEECH_NUM_BUCKETS)]
 
 BATCH_SIZE_LOOKUP = {}
 
+# for i in range(SPEECH_NUM_BUCKETS):
+#     if i < 7:
+#         BATCH_SIZE_LOOKUP[i] = 50
+#     elif i >= 7 and i<13:
+#         BATCH_SIZE_LOOKUP[i] = 20
+#     elif i >= 13 and i<20:
+#         BATCH_SIZE_LOOKUP[i] = 10
+#     elif i>=20 and i<26:
+#         BATCH_SIZE_LOOKUP[i] = 4
+#     else:
+#         BATCH_SIZE_LOOKUP[i] = 2
+
 for i in range(SPEECH_NUM_BUCKETS):
     if i < 7:
         BATCH_SIZE_LOOKUP[i] = 50
     elif i >= 7 and i<13:
-        BATCH_SIZE_LOOKUP[i] = 20
+        BATCH_SIZE_LOOKUP[i] = 50
     elif i >= 13 and i<20:
-        BATCH_SIZE_LOOKUP[i] = 10
+        BATCH_SIZE_LOOKUP[i] = 50
     elif i>=20 and i<26:
-        BATCH_SIZE_LOOKUP[i] = 2
+        BATCH_SIZE_LOOKUP[i] = 50
     else:
-        BATCH_SIZE_LOOKUP[i] = 2
+        BATCH_SIZE_LOOKUP[i] = 50
 
 
 # create separate widths for input and output, speech and english words/chars
