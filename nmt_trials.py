@@ -28,12 +28,12 @@ if gpuid >= 0:
 # In[ ]:
 
 # optimizer = optimizers.Adam()
-optimizer = optimizers.Adam(alpha=0.0001, beta1=0.9, beta2=0.999, eps=1e-08)
-# optimizer = optimizers.SGD(lr=0.0001)
+# optimizer = optimizers.Adam(alpha=0.0001, beta1=0.9, beta2=0.999, eps=1e-08)
+optimizer = optimizers.SGD(lr=0.0001)
 optimizer.setup(model)
 # gradient clipping
 optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
-optimizer.add_hook(chainer.optimizer.WeightDecay(0.0001))
+# optimizer.add_hook(chainer.optimizer.WeightDecay(0.0001))
 
 
 # In[ ]:

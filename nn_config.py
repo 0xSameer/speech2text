@@ -21,7 +21,7 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-model_dir = "es_speech_to_en_char_better"
+model_dir = "es_speech_to_en_word_better"
 EXP_NAME_PREFIX="callhome"
 
 
@@ -37,13 +37,13 @@ text_data_dict = os.path.join(input_dir, "text_split.dict")
 
 speech_extn = "_fa_vad.std.mfb"
 
-CHAR_LEVEL = True
+CHAR_LEVEL = False
 
 NUM_SENTENCES = 17394
 # use 90% of the data for training
 
 NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = 13137
+NUM_MINI_TRAINING_SENTENCES = 1000
 
 ITERS_TO_SAVE = 1
 
@@ -88,11 +88,11 @@ for i in range(SPEECH_NUM_BUCKETS):
     elif i >= 7 and i<13:
         BATCH_SIZE_LOOKUP[i] = 50
     elif i >= 13 and i<20:
-        BATCH_SIZE_LOOKUP[i] = 50
+        BATCH_SIZE_LOOKUP[i] = 25
     elif i>=20 and i<26:
-        BATCH_SIZE_LOOKUP[i] = 50
+        BATCH_SIZE_LOOKUP[i] = 25
     else:
-        BATCH_SIZE_LOOKUP[i] = 50
+        BATCH_SIZE_LOOKUP[i] = 25
 
 
 # create separate widths for input and output, speech and english words/chars
@@ -127,9 +127,9 @@ num_layers_dec = 2
 use_attn = SOFT_ATTN
 hidden_units = 512
 
-NUM_EPOCHS = 5
+NUM_EPOCHS = 1
 
-gpuid = 1
+gpuid = 0
 
 load_existing_model = True
 
