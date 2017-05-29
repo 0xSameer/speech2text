@@ -28,12 +28,12 @@ if gpuid >= 0:
 # In[ ]:
 
 # optimizer = optimizers.Adam()
-# optimizer = optimizers.Adam(alpha=0.0001, beta1=0.9, beta2=0.999, eps=1e-08)
+#optimizer = optimizers.Adam(alpha=0.0001, beta1=0.9, beta2=0.999, eps=1e-08)
 optimizer = optimizers.SGD(lr=0.0001)
 optimizer.setup(model)
 # gradient clipping
 optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
-# optimizer.add_hook(chainer.optimizer.WeightDecay(0.0001))
+#optimizer.add_hook(chainer.optimizer.WeightDecay(0.0001))
 
 
 # In[ ]:
@@ -52,15 +52,15 @@ def display_buckets(bucket_lengths, width_b = SPEECH_BUCKET_WIDTH):
     print("\n".join(["{0:3d} | {1:5d} | {2:5d} | {3:6d} | {4:8.0f} | {5:6d} | {6:8.0f}".format(i[0], (i[0]+1)*width_b, *i[1]) for i in list(bucket_lengths.items())]))
 
 
-def populate_buckets(width_b = SPEECH_BUCKET_WIDTH, 
-                     num_b = SPEECH_NUM_BUCKETS, 
-                     speech=True, 
+def populate_buckets(width_b = SPEECH_BUCKET_WIDTH,
+                     num_b = SPEECH_NUM_BUCKETS,
+                     speech=True,
                      num_sent=NUM_TRAINING_SENTENCES,
                      filname_b=speech_bucket_data_fname,
                      cat="train", display=False):
-    
+
     buckets = [[] for i in range(num_b)]
-    
+
     print("Splitting data into {0:d} buckets, each of width={1:d}".format(num_b, width_b))
 
     with tqdm(total=num_sent) as pbar:
@@ -82,7 +82,7 @@ def populate_buckets(width_b = SPEECH_BUCKET_WIDTH,
 
             pbar.update(1)
 
-    bucket_lengths = {i:(len(l), 
+    bucket_lengths = {i:(len(l),
                     max(l, key=lambda t:t[2])[2],
                     np.mean([i[2]for i in l]),
                     max(l, key=lambda t:t[3])[3],
@@ -116,13 +116,13 @@ def display_prediction(fr_line, en_line, pred_words, prec=0, rec=0):
 
     # if plot_name and use_attn:
     #     plot_attention(alpha_arr, fr_words, pred_words, plot_name)
-    
+
 def predict_sentence(speech_feat, en_ids, p_filt=0, r_filt=0):
     # get prediction
     pred_ids, alpha_arr = model.encode_decode_predict(speech_feat)
-    
+
     pred_words = [i2w["en"][w].decode() if w != EOS_ID else " _EOS" for w in pred_ids]
-    
+
     prec = 0
     rec = 0
     filter_match = False
@@ -132,7 +132,7 @@ def predict_sentence(speech_feat, en_ids, p_filt=0, r_filt=0):
         pred_len = len(pred_ids)-1
     else:
         pred_len = len(pred_ids)
-    
+
     # subtract 1 from length for EOS id
     prec = (matches/pred_len) if pred_len > 0 else 0
     rec = matches/len(en_ids)
@@ -148,23 +148,23 @@ def predict(s=0, num=1, cat="train", display=True, plot=False, p_filt=0, r_filt=
     metrics = {"cp":[], "tp":[], "t":[]}
 
     filter_count = 0
-    
+
     for i, sp_fil in enumerate(sorted(list(text_data[cat].keys()))[s:s+num]):
         if plot:
             plot_name = os.path.join(model_dir, "{0:s}_plot.png".format(sp_fil))
         else:
             plot_name=None
-            
+
         fr_ids, en_ids, speech_feat = get_data_item(sp_fil, cat=cat)
 
         # make prediction
-        pred_words, cp, tp, t, f = predict_sentence(speech_feat, en_ids, 
+        pred_words, cp, tp, t, f = predict_sentence(speech_feat, en_ids,
                                                     p_filt=p_filt, r_filt=r_filt)
         metrics["cp"].append(cp)
         metrics["tp"].append(tp)
         metrics["t"].append(t)
         filter_count += (1 if f else 0)
-        
+
         if display:
             fr_line, en_line = get_text_lines(sp_fil, cat=cat)
             print("-"*80)
@@ -207,7 +207,7 @@ def compute_pplx(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES):
             pbar.update(1)
         # end of pbar
     # end of for num_sent
-    
+
     loss_per_word = loss / num_words
     pplx = 2 ** loss_per_word
     random_pplx = vocab_size_en
@@ -255,7 +255,7 @@ def compute_bleu(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES):
             # add reference translation
             reference_words = en_line.strip().split()
             list_of_references.append(reference_words)
-            
+
             if len(speech_feat) >= MIN_SPEECH_LEN and len(en_ids) > 0:
                 pred_ids, _ = model.encode_decode_predict(speech_feat)
                 pred_words = [i2w["en"][w].decode() if w != EOS_ID else "" for w in pred_ids]
@@ -280,7 +280,7 @@ def compute_bleu(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES):
 def get_text_lines(sp_fil, cat="train"):
     _, fr_line = get_ids(text_data[cat][sp_fil]["es"])
     _, en_line = get_ids(text_data[cat][sp_fil]["en"])
-    
+
     return fr_line, en_line
 
 
@@ -289,25 +289,25 @@ def get_text_lines(sp_fil, cat="train"):
 def get_ids(align_list, char_level=CHAR_LEVEL):
     words = [a.word for a in align_list]
     text_line = " ".join(words)
-    
+
     if not char_level:
-        symbols = [w.encode() for w in text_line.strip()]
+        symbols = [w.encode() for w in words]
     else:
         symbols = [c.encode() for c in list(text_line.strip())]
-    
+
     return symbols, text_line
 
 
 # In[ ]:
 
-def get_data_item(sp_fil, cat="train"):    
+def get_data_item(sp_fil, cat="train"):
     fr_sent, _ = get_ids(text_data[cat][sp_fil]["es"])
     en_sent, _ = get_ids(text_data[cat][sp_fil]["en"])
 
     fr_ids = [w2i["fr"].get(w, UNK_ID) for w in fr_sent]
     en_ids = [w2i["en"].get(w, UNK_ID) for w in en_sent]
 
-    speech_feat = xp.load(os.path.join(speech_dir, sp_fil+speech_extn))
+    speech_feat = xp.load(os.path.join(speech_dir, sp_fil+speech_extn)).astype(xp.float32)
     return fr_ids, en_ids, speech_feat
 
 
@@ -329,7 +329,7 @@ def single_instance_training(num_training, epoch):
             loss_per_epoch = 0
             out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, 0, 0)
             pbar.set_description(out_str)
-            
+
             # get the word/character ids
             fr_ids, en_ids, speech_feat = get_data_item(sp_fil, cat="train")
 
@@ -356,10 +356,10 @@ def single_instance_training(num_training, epoch):
 
 # In[ ]:
 
-def batch_training(num_training, 
-                   BATCH_SIZE_LOOKUP, 
-                   buckets, 
-                   bucket_lengths, 
+def batch_training(num_training,
+                   BATCH_SIZE_LOOKUP,
+                   buckets,
+                   bucket_lengths,
                    width_b,
                    epoch):
 
@@ -433,10 +433,10 @@ def batch_training(num_training,
 
 # In[ ]:
 
-def train_loop(num_training, 
-               num_epochs, 
-               log_mode="a", 
-               last_epoch_id=0, 
+def train_loop(num_training,
+               num_epochs,
+               log_mode="a",
+               last_epoch_id=0,
                batches=False):
     # Set up log file for loss
     log_dev_fil = open(log_dev_fil_name, mode=log_mode)
@@ -483,7 +483,7 @@ def train_loop(num_training,
         pplx = pplx_new
         print(log_dev_fil_name)
         print(model_fil.replace(".model", "_{0:d}.model".format(epoch+1)))
-    
+
     print("Simple predictions (╯°□°）╯︵ ┻━┻")
     print("training set predictions")
     _ = predict(s=0, num=2, cat="train", display=True, plot=False, p_filt=0, r_filt=0)
@@ -539,7 +539,7 @@ def start_here(num_training=1000, num_epochs=1, batches=False):
     else:
         print("model not found")
 
-    train_loop(num_training=num_training, 
+    train_loop(num_training=num_training,
                num_epochs=num_epochs,
                last_epoch_id=max_epoch_id,
                batches=batches)

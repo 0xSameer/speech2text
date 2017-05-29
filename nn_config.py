@@ -21,7 +21,7 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-model_dir = "es_speech_to_en_word_better"
+model_dir = "mfcc_std_word"
 EXP_NAME_PREFIX="callhome"
 
 
@@ -29,13 +29,13 @@ print("callhome es-en word level configuration")
 
 input_dir = "../../corpora/callhome/uttr_fa_vad_wavs"
 
-speech_dir = os.path.join(input_dir, "mfb_std")
-SPEECH_DIM = 120
+speech_dir = os.path.join(input_dir, "mfcc_std")
+SPEECH_DIM = 39
 MAX_SPEECH_LEN = 400
 MIN_SPEECH_LEN = 16
 text_data_dict = os.path.join(input_dir, "text_split.dict")
 
-speech_extn = "_fa_vad.std.mfb"
+speech_extn = "_fa_vad.std.mfcc"
 
 CHAR_LEVEL = False
 
@@ -43,12 +43,12 @@ NUM_SENTENCES = 17394
 # use 90% of the data for training
 
 NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = 1000
+NUM_MINI_TRAINING_SENTENCES = 13137
 
-ITERS_TO_SAVE = 1
+ITERS_TO_SAVE = 2
 
 NUM_DEV_SENTENCES = 2476
-NUM_MINI_DEV_SENTENCES = 100
+NUM_MINI_DEV_SENTENCES = 300
 
 NUM_TEST_SENTENCES = 1781
 
@@ -127,7 +127,7 @@ num_layers_dec = 2
 use_attn = SOFT_ATTN
 hidden_units = 512
 
-NUM_EPOCHS = 1
+NUM_EPOCHS = 10
 
 gpuid = 0
 
