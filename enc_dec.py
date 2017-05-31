@@ -7,7 +7,8 @@ class SpeechEncoderDecoder(Chain):
 
     def __init__(self, n_speech_dim, vsize_dec,
                  nlayers_enc, nlayers_dec,
-                 n_units, gpuid, attn=False):
+                 n_units, gpuid,
+                 lstm1_or_gru0=True, attn=False):
         '''
         n_speech_dim: dimensions for the speech features
         vsize:   vocabulary size
@@ -28,17 +29,27 @@ class SpeechEncoderDecoder(Chain):
         scale = 2
         # add LSTM layers
         self.lstm_enc = ["L{0:d}_enc".format(i) for i in range(nlayers_enc)]
+        if lstm1_or_gru0:
+            RNN_LAYER = L.LSTM
+        else:
+            RNN_LAYER = L.StatefulGRU
         # first LSTM layer takes speech features
-        self.add_link(self.lstm_enc[0], L.LSTM(n_speech_dim, n_units))
+        self.add_link(self.lstm_enc[0], RNN_LAYER(n_speech_dim, n_units))
         # add remaining layers
         for lstm_name in self.lstm_enc[1:]:
-            self.add_link(lstm_name, L.LSTM(n_units*scale, n_units))
+            if lstm1_or_gru0:
+                self.add_link(lstm_name, L.LSTM(n_units*scale, n_units))
+            else:
+                self.add_link(lstm_name, L.StatefulGRU(n_units*scale, n_units))
 
         # reverse LSTM layer
         self.lstm_rev_enc = ["L{0:d}_rev_enc".format(i) for i in range(nlayers_enc)]
         self.add_link(self.lstm_rev_enc[0], L.LSTM(n_speech_dim, n_units))
         for lstm_name in self.lstm_rev_enc[1:]:
-            self.add_link(lstm_name, L.LSTM(n_units*scale, n_units))
+            if lstm1_or_gru0:
+                self.add_link(lstm_name, L.LSTM(n_units*scale, n_units))
+            else:
+                self.add_link(lstm_name, L.StatefulGRU(n_units*scale, n_units))
 
         #--------------------------------------------------------------------
         # add decoder layers
@@ -49,9 +60,12 @@ class SpeechEncoderDecoder(Chain):
 
         # add LSTM layers
         self.lstm_dec = ["L{0:d}_dec".format(i) for i in range(nlayers_dec)]
-        self.add_link(self.lstm_dec[0], L.LSTM(n_units, 2*n_units))
+        self.add_link(self.lstm_dec[0], RNN_LAYER(n_units, 2*n_units))
         for lstm_name in self.lstm_dec[1:]:
-            self.add_link(lstm_name, L.LSTM(2*n_units, 2*n_units))
+            if lstm1_or_gru0:
+                self.add_link(lstm_name, L.LSTM(2*n_units, 2*n_units))
+            else:
+                self.add_link(lstm_name, L.StatefulGRU(2*n_units, 2*n_units))
 
         if attn > 0:
             # add context layer for attention
@@ -68,6 +82,7 @@ class SpeechEncoderDecoder(Chain):
         # make the class weight for pad id equal to 0
         # this way loss will not be computed for this predicted loss
         self.mask_pad_id[0] = 0
+        self.lstm1_or_gru0 = lstm1_or_gru0
 
     def reset_state(self):
         # reset the state of LSTM layers
@@ -77,13 +92,16 @@ class SpeechEncoderDecoder(Chain):
 
     def set_decoder_state(self):
         xp = cuda.cupy if self.gpuid >= 0 else np
-        # set the hidden and cell state of the first LSTM in the decoder
-        # concatenate cell state of both enc LSTMs
-        c_state = F.concat((self[self.lstm_enc[-1]].c, self[self.lstm_rev_enc[-1]].c))
+        # set the hidden and cell state (if LSTM) of the first RNN in the decoder
+        if self.lstm1_or_gru0:
+            # concatenate cell state of both enc LSTMs
+            c_state = F.concat((self[self.lstm_enc[-1]].c, self[self.lstm_rev_enc[-1]].c))
         # concatenate hidden state of both enc LSTMs
         h_state = F.concat((self[self.lstm_enc[-1]].h, self[self.lstm_rev_enc[-1]].h))
-        # h_state = F.split((self.enc_states), [:len(self.enc_states.data)])[0]
-        self[self.lstm_dec[0]].set_state(c_state, h_state)
+        if self.lstm1_or_gru0:
+            self[self.lstm_dec[0]].set_state(c_state, h_state)
+        else:
+            self[self.lstm_dec[0]].set_state(h_state)
 
     '''
     Function to feed an input word through the embedding and lstm layers

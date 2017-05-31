@@ -19,7 +19,10 @@ text_data = pickle.load(open(text_data_dict, "rb"))
 
 # In[ ]:
 
-model = SpeechEncoderDecoder(SPEECH_DIM, vocab_size_en, num_layers_enc, num_layers_dec, hidden_units, gpuid, attn=use_attn)
+model = SpeechEncoderDecoder(SPEECH_DIM, vocab_size_en,
+                             num_layers_enc, num_layers_dec,
+                             hidden_units, gpuid,
+                             lstm1_or_gru0=lstm1_or_gru0, attn=use_attn)
 
 if gpuid >= 0:
     cuda.get_device(gpuid).use()
@@ -27,14 +30,26 @@ if gpuid >= 0:
 
 # In[ ]:
 
-# optimizer = optimizers.Adam()
-#optimizer = optimizers.Adam(alpha=0.0001, beta1=0.9, beta2=0.999, eps=1e-08)
-optimizer = optimizers.SGD(lr=0.0001)
-optimizer.setup(model)
+if OPTIMIZER_ADAM1_SGD_0:
+    optimizer = optimizers.Adam(alpha=0.0001, 
+                                beta1=0.9, 
+                                beta2=0.999, 
+                                eps=1e-08)
+    optimizer.setup(model)
+    optimizer.add_hook(chainer.optimizer.WeightDecay(0.0001))
+else:
+    optimizer = optimizers.SGD(lr=0.0001)
+    optimizer.setup(model)
+
 # gradient clipping
 optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
-#optimizer.add_hook(chainer.optimizer.WeightDecay(0.0001))
 
+print("loading data")
+speech_feats = {} 
+speech_feats['train'] = xp.load(os.path.join(speech_dir, "train.npz"))
+speech_feats['dev'] = xp.load(os.path.join(speech_dir, "dev.npz"))
+speech_feats['test'] = xp.load(os.path.join(speech_dir, "test.npz"))
+print("finished loading data")
 
 # In[ ]:
 
@@ -307,7 +322,9 @@ def get_data_item(sp_fil, cat="train"):
     fr_ids = [w2i["fr"].get(w, UNK_ID) for w in fr_sent]
     en_ids = [w2i["en"].get(w, UNK_ID) for w in en_sent]
 
-    speech_feat = xp.load(os.path.join(speech_dir, sp_fil+speech_extn)).astype(xp.float32)
+    # speech_feat = xp.load(os.path.join(speech_dir, sp_fil+speech_extn)).astype(xp.float32)
+
+    speech_feat = speech_feats[cat][sp_fil]
     return fr_ids, en_ids, speech_feat
 
 
