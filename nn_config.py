@@ -21,7 +21,7 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-model_dir = "mfcc_kaldi_GRU"
+model_dir = "mfcc_kaldi_GRU_cnn"
 EXP_NAME_PREFIX = ""
 
 print("callhome es-en word level configuration")
@@ -39,8 +39,12 @@ text_data_dict = os.path.join(input_dir, "text_split.dict")
 speech_extn = "_fa_vad.std.mfcc"
 
 lstm1_or_gru0 = False
-CHAR_LEVEL = False
+CHAR_LEVEL = True
 OPTIMIZER_ADAM1_SGD_0 = True
+
+NUM_EPOCHS = 10
+
+gpuid = 1
 
 
 if CHAR_LEVEL:
@@ -56,19 +60,19 @@ else:
 if OPTIMIZER_ADAM1_SGD_0:
     EXP_NAME_PREFIX += "_adam"
 else:
-    EXP_NAME_PREFIX += "_sgd"
+    EXP_NAME_PREFIX += "_adam"
 
 
 NUM_SENTENCES = 17394
 # use 90% of the data for training
 
 NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = 13137
+NUM_MINI_TRAINING_SENTENCES = 2
 
 ITERS_TO_SAVE = 2
 
 NUM_DEV_SENTENCES = 2476
-NUM_MINI_DEV_SENTENCES = 300
+NUM_MINI_DEV_SENTENCES = 2
 
 NUM_TEST_SENTENCES = 1781
 
@@ -80,9 +84,17 @@ TEXT_BUCKETS = [[] for i in range(NUM_BUCKETS)]
 
 MAX_EN_LEN = 100 if not CHAR_LEVEL else 200
 # speech bucket width = 25, num_buckets = 32, for a max length of 800
-SPEECH_BUCKET_WIDTH = 24
-SPEECH_NUM_BUCKETS = 34
-SPEECH_BUCKETS = [[] for i in range(SPEECH_NUM_BUCKETS)]
+# SPEECH_BUCKET_WIDTH = 24
+# SPEECH_NUM_BUCKETS = 34
+
+#------------------------------------------------
+# WARNING !!!!!!!!!!!!!!!!!!!!!!!!
+#------------------------------------------------
+# SPEECH_BUCKET_WIDTH should be a multiple of 8
+#------------------------------------------------
+SPEECH_BUCKET_WIDTH = 32
+#------------------------------------------------
+SPEECH_NUM_BUCKETS = 25
 
 # BATCH_SIZE = 30
 # SMALL_BATCH_SIZE = 5
@@ -90,29 +102,33 @@ SPEECH_BUCKETS = [[] for i in range(SPEECH_NUM_BUCKETS)]
 
 BATCH_SIZE_LOOKUP = {}
 
-# for i in range(SPEECH_NUM_BUCKETS):
-#     if i < 7:
-#         BATCH_SIZE_LOOKUP[i] = 50
-#     elif i >= 7 and i<13:
-#         BATCH_SIZE_LOOKUP[i] = 20
-#     elif i >= 13 and i<20:
-#         BATCH_SIZE_LOOKUP[i] = 10
-#     elif i>=20 and i<26:
-#         BATCH_SIZE_LOOKUP[i] = 4
-#     else:
-#         BATCH_SIZE_LOOKUP[i] = 2
-
 for i in range(SPEECH_NUM_BUCKETS):
     if i < 7:
-        BATCH_SIZE_LOOKUP[i] = 50
+        BATCH_SIZE_LOOKUP[i] = 100
     elif i >= 7 and i<13:
-        BATCH_SIZE_LOOKUP[i] = 50
-    elif i >= 13 and i<20:
-        BATCH_SIZE_LOOKUP[i] = 25
-    elif i>=20 and i<26:
+        BATCH_SIZE_LOOKUP[i] = 100
+    elif i >= 13 and i<18:
+        BATCH_SIZE_LOOKUP[i] = 100
+    elif i>=18 and i<26:
         BATCH_SIZE_LOOKUP[i] = 25
     else:
         BATCH_SIZE_LOOKUP[i] = 25
+
+DEV_BATCH_SIZE_LOOKUP = {}
+DEV_SPEECH_BUCKET_WIDTH = 40
+DEV_SPEECH_NUM_BUCKETS = 20
+
+for i in range(DEV_SPEECH_NUM_BUCKETS):
+    if i < 6:
+        DEV_BATCH_SIZE_LOOKUP[i] = 100
+    elif i >= 6 and i<13:
+        DEV_BATCH_SIZE_LOOKUP[i] = 100
+    elif i >= 13 and i<18:
+        DEV_BATCH_SIZE_LOOKUP[i] = 50
+    elif i>=18 and i<26:
+        DEV_BATCH_SIZE_LOOKUP[i] = 30
+    else:
+        DEV_BATCH_SIZE_LOOKUP[i] = 30
 
 
 # create separate widths for input and output, speech and english words/chars
@@ -134,6 +150,7 @@ speech_bucket_data_fname = os.path.join(model_dir, "speech_buckets.dict")
 
 bucket_data_fname = os.path.join(model_dir, "buckets_{0:d}.list" if not CHAR_LEVEL else "buckets_{0:d}_char.list")
 
+
 if os.path.exists(w2i_path):
     w2i = pickle.load(open(w2i_path, "rb"))
     i2w = pickle.load(open(i2w_path, "rb"))
@@ -143,13 +160,9 @@ if os.path.exists(w2i_path):
     print("vocab size, en={0:d}, fr={1:d}".format(vocab_size_en, vocab_size_fr))
 
 num_layers_enc = 4
-num_layers_dec = 2
+num_layers_dec = 1
 use_attn = SOFT_ATTN
-hidden_units = 512
-
-NUM_EPOCHS = 4
-
-gpuid = 1
+hidden_units = 256
 
 load_existing_model = True
 

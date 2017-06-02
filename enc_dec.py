@@ -381,15 +381,21 @@ class SpeechEncoderDecoder(Chain):
         return L_states
 
     def encode_speech_batch_lstm(self, speech_feat_batch, lstm_layer_list, train=True):
+        # print("here, shape", speech_feat_batch.shape)
         in_size, batch_size, in_dim = speech_feat_batch.shape
         # print("speech", speech_feat_batch.shape)
         # step size to process input
         step_size = 2**len(lstm_layer_list[:-1])
+        # print("step size", step_size)
         for s in range(0,in_size,step_size):
             if s == 0:
+                # print("s == 0")
                 out_states = self.encode_speech_batch_lstm_seg(speech_feat_batch[s:s+step_size], lstm_layer_list, train=train)
+                # print(out_states.shape)
             else:
+                # print("s != 0")
                 out_states = F.concat((out_states, self.encode_speech_batch_lstm_seg(speech_feat_batch[s:s+step_size], lstm_layer_list, train=train)), axis=0)
+                # print(out_states.shape)
             # print(s, s+step_size, out_states.shape)
         # end for step_size
         return out_states

@@ -31,15 +31,18 @@ if gpuid >= 0:
 # In[ ]:
 
 if OPTIMIZER_ADAM1_SGD_0:
-    optimizer = optimizers.Adam(alpha=0.0001, 
+    print("using ADAM optimizer")
+    optimizer = optimizers.Adam(alpha=0.001, 
                                 beta1=0.9, 
                                 beta2=0.999, 
                                 eps=1e-08)
     optimizer.setup(model)
-    optimizer.add_hook(chainer.optimizer.WeightDecay(0.0001))
+    optimizer.add_hook(chainer.optimizer.WeightDecay(0.95))
 else:
-    optimizer = optimizers.SGD(lr=0.0001)
+    print("using SGD optimizer")
+    optimizer = optimizers.SGD(lr=0.001)
     optimizer.setup(model)
+    optimizer.add_hook(chainer.optimizer.WeightDecay(0.95))
 
 # gradient clipping
 optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
@@ -107,8 +110,9 @@ def populate_buckets(width_b = SPEECH_BUCKET_WIDTH,
         display_buckets(bucket_lengths, width_b)
 
     # Saving bucket data
-    print("Saving bucket data")
-    pickle.dump(buckets, open(filname_b, "wb"))
+    if filname_b:
+        print("Saving bucket data")
+        pickle.dump(buckets, open(filname_b, "wb"))
     return buckets, bucket_lengths
 
 
@@ -201,31 +205,40 @@ def count_match(list1, list2):
 
 # In[ ]:
 
-def compute_pplx(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES):
+def compute_pplx(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES, batches=False):
     loss = 0
     num_words = 0
-    with tqdm(total=num_sent) as pbar:
-        for i, sp_fil in enumerate(sorted(list(text_data[cat].keys()))[:num_sent]):
-            sys.stderr.flush()
-            out_str = "loss={0:.6f}".format(0)
-            pbar.set_description(out_str)
-            fr_ids, en_ids, speech_feat = get_data_item(sp_fil, cat=cat)
 
-            if len(speech_feat) >= MIN_SPEECH_LEN and len(en_ids) > 0:
-                # compute loss
-                curr_loss = float(model.encode_decode_train(speech_feat, en_ids, train=False).data)
-                loss += curr_loss
-                num_words += len(en_ids)
-
-                out_str = "loss={0:.6f}".format(curr_loss)
+    if not batches:
+        with tqdm(total=num_sent) as pbar:
+            for i, sp_fil in enumerate(sorted(list(text_data[cat].keys()))[:num_sent]):
+                sys.stderr.flush()
+                out_str = "loss={0:.6f}".format(0)
                 pbar.set_description(out_str)
-            pbar.update(1)
-        # end of pbar
-    # end of for num_sent
+                fr_ids, en_ids, speech_feat = get_data_item(sp_fil, cat=cat)
 
-    loss_per_word = loss / num_words
+                if len(speech_feat) >= MIN_SPEECH_LEN and len(en_ids) > 0:
+                    # compute loss
+                    curr_loss = float(model.encode_decode_train(speech_feat, en_ids, train=False).data)
+                    loss += curr_loss
+                    num_words += len(en_ids)
+
+                    out_str = "loss={0:.6f}".format(curr_loss)
+                    pbar.set_description(out_str)
+                pbar.update(1)
+        # end of pbar
+        loss_per_word = curr_loss / num_words
+    else:
+        loss_per_word = batch_training(num_sent, 
+                                       DEV_BATCH_SIZE_LOOKUP, 
+                                       buckets_dict[cat], 
+                                       buckets_len_dict[cat],
+                                       SPEECH_BUCKET_WIDTH,
+                                       epoch=0,
+                                       train=False,
+                                       cat=cat)
+    
     pplx = 2 ** loss_per_word
-    random_pplx = vocab_size_en
 
     print("{0:s}".format("-"*50))
     print("{0:s} | {1:0.6f}".format("dev perplexity", pplx))
@@ -378,7 +391,9 @@ def batch_training(num_training,
                    buckets,
                    bucket_lengths,
                    width_b,
-                   epoch):
+                   epoch=0,
+                   train=True,
+                   cat="train"):
 
     curr_batch = 0
     curr_bucket = 0
@@ -391,6 +406,7 @@ def batch_training(num_training,
 
         total_trained = 0
         loss_per_epoch = 0
+        total_loss = 0
 
         for buck_indx in range(len(buckets)):
             if total_trained >= num_training:
@@ -414,39 +430,52 @@ def batch_training(num_training,
                 # print(pad_size_speech, pad_size_en, batch_size)
                 # print("in bucket={0:d}, indx={1:d} to {2:d}".format(buck_indx, i, i+batch_size))
 
+                total_words = 0
                 # get the next batch of data
                 batch_data = []
                 for sp_fil in sp_files_in_batch:
-                    _, en_ids, speech_feat = get_data_item(sp_fil, cat="train")
+                    _, en_ids, speech_feat = get_data_item(sp_fil, cat=cat)
                     # print(speech_feat.shape, len(en_ids))
-                    batch_data.append((speech_feat[:pad_size_speech], en_ids[:pad_size_en]))
+                    if len(speech_feat) >= MIN_SPEECH_LEN:
+                        batch_data.append((speech_feat[:pad_size_speech], en_ids[:pad_size_en]))
+                        total_words += len(en_ids[:pad_size_en])
 
                 # compute loss
-                loss = model.encode_decode_train_batch(batch_data, pad_size_speech, pad_size_en, train=True)
+                if len(batch_data) > 0:
+                    loss = model.encode_decode_train_batch(batch_data, pad_size_speech, pad_size_en, train=train)
 
-                # store loss values for printing
-                loss_val = float(loss.data)
-                loss_per_epoch += loss_val
+                    # store loss values for printing
+                    loss_val = float(loss.data)
 
-                total_trained += len(batch_data)
+                    total_loss += loss_val
 
-                # set up for backprop
-                model.cleargrads()
-                loss.backward()
-                # update parameters
-                optimizer.update()
+                    # total_trained += len(batch_data)
+                    total_trained += 1
 
-                # print(sp_files_in_batch)
-                # print(loss.data, math.isnan(loss.data))
-                # print("L0 after", model.L0_enc.lateral.W.data[:2,:5])
-                # print(batch_data)
+                    loss_per_epoch = (total_loss / total_trained)
 
-                out_str = "epoch={0:d}, bucket={1:d}, i={2:d}, loss={3:.4f}, mean loss={4:.4f}".format((epoch+1), (buck_indx+1), i,loss_val, (loss_per_epoch / total_trained))
-                pbar.set_description(out_str)
+                    if train:
+                        # set up for backprop
+                        model.cleargrads()
+                        loss.backward()
+                        # update parameters
+                        optimizer.update()
+
+                    # print(sp_files_in_batch)
+                    # print(loss.data, math.isnan(loss.data))
+                    # print("L0 after", model.L0_enc.lateral.W.data[:2,:5])
+                    # print(batch_data)
+
+                    out_str = "epoch={0:d}, bucket={1:d}, i={2:d}, loss={3:.4f}, mean loss={4:.4f}".format((epoch+1), (buck_indx+1), i,loss_val, (loss_per_epoch))
+                    pbar.set_description(out_str)
                 pbar.update(len(batch_data))
             # end for current bucket
         # end for all buckets
     # end with pbar
+    print("-"*80)
+    print("mean loss={0:.4f}".format(loss_per_epoch))
+    print("-"*80)
+    return (loss_per_epoch)
 
 # In[ ]:
 
@@ -468,23 +497,27 @@ def train_loop(num_training,
 
     if batches == True:
         print("creating buckets")
-        buckets, bucket_lengths = populate_buckets(display=False)
+        buckets, bucket_lengths = populate_buckets(display=True)
 
     # start epochs
     for epoch in range(num_epochs):
         if not batches:
             single_instance_training(num_training, epoch)
         else:
-            batch_training(num_training, BATCH_SIZE_LOOKUP , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, epoch)
+            batch_training(num_training, BATCH_SIZE_LOOKUP , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, epoch, 
+                train=True, cat="train")
         # end with pbar
 
         print("finished training on {0:d} sentences".format(num_training))
         print("{0:s}".format("-"*50))
         print("computing perplexity")
-        pplx_new = compute_pplx(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES)
+        pplx_new = compute_pplx(cat="dev",
+                                num_sent=NUM_MINI_DEV_SENTENCES,
+                                batches=batches)
 
         if (epoch+1) % ITERS_TO_SAVE == 0:
-            bleu_score = compute_bleu(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES)
+            # bleu_score = compute_bleu(cat="dev",
+            #                           num_sent=NUM_MINI_DEV_SENTENCES)
             print("Saving model")
             serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch_id+epoch+1)), model)
             print("Finished saving model")
@@ -562,13 +595,53 @@ def start_here(num_training=1000, num_epochs=1, batches=False):
                batches=batches)
 
 
+
+def test_gradients(buckets):
+    batch_size = 2
+    for i in range(0, batch_size, batch_size):
+        sp_files_in_batch = [t[0] for t in buckets[0][i:i+batch_size]]
+
+        # print(pad_size_speech, pad_size_en, batch_size)
+        # print("in bucket={0:d}, indx={1:d} to {2:d}".format(buck_indx, i, i+batch_size))
+
+        # get the next batch of data
+        batch_data = []
+        for sp_fil in sp_files_in_batch:
+            _, en_ids, speech_feat = get_data_item(sp_fil, cat="train")
+            # print(speech_feat.shape, len(en_ids))
+            batch_data.append((speech_feat[:50], en_ids[:20]))
+
+        # compute loss
+        loss = model.encode_decode_train_batch(batch_data, 50, 20, train=True)
+
+        # store loss values for printing
+        loss_val = float(loss.data)
+
+        # set up for backprop
+        model.cleargrads()
+        loss.backward()
+        # update parameters
+        #optimizer.update()
+        print(loss_val)
+
 # In[ ]:
 print("Starting experiment")
 print("num sentences={0:d} and num epochs={1:d}".format(NUM_MINI_TRAINING_SENTENCES, NUM_EPOCHS))
 
+# buckets, bucket_lengths = populate_buckets(display=True)
+buckets_dict = {}
+buckets_len_dict = {}
+
+buckets_dict['dev'], buckets_len_dict['dev'] = populate_buckets(
+                                            width_b=DEV_SPEECH_BUCKET_WIDTH,
+                                            num_b=DEV_SPEECH_NUM_BUCKETS,
+                                            speech=True,
+                                            num_sent=NUM_DEV_SENTENCES,
+                                            filname_b=None,
+                                            cat="dev", display=False)
+
 start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS, batches=True)
 
-# buckets, bucket_lengths = populate_buckets(display=True)
 # batch_training(100, BATCH_SIZE_LOOKUP , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, 0)
 
 # In[ ]:
