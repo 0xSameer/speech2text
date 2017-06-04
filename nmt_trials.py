@@ -32,17 +32,17 @@ if gpuid >= 0:
 
 if OPTIMIZER_ADAM1_SGD_0:
     print("using ADAM optimizer")
-    optimizer = optimizers.Adam(alpha=0.001, 
+    optimizer = optimizers.Adam(alpha=0.01, 
                                 beta1=0.9, 
                                 beta2=0.999, 
                                 eps=1e-08)
     optimizer.setup(model)
-    optimizer.add_hook(chainer.optimizer.WeightDecay(0.95))
+    optimizer.add_hook(chainer.optimizer.WeightDecay(0.5))
 else:
     print("using SGD optimizer")
     optimizer = optimizers.SGD(lr=0.001)
     optimizer.setup(model)
-    optimizer.add_hook(chainer.optimizer.WeightDecay(0.95))
+    optimizer.add_hook(chainer.optimizer.WeightDecay(0.01))
 
 # gradient clipping
 optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
@@ -407,6 +407,8 @@ def batch_training(num_training,
         total_trained = 0
         loss_per_epoch = 0
         total_loss = 0
+        total_loss_updates = 0
+        total_words = 0
 
         for buck_indx in range(len(buckets)):
             if total_trained >= num_training:
@@ -430,15 +432,15 @@ def batch_training(num_training,
                 # print(pad_size_speech, pad_size_en, batch_size)
                 # print("in bucket={0:d}, indx={1:d} to {2:d}".format(buck_indx, i, i+batch_size))
 
-                total_words = 0
                 # get the next batch of data
+                local_total_words = 0
                 batch_data = []
                 for sp_fil in sp_files_in_batch:
                     _, en_ids, speech_feat = get_data_item(sp_fil, cat=cat)
                     # print(speech_feat.shape, len(en_ids))
-                    if len(speech_feat) >= MIN_SPEECH_LEN:
-                        batch_data.append((speech_feat[:pad_size_speech], en_ids[:pad_size_en]))
-                        total_words += len(en_ids[:pad_size_en])
+                    # if len(speech_feat) >= MIN_SPEECH_LEN:
+                    batch_data.append((speech_feat[:pad_size_speech], en_ids[:pad_size_en]))
+                    local_total_words += len(en_ids[:pad_size_en])
 
                 # compute loss
                 if len(batch_data) > 0:
@@ -449,10 +451,11 @@ def batch_training(num_training,
 
                     total_loss += loss_val
 
-                    # total_trained += len(batch_data)
-                    total_trained += 1
+                    total_trained += len(batch_data)
+                    total_loss_updates += 1
 
-                    loss_per_epoch = (total_loss / total_trained)
+                    loss_per_epoch = (total_loss / total_loss_updates)
+                    total_words += local_total_words / len(batch_data)
 
                     if train:
                         # set up for backprop
@@ -475,7 +478,7 @@ def batch_training(num_training,
     print("-"*80)
     print("mean loss={0:.4f}".format(loss_per_epoch))
     print("-"*80)
-    return (loss_per_epoch)
+    return (loss_per_epoch / total_words)
 
 # In[ ]:
 
@@ -626,7 +629,11 @@ def test_gradients(buckets):
 
 # In[ ]:
 print("Starting experiment")
+print(log_dev_fil_name)
+print(model_fil)
 print("num sentences={0:d} and num epochs={1:d}".format(NUM_MINI_TRAINING_SENTENCES, NUM_EPOCHS))
+
+
 
 # buckets, bucket_lengths = populate_buckets(display=True)
 buckets_dict = {}
@@ -639,6 +646,7 @@ buckets_dict['dev'], buckets_len_dict['dev'] = populate_buckets(
                                             num_sent=NUM_DEV_SENTENCES,
                                             filname_b=None,
                                             cat="dev", display=False)
+
 
 start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS, batches=True)
 

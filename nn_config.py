@@ -21,7 +21,7 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-model_dir = "mfcc_kaldi_GRU_cnn"
+model_dir = "mfcc_kaldi_GRU_again"
 EXP_NAME_PREFIX = ""
 
 print("callhome es-en word level configuration")
@@ -39,12 +39,12 @@ text_data_dict = os.path.join(input_dir, "text_split.dict")
 speech_extn = "_fa_vad.std.mfcc"
 
 lstm1_or_gru0 = False
-CHAR_LEVEL = True
+CHAR_LEVEL = False
 OPTIMIZER_ADAM1_SGD_0 = True
 
 NUM_EPOCHS = 10
 
-gpuid = 1
+gpuid = 0
 
 
 if CHAR_LEVEL:
@@ -67,12 +67,12 @@ NUM_SENTENCES = 17394
 # use 90% of the data for training
 
 NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = 2
+NUM_MINI_TRAINING_SENTENCES = 10000
 
 ITERS_TO_SAVE = 2
 
 NUM_DEV_SENTENCES = 2476
-NUM_MINI_DEV_SENTENCES = 2
+NUM_MINI_DEV_SENTENCES = 1600
 
 NUM_TEST_SENTENCES = 1781
 
@@ -94,7 +94,7 @@ MAX_EN_LEN = 100 if not CHAR_LEVEL else 200
 #------------------------------------------------
 SPEECH_BUCKET_WIDTH = 32
 #------------------------------------------------
-SPEECH_NUM_BUCKETS = 25
+SPEECH_NUM_BUCKETS = 16
 
 # BATCH_SIZE = 30
 # SMALL_BATCH_SIZE = 5
@@ -104,15 +104,15 @@ BATCH_SIZE_LOOKUP = {}
 
 for i in range(SPEECH_NUM_BUCKETS):
     if i < 7:
-        BATCH_SIZE_LOOKUP[i] = 100
+        BATCH_SIZE_LOOKUP[i] = 64
     elif i >= 7 and i<13:
-        BATCH_SIZE_LOOKUP[i] = 100
+        BATCH_SIZE_LOOKUP[i] = 64
     elif i >= 13 and i<18:
-        BATCH_SIZE_LOOKUP[i] = 100
+        BATCH_SIZE_LOOKUP[i] = 64
     elif i>=18 and i<26:
-        BATCH_SIZE_LOOKUP[i] = 25
+        BATCH_SIZE_LOOKUP[i] = 24
     else:
-        BATCH_SIZE_LOOKUP[i] = 25
+        BATCH_SIZE_LOOKUP[i] = 24
 
 DEV_BATCH_SIZE_LOOKUP = {}
 DEV_SPEECH_BUCKET_WIDTH = 40
@@ -159,10 +159,10 @@ if os.path.exists(w2i_path):
     vocab_size_fr = min(len(i2w["fr"]), max_vocab_size["fr"])
     print("vocab size, en={0:d}, fr={1:d}".format(vocab_size_en, vocab_size_fr))
 
-num_layers_enc = 4
+num_layers_enc = 2
 num_layers_dec = 1
 use_attn = SOFT_ATTN
-hidden_units = 256
+hidden_units = 200
 
 load_existing_model = True
 
