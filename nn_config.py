@@ -39,12 +39,12 @@ text_data_dict = os.path.join(input_dir, "text_split.dict")
 speech_extn = "_fa_vad.std.mfcc"
 
 lstm1_or_gru0 = False
-CHAR_LEVEL = False
+CHAR_LEVEL = True
 OPTIMIZER_ADAM1_SGD_0 = True
 
 NUM_EPOCHS = 10
 
-gpuid = 0
+gpuid = 1
 
 
 if CHAR_LEVEL:
@@ -159,10 +159,10 @@ if os.path.exists(w2i_path):
     vocab_size_fr = min(len(i2w["fr"]), max_vocab_size["fr"])
     print("vocab size, en={0:d}, fr={1:d}".format(vocab_size_en, vocab_size_fr))
 
-num_layers_enc = 2
+num_layers_enc = 4
 num_layers_dec = 1
 use_attn = SOFT_ATTN
-hidden_units = 200
+hidden_units = 100
 
 load_existing_model = True
 
