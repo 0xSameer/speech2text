@@ -38,6 +38,10 @@ text_data_dict = os.path.join(input_dir, "text_split.dict")
 
 speech_extn = "_fa_vad.std.mfcc"
 
+MODEL_RNN = 0
+MODEL_CNN = 1
+MODEL_TYPE = MODEL_CNN
+
 lstm1_or_gru0 = False
 CHAR_LEVEL = True
 OPTIMIZER_ADAM1_SGD_0 = True
@@ -45,6 +49,13 @@ OPTIMIZER_ADAM1_SGD_0 = True
 NUM_EPOCHS = 10
 
 gpuid = 1
+
+if MODEL_TYPE == MODEL_RNN:
+    EXP_NAME_PREFIX += "cnn"
+elif MODEL_TYPE == MODEL_CNN:
+    EXP_NAME_PREFIX += "rnn"
+else:
+    EXP_NAME_PREFIX += "UNK"
 
 
 if CHAR_LEVEL:
@@ -159,10 +170,25 @@ if os.path.exists(w2i_path):
     vocab_size_fr = min(len(i2w["fr"]), max_vocab_size["fr"])
     print("vocab size, en={0:d}, fr={1:d}".format(vocab_size_en, vocab_size_fr))
 
-num_layers_enc = 4
-num_layers_dec = 1
+if MODEL_TYPE == MODEL_RNN:
+    num_layers_enc = 4
+    num_layers_dec = 1
+elif MODEL_TYPE == MODEL_CNN:
+    num_layers_enc = 1
+    num_layers_dec = 2
+
 use_attn = SOFT_ATTN
 hidden_units = 100
+embedding_units = 256
+
+# cnn filter specs - tuple: (kernel size, pad, num filters)
+# for now keeping kernel widths as odd
+# this keeps the output size the same as the input
+cnn_k_widths = [i for i in range(9,81,9)]
+cnn_filters = [{"k":k, "pad": k // 2, "out": 10} for k in cnn_k_widths]
+
+num_highway_layers = 2
+pool_stride, pool_pad = 9, 9//2
 
 load_existing_model = True
 
