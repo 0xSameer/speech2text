@@ -19,10 +19,7 @@ text_data = pickle.load(open(text_data_dict, "rb"))
 
 # In[ ]:
 
-model = SpeechEncoderDecoder(SPEECH_DIM, vocab_size_en,
-                             num_layers_enc, num_layers_dec,
-                             hidden_units, gpuid,
-                             lstm1_or_gru0=lstm1_or_gru0, attn=use_attn)
+model = SpeechEncoderDecoder()
 
 if gpuid >= 0:
     cuda.get_device(gpuid).use()
@@ -32,9 +29,9 @@ if gpuid >= 0:
 
 if OPTIMIZER_ADAM1_SGD_0:
     print("using ADAM optimizer")
-    optimizer = optimizers.Adam(alpha=0.01, 
-                                beta1=0.9, 
-                                beta2=0.999, 
+    optimizer = optimizers.Adam(alpha=0.01,
+                                beta1=0.9,
+                                beta2=0.999,
                                 eps=1e-08)
     optimizer.setup(model)
     optimizer.add_hook(chainer.optimizer.WeightDecay(0.5))
@@ -48,7 +45,7 @@ else:
 optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
 
 print("loading data")
-speech_feats = {} 
+speech_feats = {}
 speech_feats['train'] = xp.load(os.path.join(speech_dir, "train.npz"))
 speech_feats['dev'] = xp.load(os.path.join(speech_dir, "dev.npz"))
 speech_feats['test'] = xp.load(os.path.join(speech_dir, "test.npz"))
@@ -70,51 +67,84 @@ def display_buckets(bucket_lengths, width_b = SPEECH_BUCKET_WIDTH):
     print("\n".join(["{0:3d} | {1:5d} | {2:5d} | {3:6d} | {4:8.0f} | {5:6d} | {6:8.0f}".format(i[0], (i[0]+1)*width_b, *i[1]) for i in list(bucket_lengths.items())]))
 
 
-def populate_buckets(width_b = SPEECH_BUCKET_WIDTH,
-                     num_b = SPEECH_NUM_BUCKETS,
-                     speech=True,
-                     num_sent=NUM_TRAINING_SENTENCES,
-                     filname_b=speech_bucket_data_fname,
-                     cat="train", display=False):
+def prepare_data(width_b = SPEECH_BUCKET_WIDTH,
+                 num_b = SPEECH_NUM_BUCKETS,
+                 speech=True,
+                 num_sent=NUM_TRAINING_SENTENCES,
+                 filname_b=speech_bucket_data_fname,
+                 cat="train", display=False):
 
-    buckets = [[] for i in range(num_b)]
+    buckets = [{"X_fwd":[],
+                 "X_rev":[],
+                 "y": []}
+                 for i in range(num_b)]
 
-    print("Splitting data into {0:d} buckets, each of width={1:d}".format(num_b, width_b))
+    print("split data into {0:d} buckets, each of width={1:d}".format(num_b,
+                                                                      width_b))
+
+    sys.stdout.flush()
 
     with tqdm(total=num_sent) as pbar:
         for i, sp_fil in enumerate(sorted(list(text_data[cat].keys()))[:num_sent]):
 
-            fr_ids, en_ids, speech_feat = get_data_item(sp_fil, cat=cat)
+            fr_ids, en_ids, sp_feat = get_data_item(sp_fil, cat=cat)
 
             len_en = len(en_ids)
             len_fr = len(fr_ids)
-            len_speech = len(speech_feat)
+
+            sp_feat_fwd = xp.pad(sp_feat,
+                                ((width_b - len(sp_feat) % width_b,0), (0,0)),
+                                mode='constant')
+            sp_feat_rev = xp.pad(xp.flipud(sp_feat),
+                                ((width_b - len(sp_feat) % width_b,0), (0,0)),
+                                mode='constant')
+            len_speech = len(sp_feat_fwd)
+            target_text = [GO_ID] + en_ids[:MAX_EN_LEN-2] + [EOS_ID]
+            target_text = xp.asarray(target_text, dtype=xp.int32)
 
             # check if speech features are valid
-            if xp.isnan(xp.sum(speech_feat)) == True:
-                print("file={0:s} has a nan value, fr len={1:d}, en len={2:d}".format(sp_fil, len_fr, len_en))
+            if xp.isnan(xp.sum(sp_feat_fwd)) == True:
+                print('''file={0:s} has a nan value,
+                      fr len={1:d}, en len={2:d}'''.format(sp_fil,
+                                                    len_fr, len_en))
             else:
                 # add to buckets
-                indx_b = min(num_b-1, len_speech // width_b)
-                buckets[indx_b].append((sp_fil, len_speech, len_fr, len_en))
+                indx_b = min(num_b-1, (len_speech // width_b)-1)
+                max_b_len = (indx_b+1) * width_b
+                # print("max_b_len", max_b_len)
+                # print("sp_feat_fwd", sp_feat_fwd[:max_b_len].shape)
+                # print(buckets[indx_b]["X_fwd"])
+                # buckets[indx_b]["X_fwd"].append(sp_feat_fwd[:max_b_len])
+                if len(buckets[indx_b]["X_fwd"]) == 0:
+                    buckets[indx_b]["X_fwd"] = xp.expand_dims(sp_feat_fwd[:max_b_len], axis=0)
+                else:
+                    buckets[indx_b]["X_fwd"] = xp.concatenate((buckets[indx_b]["X_fwd"], xp.expand_dims(sp_feat_rev[:max_b_len], axis=0)), axis=0)
+                if len(buckets[indx_b]["X_rev"]) == 0:
+                    buckets[indx_b]["X_rev"] = xp.expand_dims(sp_feat_rev[:max_b_len], axis=0)
+                else:
+                    buckets[indx_b]["X_rev"] = xp.concatenate((buckets[indx_b]["X_rev"], xp.expand_dims(sp_feat_rev[:max_b_len], axis=0)), axis=0)
+                #buckets[indx_b]["X_rev"].append(sp_feat_rev[:max_b_len])
+                buckets[indx_b]["y"].append(target_text)
 
             pbar.update(1)
 
-    bucket_lengths = {i:(len(l),
-                    max(l, key=lambda t:t[2])[2],
-                    np.mean([i[2]for i in l]),
-                    max(l, key=lambda t:t[3])[3],
-                    np.mean([i[3]for i in l]))
-                     for i, l in enumerate(buckets)}
-    if display:
-        display_buckets(bucket_lengths, width_b)
-
-    # Saving bucket data
-    if filname_b:
-        print("Saving bucket data")
-        pickle.dump(buckets, open(filname_b, "wb"))
-    return buckets, bucket_lengths
-
+    # pad all "y" data
+    print("padding labels")
+    for indx_b in range(len(buckets)):
+        # buckets[indx_b]["X_fwd"] = xp.asarray(buckets[indx_b]["X_fwd"], dtype=xp.float32)
+        # buckets[indx_b]["X_rev"] = xp.asarray(buckets[indx_b]["X_rev"], dtype=xp.float32)
+        buckets[indx_b]["X_fwd"] = F.swapaxes(buckets[indx_b]["X_fwd"], 1,2)
+        buckets[indx_b]["X_rev"] = F.swapaxes(buckets[indx_b]["X_rev"], 1,2)
+        buckets[indx_b]["y"] = F.pad_sequence(buckets[indx_b]["y"], padding=PAD_ID)
+        print('''{0:d} items in bucket={1:d}, each of length={2:d}, max en ids={3:d}'''.format(len(buckets[indx_b]["X_fwd"]),
+                                                               indx_b+1,
+                                                               len(buckets[indx_b]["X_fwd"][0]),
+                                                               len(buckets[indx_b]["y"][0])))
+    # # Saving bucket data
+    # if filname_b:
+    #     print("Saving bucket data")
+    #     pickle.dump(buckets, open(filname_b, "wb"))
+    return buckets
 
 # In[ ]:
 
@@ -229,15 +259,15 @@ def compute_pplx(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES, batches=False):
         # end of pbar
         loss_per_word = curr_loss / num_words
     else:
-        loss_per_word = batch_training(num_sent, 
-                                       DEV_BATCH_SIZE_LOOKUP, 
-                                       buckets_dict[cat], 
+        loss_per_word = batch_training(num_sent,
+                                       DEV_BATCH_SIZE_LOOKUP,
+                                       buckets_dict[cat],
                                        buckets_len_dict[cat],
                                        SPEECH_BUCKET_WIDTH,
                                        epoch=0,
                                        train=False,
                                        cat=cat)
-    
+
     pplx = 2 ** loss_per_word
 
     print("{0:s}".format("-"*50))
@@ -340,66 +370,15 @@ def get_data_item(sp_fil, cat="train"):
     speech_feat = speech_feats[cat][sp_fil]
     return fr_ids, en_ids, speech_feat
 
-
-# In[ ]:
-
-# predict(s=0, num=1, cat="train", display=True, plot=False, p_filt=0, r_filt=0)
-
-
-# In[ ]:
-
-# print(b" ".join(get_ids(text_data["train"]["041.004"]["en"])[0]))
-
-
-# In[ ]:
-def single_instance_training(num_training, epoch):
-    with tqdm(total=num_training) as pbar:
-        sys.stderr.flush()
-        for i, sp_fil in enumerate(sorted(list(text_data["train"].keys()))[:num_training], start=1):
-            loss_per_epoch = 0
-            out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, 0, 0)
-            pbar.set_description(out_str)
-
-            # get the word/character ids
-            fr_ids, en_ids, speech_feat = get_data_item(sp_fil, cat="train")
-
-            it = (epoch * num_training) + i
-
-            if len(speech_feat) >= MIN_SPEECH_LEN:
-                # compute loss
-                loss = model.encode_decode_train(speech_feat, en_ids, train=True)
-
-                # set up for backprop
-                model.cleargrads()
-                loss.backward()
-                # update parameters
-                optimizer.update()
-                # store loss value for display
-                loss_val = float(loss.data)
-                loss_per_epoch += loss_val
-
-                out_str = "epoch={0:d}, loss={1:.4f}, mean loss={2:.4f}".format(epoch+1, loss_val, (loss_per_epoch / i))
-                pbar.set_description(out_str)
-            pbar.update(1)
-        # end for num_training
-    # end with pbar
-
 # In[ ]:
 
 def batch_training(num_training,
                    BATCH_SIZE_LOOKUP,
                    buckets,
-                   bucket_lengths,
                    width_b,
                    epoch=0,
                    train=True,
                    cat="train"):
-
-    curr_batch = 0
-    curr_bucket = 0
-    prev_buckets_len = 0
-
-    train_count = 0
 
     with tqdm(total=(num_training)) as pbar:
         sys.stderr.flush()
@@ -414,13 +393,8 @@ def batch_training(num_training,
             if total_trained >= num_training:
                 break
 
-            # buck_indx = 26
-            # BATCH_SIZE_LOOKUP[buck_indx] = 25
-
             left_to_train = num_training - total_trained
-            items_in_bucket = bucket_lengths[buck_indx][0]
-            pad_size_speech = (buck_indx+1) * width_b
-            pad_size_en = min(bucket_lengths[buck_indx][3], MAX_EN_LEN)
+            items_in_bucket = len(buckets[buck_indx]['X_fwd'])
 
             items_to_train_in_bucket = min(left_to_train, items_in_bucket)
 
@@ -428,9 +402,6 @@ def batch_training(num_training,
 
             for i in range(0, items_to_train_in_bucket, batch_size):
                 sp_files_in_batch = [t[0] for t in buckets[buck_indx][i:i+batch_size]]
-
-                # print(pad_size_speech, pad_size_en, batch_size)
-                # print("in bucket={0:d}, indx={1:d} to {2:d}".format(buck_indx, i, i+batch_size))
 
                 # get the next batch of data
                 local_total_words = 0
@@ -507,7 +478,7 @@ def train_loop(num_training,
         if not batches:
             single_instance_training(num_training, epoch)
         else:
-            batch_training(num_training, BATCH_SIZE_LOOKUP , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, epoch, 
+            batch_training(num_training, BATCH_SIZE_LOOKUP , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, epoch,
                 train=True, cat="train")
         # end with pbar
 
@@ -637,18 +608,25 @@ print("num sentences={0:d} and num epochs={1:d}".format(NUM_MINI_TRAINING_SENTEN
 
 # buckets, bucket_lengths = populate_buckets(display=True)
 buckets_dict = {}
-buckets_len_dict = {}
+# buckets_len_dict = {}
 
-buckets_dict['dev'], buckets_len_dict['dev'] = populate_buckets(
-                                            width_b=DEV_SPEECH_BUCKET_WIDTH,
-                                            num_b=DEV_SPEECH_NUM_BUCKETS,
-                                            speech=True,
-                                            num_sent=NUM_DEV_SENTENCES,
-                                            filname_b=None,
-                                            cat="dev", display=False)
+# buckets_dict['dev'], buckets_len_dict['dev'] = populate_buckets(
+#                                             width_b=DEV_SPEECH_BUCKET_WIDTH,
+#                                             num_b=DEV_SPEECH_NUM_BUCKETS,
+#                                             speech=True,
+#                                             num_sent=NUM_DEV_SENTENCES,
+#                                             filname_b=None,
+#                                             cat="dev", display=False)
+
+buckets_dict['dev'] = prepare_data(width_b=DEV_SPEECH_BUCKET_WIDTH,
+                                    num_b=DEV_SPEECH_NUM_BUCKETS,
+                                    speech=True,
+                                    num_sent=NUM_DEV_SENTENCES,
+                                    filname_b=None,
+                                    cat="dev", display=False)
 
 
-start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS, batches=True)
+# start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS, batches=True)
 
 # batch_training(100, BATCH_SIZE_LOOKUP , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, 0)
 

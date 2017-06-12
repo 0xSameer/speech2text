@@ -13,7 +13,10 @@ class SpeechEncoderDecoder(Chain):
         nlayers: # layers
         attn:    if True, use attention
         '''
-        init_params()
+        self.init_params()
+
+        if self.gpuid >= 0:
+            cuda.get_device(self.gpuid).use()
 
         super(SpeechEncoderDecoder, self).__init__()
 
@@ -23,9 +26,7 @@ class SpeechEncoderDecoder(Chain):
     def init_params(self):
         # Store GPU id
         self.gpuid = gpuid
-        
-        if self.gpuid >= 0:
-            cuda.get_device(gpuid).use()
+
         #--------------------------------------------------------------------
         # initialize model
         #--------------------------------------------------------------------
@@ -34,83 +35,108 @@ class SpeechEncoderDecoder(Chain):
         else:
             self.RNN = L.GRU
 
+        self.lstm1_or_gru0 = lstm1_or_gru0
+
         self.speech_dim = SPEECH_DIM
         self.n_units = hidden_units
         self.embed_units = embedding_units
-        
+
         self.attn =  use_attn
-        
+
         self.vocab_size_en = vocab_size_en
+
+        self.max_pool_stride = max_pool_stride
+        self.max_pool_pad = max_pool_pad
 
 
     def add_rnn_layers(self, layer_names, in_units, out_units, scale):
         # add first layer
-        self.add_link(layer_names[0], self.RNN(in_units, in_units))
+        self.add_link(layer_names[0], self.RNN(in_units, out_units))
         # add remaining layers
         for rnn_name in layer_names[1:]:
-            self.add_link(rnn_name, self.RNN(n_units*scale, n_units))
+            self.add_link(rnn_name, self.RNN(out_units*scale, out_units))
 
 
-    def add_cnn_layers(self, 
-                       layer_name, 
-                       in_channels, 
-                       out_channels, 
-                       num_filters):
-        self.add_link(layer_name, 
-                      L.ConvolutionND(ndim=1, 
-                                      in_channels=in_channels, 
-                                      out_channels=out_channels, ksize=2, stride=1, pad=1)
+    def add_cnn_layers(self, layer_name, in_channels, out_channels,
+                       num_filters, ksize, stride, pad):
+        self.add_link(layer_name,
+                      L.ConvolutionND(ndim=1,
+                                      in_channels=in_channels,
+                                      out_channels=out_channels,
+                                      ksize=2,
+                                      stride=1,
+                                      pad=1))
 
 
-    def init_rnn_model(self, scale):
+    def init_rnn_model(self, scale, in_dim):
         #--------------------------------------------------------------------
         # add encoder layers
         #--------------------------------------------------------------------
-        self.rnn_enc = ["L{0:d}_enc".format(i) for i in range(nlayers_enc)]
-        self.add_rnn_layers(self.rnn_enc, 
-                            self.speech_dim, 
+        self.rnn_enc = ["L{0:d}_enc".format(i) for i in range(num_layers_enc)]
+        self.add_rnn_layers(self.rnn_enc,
+                            in_dim,
                             self.n_units,
                             scale=scale)
 
         # reverse LSTM layer
-        self.rnn_rev_enc = ["L{0:d}_rev_enc".format(i) for i in range(nlayers_enc)]
-        self.add_rnn_layers(self.rnn_rev_enc, 
-                            self.speech_dim, 
+        self.rnn_rev_enc = ["L{0:d}_rev_enc".format(i) for i in range(num_layers_enc)]
+        self.add_rnn_layers(self.rnn_rev_enc,
+                            in_dim,
                             self.n_units,
                             scale=scale)
 
         # add LSTM layers
-        self.lstm_dec = ["L{0:d}_dec".format(i) for i in range(nlayers_dec)]
-        self.add_rnn_layers(self.rnn_rev_enc, 
-                            self.embed_units, 
+        self.rnn_dec = ["L{0:d}_dec".format(i) for i in range(num_layers_dec)]
+        self.add_rnn_layers(self.rnn_dec,
+                            self.embed_units,
                             2*self.n_units,
                             scale=scale)
 
     def init_cnn_model(self):
-        
+        self.cnns = []
+        # add CNN layers
+        cnn_out_dim = 0
+        for l in cnn_filters:
+            lname = "CNN_{0:d}".format(l['ksize'])
+            cnn_out_dim += l["out_channels"]
+            self.cnns.append(lname)
+            self.add_link(lname, L.ConvolutionND(**l))
+
+        self.cnn_out_dim = cnn_out_dim
+
+        # add highway layers
+        self.highway = ["highway_{0:d}".format(i)
+                         for i in range(num_highway_layers)]
+
+        for hname in self.highway:
+            self.add_link(hname, L.Highway(self.cnn_out_dim))
 
 
     def init_model(self):
-
         if MODEL_TYPE == MODEL_RNN:
             self.scale = 2
-            self.init_rnn_model(self.scale)
+            rnn_in_units = self.speech_dim
         elif MODEL_TYPE == MODEL_CNN:
             self.scale = 1
-            self.init_cnn_model(self.scale)
+            self.init_cnn_model()
+            rnn_in_units = self.cnn_out_dim
         else:
             print("Nooooooooooooooooooo")
 
+        # initialize RNN layers
+        print("rnn_in_units", rnn_in_units)
+        self.init_rnn_model(self.scale, rnn_in_units)
+
         # add embedding layer
-        self.add_link("embed_dec", L.EmbedID(self.vocab_size_en, 
+        self.add_link("embed_dec", L.EmbedID(self.vocab_size_en,
                                              self.embed_units))
 
         if self.attn > 0:
             # add context layer for attention
-            self.add_link("context", L.Linear(4*n_units, 2*n_units))
+            self.add_link("context", L.Linear(4*self.n_units, 2*self.n_units))
 
         # add output layer
-        self.add_link("out", L.Linear(2*n_units, vocab_size_en))
+        self.add_link("out", L.Linear(2*self.n_units, vocab_size_en))
 
         # create masking array for pad id
         self.mask_pad_id = xp.ones(self.vocab_size_en, dtype=xp.float32)
@@ -119,15 +145,13 @@ class SpeechEncoderDecoder(Chain):
         self.mask_pad_id[0] = 0
 
 
-
     def reset_state(self):
         # reset the state of LSTM layers
-        for rnn_name in self.rnn_enc + self.rnn_rev_enc + self.lstm_dec:
+        for rnn_name in self.rnn_enc + self.rnn_rev_enc + self.rnn_dec:
             self[rnn_name].reset_state()
         self.loss = 0
 
     def set_decoder_state(self):
-        xp = cuda.cupy if self.gpuid >= 0 else np
         # set the hidden and cell state (if LSTM) of the first RNN in the decoder
         if self.lstm1_or_gru0:
             # concatenate cell state of both enc LSTMs
@@ -135,99 +159,17 @@ class SpeechEncoderDecoder(Chain):
         # concatenate hidden state of both enc LSTMs
         h_state = F.concat((self[self.rnn_enc[-1]].h, self[self.rnn_rev_enc[-1]].h))
         if self.lstm1_or_gru0:
-            self[self.lstm_dec[0]].set_state(c_state, h_state)
+            self[self.rnn_dec[0]].set_state(c_state, h_state)
         else:
-            self[self.lstm_dec[0]].set_state(h_state)
+            self[self.rnn_dec[0]].set_state(h_state)
 
-    '''
-    Function to feed an input word through the embedding and lstm layers
-        args:
-        embed_layer: embeddings layer to use
-        lstm_layer:  list of lstm layer names
-    '''
-    def feed_lstm(self, lstm_in, lstm_layer_list, train):
-        # feed into first LSTM layer
-        # hs = self[lstm_layer_list[0]](embed_id)
-        hs = F.dropout(self[lstm_layer_list[0]](lstm_in), ratio=0.2, train=train)
-        # feed into remaining LSTM layers
-        for lstm_layer in lstm_layer_list[1:]:
-            hs = F.dropout(self[lstm_layer](hs), ratio=0.2, train=train)
-
-
-    def feed_pyramidal_lstm(self, feat_in, lstm_layer, scale, train=True):
-        xp = cuda.cupy if self.gpuid >= 0 else np
-        # create empty array to store the output
-        # the output is scaled by the scale factor
-        n_out_states = feat_in.shape[0] // scale
-        out_dim = self[lstm_layer].state_size
-
-        for i in range(0, n_out_states):
-            lateral_states = self[lstm_layer](feat_in[(i*scale)])
-            for j in range(1, scale):
-                out = self[lstm_layer](feat_in[(i*scale)+j])
-                lateral_states = F.concat((lateral_states, out), axis=1)
-            # concatenate and append lateral states into out states
-            if i > 0:
-                out_states = F.concat((out_states, lateral_states), axis=0)
-            else:
-                out_states = lateral_states
-        return F.expand_dims(out_states,1)
-
-    def encode_speech_lstm(self, speech_feat, lstm_layer_list, train=True):
-        # pad the speech feat and adjust dims
-
-        # _TODO_ can optimize the loops to save memory. Using nested loops for every successive LSTM layer. Feed 8 units to L0 at a time.
-
-        # initialize layer 0 input as speech features
-        L_states = Variable(xp.expand_dims(speech_feat, 1), volatile=not train)
-        # print("speech", L_states.shape)
-        # initial scale values, for every layer
-        # except the final, scale down by 2
-        scale = [2]*len(lstm_layer_list[:-1]) + [1]
-        # feed LSTM layer
-        for i, lstm_layer in enumerate(lstm_layer_list):
-            # print(lstm_layer, "before", L_states.shape)
-            L_states = self.feed_pyramidal_lstm(L_states, lstm_layer=lstm_layer, scale=scale[i], train=train)
-            # print(lstm_layer, "out", L_states.shape)
-
-        return L_states
-
-
-    def encode(self, speech_in, lstm_layer_list, train):
-        self.feed_lstm(speech_in, lstm_layer_list, train)
-
-    def decode(self, word, train):
-        embed_id = self.embed_dec(word)
-        self.feed_lstm(embed_id, self.lstm_dec, train)
-
-    #-----------------------------------------------------------------
-    # For SGD - Batch size = 1
-    #--------------------------------------------------------------------
-    def encode_list(self, speech_feat, train=True):
-        xp = cuda.cupy if self.gpuid >= 0 else np
-
-        # forward LSTM
-        L_FWD_STATES = self.encode_speech_lstm(speech_feat, self.rnn_enc, train)
-
-        L_REV_STATES = self.encode_speech_lstm(xp.flip(speech_feat, axis=0), self.rnn_rev_enc, train)
-
-        # reverse the states to align them with forward encoder
-        L_REV_STATES = xp.flip(L_REV_STATES, axis=0)
-
-        return_shape = L_FWD_STATES.shape
-
-        self.enc_states = F.concat((L_FWD_STATES, L_REV_STATES), axis=1)
-
-        self.enc_states = F.reshape(self.enc_states, shape=(return_shape[0], 2*return_shape[2]))
 
     def compute_context_vector(self, batches=True):
-        xp = cuda.cupy if self.gpuid >= 0 else np
-
-        batch_size, n_units = self[self.lstm_dec[-1]].h.shape
+        batch_size, n_units = self[self.rnn_dec[-1]].h.shape
         # attention weights for the hidden states of each word in the input list
 
         if batches:
-            weights = F.batch_matmul(self.enc_states, self[self.lstm_dec[-1]].h)
+            weights = F.batch_matmul(self.enc_states, self[self.rnn_dec[-1]].h)
             # weights = F.where(self.mask, weights, self.minf)
             alphas = F.softmax(weights)
             # compute context vector
@@ -235,7 +177,7 @@ class SpeechEncoderDecoder(Chain):
 
         else:
             # without batches
-            alphas = F.softmax(F.matmul(self[self.lstm_dec[-1]].h, self.enc_states, transb=True))
+            alphas = F.softmax(F.matmul(self[self.rnn_dec[-1]].h, self.enc_states, transb=True))
             # compute context vector
             if self.attn == SOFT_ATTN:
                 cv = F.batch_matmul(self.enc_states, F.transpose(alphas))
@@ -245,107 +187,7 @@ class SpeechEncoderDecoder(Chain):
 
         return cv, alphas
 
-    #--------------------------------------------------------------------
-    # For SGD - Batch size = 1
-    #--------------------------------------------------------------------
-    def encode_decode_train(self, speech_feat, out_word_list, train=True):
-        xp = cuda.cupy if self.gpuid >= 0 else np
-        self.reset_state()
-        # Add GO_ID, EOS_ID to decoder input
-        decoder_word_list = [GO_ID] + out_word_list + [EOS_ID]
-        # encode list of words/tokens
-        self.encode_list(speech_feat[:MAX_SPEECH_LEN], train=train)
-        # initialize decoder LSTM to final encoder state
-        self.set_decoder_state()
-        # decode and compute loss
-        # convert list of tokens into chainer variable list
-        var_dec = (Variable(xp.asarray(decoder_word_list, dtype=xp.int32).reshape((-1,1)),
-                            volatile=not train))
-        # Initialise first decoded word to GOID
-        # pred_word = Variable(xp.asarray([GO_ID], dtype=np.int32), volatile=not train)
-
-        # compute loss
-        self.loss = 0
-        # decode tokens
-        for curr_word_var, next_word_var in zip(var_dec, var_dec[1:]):
-            self.decode(curr_word_var, train=train)
-            if self.attn:
-                cv, _ = self.compute_context_vector(batches=False)
-                cv_hdec = F.concat((cv, self[self.lstm_dec[-1]].h), axis=1)
-                ht = F.tanh(self.context(cv_hdec))
-                predicted_out = self.out(ht)
-            else:
-                predicted_out = self.out(self[self.lstm_dec[-1]].h)
-            # compute loss
-            self.loss += F.softmax_cross_entropy(predicted_out, next_word_var)
-        report({"loss":self.loss},self)
-
-        return self.loss
-
-    #--------------------------------------------------------------------
-    # For SGD - Batch size = 1
-    #--------------------------------------------------------------------
-    def decoder_predict(self, start_word, max_predict_len=MAX_PREDICT_LEN):
-        xp = cuda.cupy if self.gpuid >= 0 else np
-        alpha_arr = xp.empty((0,self.enc_states.shape[0]), dtype=xp.float32)
-
-        # return list of predicted words
-        predicted_sent = []
-        # load start symbol
-        prev_word = Variable(xp.asarray([start_word], dtype=xp.int32), volatile=True)
-        pred_count = 0
-        pred_word = None
-
-        # start pred loop
-        while pred_count < max_predict_len and pred_word != (EOS_ID) and pred_word != (PAD_ID):
-            self.decode(prev_word, train=False)
-
-            if self.attn:
-                cv, alpha_list = self.compute_context_vector(batches=False)
-                # concatenate hidden state
-                cv_hdec = F.concat((cv, self[self.lstm_dec[-1]].h), axis=1)
-                # add alphas row
-                alpha_arr = xp.vstack((alpha_arr, alpha_list.data))
-
-                ht = F.tanh(self.context(cv_hdec))
-                prob = F.softmax(self.out(ht))
-            else:
-                prob = F.softmax(self.out(self[self.lstm_dec[-1]].h))
-
-            if self.gpuid >= 0:
-                prob = cuda.to_cpu(prob.data)[0].astype(np.float64)
-            else:
-                prob = prob.data[0].astype(np.float64)
-            #prob /= np.sum(prob)
-            #pred_word = np.random.choice(range(len(prob)), p=prob)
-            pred_word = np.argmax(prob)
-            predicted_sent.append(pred_word)
-            prev_word = Variable(xp.asarray([pred_word], dtype=xp.int32), volatile=True)
-            pred_count += 1
-        return predicted_sent, alpha_arr
-
-    #--------------------------------------------------------------------
-    # For SGD - Batch size = 1
-    #--------------------------------------------------------------------
-    def encode_decode_predict(self, speech_feat, max_predict_len=MAX_PREDICT_LEN):
-        xp = cuda.cupy if self.gpuid >= 0 else np
-        self.reset_state()
-        # encode list of words/tokens
-        # in_word_list_no_padding = [w for w in in_word_list if w != PAD_ID]
-        # enc_states = self.encode_list(in_word_list, train=False)
-        self.encode_list(speech_feat, train=False)
-        # initialize decoder LSTM to final encoder state
-        self.set_decoder_state()
-        # decode starting with GO_ID
-        predicted_sent, alpha_arr = self.decoder_predict(GO_ID, max_predict_len)
-        return predicted_sent, alpha_arr
-
-
-    #--------------------------------------------------------------------
-    # For batch size > 1
-    #--------------------------------------------------------------------
     def pad_array(self, data, lim, at_start=True):
-        xp = cuda.cupy if self.gpuid >= 0 else np
         r, c = data.shape
         if r >= lim:
             return data[:lim]
@@ -358,9 +200,6 @@ class SpeechEncoderDecoder(Chain):
             ret_data = xp.concatenate((data, zero_arr), axis=0)
         return ret_data
 
-    #--------------------------------------------------------------------
-    # For batch size > 1
-    #--------------------------------------------------------------------
     def pad_list(self, data, lim, at_start=True):
         if len(data) >= lim:
             ret_data = data[:lim]
@@ -372,11 +211,27 @@ class SpeechEncoderDecoder(Chain):
                 ret_data = data + [PAD_ID]*(rows_to_pad)
         return xp.asarray(ret_data, dtype=xp.int32)
 
-    #--------------------------------------------------------------------
-    # For batch size > 1
-    #--------------------------------------------------------------------
-    def batch_feed_pyramidal_lstm(self, feat_in, lstm_layer, scale, train=True):
-        xp = cuda.cupy if self.gpuid >= 0 else np
+
+    def feed_rnn(self, rnn_in, rnn_layers):
+        # feed into first rnn layer
+        hs = F.dropout(self[rnn_layers[0]](rnn_in), ratio=0.2)
+        # feed into remaining rnn layers
+        for rnn_layer in rnn_layers[1:]:
+            hs = F.dropout(self[rnn_layer](hs), ratio=0.2)
+        return hs
+
+
+    def encode(self, data_in, rnn_layers):
+        h = self.feed_rnn(data_in, rnn_layers)
+        return h
+
+    def decode(self, word):
+        embed_id = self.embed_dec(word)
+        h = self.feed_rnn(embed_id, self.rnn_dec)
+        return h
+
+
+    def batch_feed_pyramidal_rnn(self, feat_in, rnn_layer, scale):
         # create empty array to store the output
         # the output is scaled by the scale factor
         in_size, batch_size, in_dim = feat_in.shape
@@ -385,9 +240,9 @@ class SpeechEncoderDecoder(Chain):
         # print(n_out_states, feat_in.shape, scale)
 
         for i in range(0, n_out_states):
-            lateral_states = self[lstm_layer](feat_in[(i*scale)])
+            lateral_states = self[rnn_layer](feat_in[(i*scale)])
             for j in range(1, scale):
-                out = self[lstm_layer](feat_in[(i*scale)+j])
+                out = self[rnn_layer](feat_in[(i*scale)+j])
                 lateral_states = F.concat((lateral_states, out), axis=1)
             # concatenate and append lateral states into out states
             if i > 0:
@@ -396,99 +251,73 @@ class SpeechEncoderDecoder(Chain):
                 out_states = F.expand_dims(lateral_states, 0)
         return out_states
 
-    def encode_speech_batch_lstm_seg(self, speech_feat_batch, lstm_layer_list, train=True):
+    def encode_speech_batch_lstm_seg(self, L_states, rnn_layer_list):
         # pad the speech feat and adjust dims
-
-        # _TODO_ can optimize the loops to save memory. Using nested loops for every successive LSTM layer. Feed 8 units to L0 at a time.
-
         # initialize layer 0 input as speech features
-        L_states = Variable(speech_feat_batch, volatile=not train)
-        # print("speech", L_states.shape)
         # initial scale values, for every layer
         # except the final, scale down by 2
-        scale = [2]*len(lstm_layer_list[:-1]) + [1]
+        scale = [self.scale]*len(rnn_layer_list[:-1]) + [1]
         # feed LSTM layer
-        for i, lstm_layer in enumerate(lstm_layer_list):
-            # print(lstm_layer, "before", L_states.shape)
-            L_states = self.batch_feed_pyramidal_lstm(L_states, lstm_layer=lstm_layer, scale=scale[i], train=train)
-            # print(i, lstm_layer, L_states.shape)
-            # print(lstm_layer, "out", L_states.shape)
-
+        for i, rnn_layer in enumerate(rnn_layer_list):
+            L_states = self.batch_feed_pyramidal_rnn(L_states, rnn_layer=rnn_layer, scale=scale[i])
         return L_states
 
-    def encode_speech_batch_lstm(self, speech_feat_batch, lstm_layer_list, train=True):
-        # print("here, shape", speech_feat_batch.shape)
+    def encode_speech_batch_lstm(self, speech_feat_batch, rnn_layer_list):
         in_size, batch_size, in_dim = speech_feat_batch.shape
-        # print("speech", speech_feat_batch.shape)
+        # Optimize the loops to save memory. Using nested loops for every successive LSTM layer. Feed 8 units to L0 at a time.
         # step size to process input
-        step_size = 2**len(lstm_layer_list[:-1])
+        step_size = self.scale**len(rnn_layer_list[:-1])
         # print("step size", step_size)
         for s in range(0,in_size,step_size):
             if s == 0:
-                # print("s == 0")
-                out_states = self.encode_speech_batch_lstm_seg(speech_feat_batch[s:s+step_size], lstm_layer_list, train=train)
-                # print(out_states.shape)
+                out_states = self.encode_speech_batch_lstm_seg(speech_feat_batch[s:s+step_size], rnn_layer_list)
             else:
-                # print("s != 0")
-                out_states = F.concat((out_states, self.encode_speech_batch_lstm_seg(speech_feat_batch[s:s+step_size], lstm_layer_list, train=train)), axis=0)
-                # print(out_states.shape)
-            # print(s, s+step_size, out_states.shape)
+                out_states = F.concat((out_states, self.encode_speech_batch_lstm_seg(speech_feat_batch[s:s+step_size], rnn_layer_list)), axis=0)
         # end for step_size
         return out_states
 
 
-    def encode_batch(self, fwd_encoder_batch, rev_encoder_batch, train=True):
+    def encode_batch(self, fwd_encoder_batch, rev_encoder_batch=None):
         # convert list of tokens into chainer variable list
-        # self.encode_speech_batch_lstm(fwd_encoder_batch, self.rnn_enc, train)
-
         seq_len, batch_size, in_dim = fwd_encoder_batch.shape
+        print("fwd_encoder_batch", fwd_encoder_batch.shape)
 
         if self.attn:
-            self.mask = xp.expand_dims(fwd_encoder_batch != 0, -1)
+            #self.mask = F.expand_dims(fwd_encoder_batch != 0, -1)
             self.minf = Variable(xp.full((batch_size, seq_len, 1), -1000.,
-                                 dtype=xp.float32), volatile=not train)
+                                 dtype=xp.float32))
 
         # for all sequences in the batch, feed the characters one by one
-        L_FWD_STATES = self.encode_speech_batch_lstm(fwd_encoder_batch, self.rnn_enc, train)
+        L_FWD_STATES = self.encode_speech_batch_lstm(fwd_encoder_batch,
+                                                     self.rnn_enc)
 
-        L_REV_STATES = self.encode_speech_batch_lstm(rev_encoder_batch, self.rnn_rev_enc, train)
+        if not rev_encoder_batch:
+            rev_encoder_batch = F.flipud(fwd_encoder_batch)
+            print("rev_encoder_batch", rev_encoder_batch.shape)
+
+        L_REV_STATES = self.encode_speech_batch_lstm(rev_encoder_batch,
+                                                     self.rnn_rev_enc)
 
         # reverse the states to align them with forward encoder
-        L_REV_STATES = xp.flip(L_REV_STATES, axis=0)
-
-        return_shape = L_FWD_STATES.shape
+        L_REV_STATES = F.flipud(L_REV_STATES)
 
         self.enc_states = F.concat((L_FWD_STATES, L_REV_STATES), axis=2)
-
         self.enc_states = F.swapaxes(self.enc_states, 0, 1)
 
-        # prL_FWD_STATES", L_FWD_STATES.shape)
-        # prL_REV_STATES", L_REV_STATES.shape)
-        # print("enc_states", self.enc_states.shape)
-
-
-    #--------------------------------------------------------------------
-    # For batch size > 1
-    #--------------------------------------------------------------------
-    def decode_batch(self, decoder_batch, train=True):
-        xp = cuda.cupy if self.gpuid >= 0 else np
-        # convert list of tokens into chainer variable list
-        var_dec = (Variable(decoder_batch, volatile=(not train)))
-
+    def decode_batch(self, decoder_batch):
         loss = 0
-
         # for all sequences in the batch, feed the characters one by one
-        for curr_word, next_word in zip(var_dec, var_dec[1:]):
+        for curr_word, next_word in zip(decoder_batch, decoder_batch[1:]):
             # encode tokens
-            self.decode(curr_word, train)
+            self.decode(curr_word)
 
             if self.attn:
                 cv, _ = self.compute_context_vector(batches=True)
-                cv_hdec = F.concat((cv, self[self.lstm_dec[-1]].h), axis=1)
+                cv_hdec = F.concat((cv, self[self.rnn_dec[-1]].h), axis=1)
                 ht = F.tanh(self.context(cv_hdec))
                 predicted_out = self.out(ht)
             else:
-                predicted_out = self.out(self[self.lstm_dec[-1]].h)
+                predicted_out = self.out(self[self.rnn_dec[-1]].h)
 
             loss_arr = F.softmax_cross_entropy(predicted_out, next_word,
                                                class_weight=self.mask_pad_id)
@@ -496,17 +325,23 @@ class SpeechEncoderDecoder(Chain):
 
         return loss
 
-    #--------------------------------------------------------------------
-    # For batch size > 1
-    #--------------------------------------------------------------------
-    def encode_decode_train_batch(self, batch_data, src_lim, tar_lim, train=True):
-        xp = cuda.cupy if self.gpuid >= 0 else np
+    def prepare_batch(self, batch_data, src_lim, tar_lim):
+        # pad and return batch data
+        pass
+
+
+    def encode_decode_train_batch(self, batch_data, src_lim, tar_lim):
         self.reset_state()
 
         batch_size = len(batch_data)
 
+        # get the dimension of the input data
+        # format of batch_data = num in batch * sequence length * frame/char/word dimensionality
+        # batch_data is a list of (speech_feat data, en_ids and pad_size_en)
+        # batch_data[0][0] gets the first speech_feat numpy array
+        # the columns (dimensionality) of all speech feats in a batch
+        # is assumed to be the same
         in_shape_r, in_shape_c = batch_data[0][0].shape
-        # print(len(batch_data), in_shape_r, in_shape_c)
 
         fwd_encoder_batch = xp.full((batch_size, src_lim, in_shape_c), PAD_ID, dtype=xp.float32)
         rev_encoder_batch = xp.full((batch_size, src_lim, in_shape_c), PAD_ID, dtype=xp.float32)
@@ -519,8 +354,8 @@ class SpeechEncoderDecoder(Chain):
             tar_data = [GO_ID] + tar + [EOS_ID]
             decoder_batch[i] = self.pad_list(tar_data, tar_lim+2, at_start=False)
 
-        # print(fwd_encoder_batch.shape, rev_encoder_batch.shape, decoder_batch.shape)
-        batch_data = 0
+        # free memory
+        del batch_data
 
         # swap axes for batch and total rows
         fwd_encoder_batch = xp.swapaxes(fwd_encoder_batch, 0,1)
@@ -529,16 +364,76 @@ class SpeechEncoderDecoder(Chain):
 
         # print(fwd_encoder_batch.shape, rev_encoder_batch.shape, decoder_batch.shape)
 
-        self.encode_batch(fwd_encoder_batch, rev_encoder_batch, train)
+        self.encode_batch(fwd_encoder_batch, rev_encoder_batch)
 
         # initialize decoder LSTM to final encoder state
         self.set_decoder_state()
         # decode and compute loss
-        self.loss = self.decode_batch(decoder_batch, train=train)
+        self.loss = self.decode_batch(decoder_batch)
 
         self.enc_states = 0
 
         return self.loss
+
+
+    def forward_cnn(self, X):
+        # perform convolutions
+        h = F.relu(self[self.cnns[0]](X))
+        print(h.shape)
+        for i in range(len(self.cnns[1:])):
+            h = F.concat((h, F.relu(self[self.cnns[i]](X))), axis=1)
+            print(h.shape)
+
+        # max pooling
+        h = F.max_pooling_nd(h, ksize=max_pool_stride,
+                             stride=max_pool_stride,
+                             pad=max_pool_stride//2)
+        print(h.shape)
+
+        # out dimension:
+        # batch size * cnn out dim * num time frames after pooling
+        return h
+
+
+    def forward_highway(self, X):
+        # highway
+        for i in range(len(self.highway)):
+            h = self[self.highway[i]](X)
+            print(h.shape)
+        return h
+
+    def forward_rnn(self, X):
+        self.reset_state()
+        in_size, batch_size, in_dim = X.shape
+        print("X", X.shape)
+        for i in range(in_size):
+            if i > 0:
+                h_fwd = F.concat((h_fwd,
+                                  F.expand_dims(self.encode(X[i],
+                                    self.rnn_enc), 0)),
+                                  axis=0)
+                h_rev = F.concat((h_rev,
+                                  F.expand_dims(self.encode(X[-i],
+                                    self.rnn_rev_enc), 0)),
+                                  axis=0)
+            else:
+                h_fwd = F.expand_dims(self.encode(X[i], self.rnn_enc), 0)
+                h_rev = F.expand_dims(self.encode(X[-i], self.rnn_rev_enc), 0)
+
+        h_rev = F.flipud(h_rev)
+        self.enc_states = F.concat((h_fwd, h_rev), axis=2)
+        self.enc_states = F.swapaxes(self.enc_states, 0, 1)
+        return h_fwd, h_rev
+
+
+    def forward(self, X):
+        if MODEL_TYPE == MODEL_CNN:
+            h = self.forward_cnn(X)
+            print(h.shape)
+            h = F.rollaxis(h, 2)
+            print(h.shape)
+        # h = self.forward_highway(h)
+        self.forward_rnn(h)
 
 
 # In[ ]:
