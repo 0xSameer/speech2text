@@ -23,7 +23,7 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-model_dir = "mfcc_kaldi_GRU_again"
+model_dir = "mfcc_kaldi_cnn_mini"
 EXP_NAME_PREFIX = ""
 
 print("callhome es-en word level configuration")
@@ -48,7 +48,7 @@ lstm1_or_gru0 = False
 CHAR_LEVEL = False
 OPTIMIZER_ADAM1_SGD_0 = True
 
-NUM_EPOCHS = 10
+NUM_EPOCHS = 1
 
 gpuid = 1
 
@@ -66,11 +66,11 @@ embedding_units = 256
 # cnn filter specs - tuple: (kernel size, pad, num filters)
 # for now keeping kernel widths as odd
 # this keeps the output size the same as the input
-cnn_k_widths = [i for i in range(9,19+1,10)]
+cnn_k_widths = [i for i in range(9,99+1,10)]
 
 cnn_filters = [{"ndim": 1,
                 "in_channels": SPEECH_DIM,
-                "out_channels": 2,
+                "out_channels": 100,
                 "ksize": k,
                 "stride": 1,
                 "pad": k //2} for k in cnn_k_widths]
@@ -109,7 +109,7 @@ NUM_SENTENCES = 17394
 # use 90% of the data for training
 
 NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = 10000
+NUM_MINI_TRAINING_SENTENCES = 1000
 
 ITERS_TO_SAVE = 2
 
@@ -134,35 +134,35 @@ SPEECH_BUCKET_WIDTH = 16
 #------------------------------------------------
 SPEECH_NUM_BUCKETS = 50
 
-BATCH_SIZE_LOOKUP = {}
+BATCH_SIZE_LOOKUP = {'train':{}, 'dev':{}, 'test':{}}
 
 for i in range(SPEECH_NUM_BUCKETS):
     if i < 7:
-        BATCH_SIZE_LOOKUP[i] = 64
+        BATCH_SIZE_LOOKUP['train'][i] = 64
     elif i >= 7 and i<13:
-        BATCH_SIZE_LOOKUP[i] = 64
+        BATCH_SIZE_LOOKUP['train'][i] = 64
     elif i >= 13 and i<18:
-        BATCH_SIZE_LOOKUP[i] = 64
+        BATCH_SIZE_LOOKUP['train'][i] = 64
     elif i>=18 and i<26:
-        BATCH_SIZE_LOOKUP[i] = 24
+        BATCH_SIZE_LOOKUP['train'][i] = 64
     else:
-        BATCH_SIZE_LOOKUP[i] = 24
+        BATCH_SIZE_LOOKUP['train'][i] = 64
 
-DEV_BATCH_SIZE_LOOKUP = {}
+BATCH_SIZE_LOOKUP['dev'] = {}
 DEV_SPEECH_BUCKET_WIDTH = 16
 DEV_SPEECH_NUM_BUCKETS = 50
 
 for i in range(DEV_SPEECH_NUM_BUCKETS):
     if i < 6:
-        DEV_BATCH_SIZE_LOOKUP[i] = 100
+        BATCH_SIZE_LOOKUP['dev'][i] = 64
     elif i >= 6 and i<13:
-        DEV_BATCH_SIZE_LOOKUP[i] = 100
+        BATCH_SIZE_LOOKUP['dev'][i] = 64
     elif i >= 13 and i<18:
-        DEV_BATCH_SIZE_LOOKUP[i] = 50
+        BATCH_SIZE_LOOKUP['dev'][i] = 64
     elif i>=18 and i<26:
-        DEV_BATCH_SIZE_LOOKUP[i] = 30
+        BATCH_SIZE_LOOKUP['dev'][i] = 64
     else:
-        DEV_BATCH_SIZE_LOOKUP[i] = 30
+        BATCH_SIZE_LOOKUP['dev'][i] = 64
 
 
 # create separate widths for input and output, speech and english words/chars

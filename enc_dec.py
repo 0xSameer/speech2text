@@ -207,7 +207,8 @@ class SpeechEncoderDecoder(Chain):
         if self.attn:
             cv, _ = self.compute_context_vector(batches=True)
             cv_hdec = F.concat((cv, self[self.rnn_dec[-1]].h), axis=1)
-            ht = F.tanh(self.context(cv_hdec))
+            # ht = F.tanh(self.context(cv_hdec))
+            ht = self.context(cv_hdec)
             predicted_out = self.out(ht)
         else:
             predicted_out = self.out(self[self.rnn_dec[-1]].h)
@@ -337,8 +338,6 @@ class SpeechEncoderDecoder(Chain):
             h = F.rollaxis(h, 2)
         _, _ = self.forward_rnn(h)
 
-    def forward_dec(self, X):
-        pass
 
     def forward(self, X, y=None):
         # get shape
@@ -354,7 +353,8 @@ class SpeechEncoderDecoder(Chain):
         if chainer.config.train:
             # decode
             self.loss = self.decode_batch(y)
-            return self.loss
+            # consistent return statement
+            return [], self.loss
         else:
             # predict
             return self.predict_batch(batch_size=batch_size, pred_limit=MAX_EN_LEN, y=y)
