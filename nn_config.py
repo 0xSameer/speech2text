@@ -44,13 +44,13 @@ MODEL_RNN = 0
 MODEL_CNN = 1
 MODEL_TYPE = MODEL_CNN
 
-lstm1_or_gru0 = True
+lstm1_or_gru0 = False
 CHAR_LEVEL = False
 OPTIMIZER_ADAM1_SGD_0 = True
 
 NUM_EPOCHS = 10
 
-gpuid = 0
+gpuid = 1
 
 if MODEL_TYPE == MODEL_RNN:
     num_layers_enc = 4
@@ -66,17 +66,18 @@ embedding_units = 256
 # cnn filter specs - tuple: (kernel size, pad, num filters)
 # for now keeping kernel widths as odd
 # this keeps the output size the same as the input
-cnn_k_widths = [i for i in range(9,99,10)]
+cnn_k_widths = [i for i in range(9,19+1,10)]
 
 cnn_filters = [{"ndim": 1,
                 "in_channels": SPEECH_DIM,
-                "out_channels": 10,
+                "out_channels": 2,
                 "ksize": k,
                 "stride": 1,
                 "pad": k //2} for k in cnn_k_widths]
 
 num_highway_layers = 2
-max_pool_stride, max_pool_pad = 5, 0
+max_pool_stride = 5
+max_pool_pad = 0
 
 #------------------------------------------------------------------------------
 

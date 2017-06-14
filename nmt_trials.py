@@ -72,7 +72,9 @@ def prepare_data(width_b = SPEECH_BUCKET_WIDTH,
                  speech=True,
                  num_sent=NUM_TRAINING_SENTENCES,
                  filname_b=speech_bucket_data_fname,
-                 cat="train", display=False):
+                 cat="train", 
+                 rev=False,
+                 display=False):
 
     buckets = [{"X_fwd":[],
                  "X_rev":[],
@@ -95,7 +97,8 @@ def prepare_data(width_b = SPEECH_BUCKET_WIDTH,
             sp_feat_fwd = xp.pad(sp_feat,
                                 ((width_b - len(sp_feat) % width_b,0), (0,0)),
                                 mode='constant')
-            sp_feat_rev = xp.pad(xp.flipud(sp_feat),
+            if rev:
+                sp_feat_rev = xp.pad(xp.flipud(sp_feat),
                                 ((width_b - len(sp_feat) % width_b,0), (0,0)),
                                 mode='constant')
             len_speech = len(sp_feat_fwd)
@@ -111,19 +114,16 @@ def prepare_data(width_b = SPEECH_BUCKET_WIDTH,
                 # add to buckets
                 indx_b = min(num_b-1, (len_speech // width_b)-1)
                 max_b_len = (indx_b+1) * width_b
-                # print("max_b_len", max_b_len)
-                # print("sp_feat_fwd", sp_feat_fwd[:max_b_len].shape)
-                # print(buckets[indx_b]["X_fwd"])
-                # buckets[indx_b]["X_fwd"].append(sp_feat_fwd[:max_b_len])
+
                 if len(buckets[indx_b]["X_fwd"]) == 0:
                     buckets[indx_b]["X_fwd"] = xp.expand_dims(sp_feat_fwd[:max_b_len], axis=0)
                 else:
-                    buckets[indx_b]["X_fwd"] = xp.concatenate((buckets[indx_b]["X_fwd"], xp.expand_dims(sp_feat_rev[:max_b_len], axis=0)), axis=0)
-                if len(buckets[indx_b]["X_rev"]) == 0:
-                    buckets[indx_b]["X_rev"] = xp.expand_dims(sp_feat_rev[:max_b_len], axis=0)
-                else:
-                    buckets[indx_b]["X_rev"] = xp.concatenate((buckets[indx_b]["X_rev"], xp.expand_dims(sp_feat_rev[:max_b_len], axis=0)), axis=0)
-                #buckets[indx_b]["X_rev"].append(sp_feat_rev[:max_b_len])
+                    buckets[indx_b]["X_fwd"] = xp.concatenate((buckets[indx_b]["X_fwd"], xp.expand_dims(sp_feat_fwd[:max_b_len], axis=0)), axis=0)
+                if rev:
+                    if len(buckets[indx_b]["X_rev"]) == 0:
+                        buckets[indx_b]["X_rev"] = xp.expand_dims(sp_feat_rev[:max_b_len], axis=0)
+                    else:
+                        buckets[indx_b]["X_rev"] = xp.concatenate((buckets[indx_b]["X_rev"], xp.expand_dims(sp_feat_rev[:max_b_len], axis=0)), axis=0)
                 buckets[indx_b]["y"].append(target_text)
 
             pbar.update(1)
@@ -131,15 +131,17 @@ def prepare_data(width_b = SPEECH_BUCKET_WIDTH,
     # pad all "y" data
     print("padding labels")
     for indx_b in range(len(buckets)):
-        # buckets[indx_b]["X_fwd"] = xp.asarray(buckets[indx_b]["X_fwd"], dtype=xp.float32)
-        # buckets[indx_b]["X_rev"] = xp.asarray(buckets[indx_b]["X_rev"], dtype=xp.float32)
         buckets[indx_b]["X_fwd"] = F.swapaxes(buckets[indx_b]["X_fwd"], 1,2)
-        buckets[indx_b]["X_rev"] = F.swapaxes(buckets[indx_b]["X_rev"], 1,2)
-        buckets[indx_b]["y"] = F.pad_sequence(buckets[indx_b]["y"], padding=PAD_ID)
-        print('''{0:d} items in bucket={1:d}, each of length={2:d}, max en ids={3:d}'''.format(len(buckets[indx_b]["X_fwd"]),
-                                                               indx_b+1,
-                                                               len(buckets[indx_b]["X_fwd"][0]),
-                                                               len(buckets[indx_b]["y"][0])))
+        if rev:
+            buckets[indx_b]["X_rev"] = F.swapaxes(buckets[indx_b]["X_rev"], 
+                                                  1,2)
+        buckets[indx_b]["y"] = F.pad_sequence(buckets[indx_b]["y"], 
+                                          padding=PAD_ID)
+        if display:
+            print('''{0:d} items in bucket={1:d}, each of length={2:d}, max en ids={3:d}'''.format(len(buckets[indx_b]["X_fwd"]),
+                indx_b+1,
+                len(buckets[indx_b]["X_fwd"][0]),
+                len(buckets[indx_b]["y"][0])))
     # # Saving bucket data
     # if filname_b:
     #     print("Saving bucket data")
