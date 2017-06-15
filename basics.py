@@ -20,6 +20,7 @@ import matplotlib.gridspec as gridspec
 import importlib
 from collections import namedtuple
 import cupy
+import random
 
 Align = namedtuple('Align', ['word', 'start', 'end'])
 

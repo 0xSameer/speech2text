@@ -23,7 +23,7 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-model_dir = "mfcc_kaldi_cnn_200_char"
+model_dir = "mfcc_kaldi_cnn_200_moser"
 EXP_NAME_PREFIX = ""
 
 print("callhome es-en word level configuration")
@@ -42,15 +42,30 @@ speech_extn = "_fa_vad.std.mfcc"
 
 MODEL_RNN = 0
 MODEL_CNN = 1
+
 MODEL_TYPE = MODEL_CNN
 
 lstm1_or_gru0 = False
-CHAR_LEVEL = True
-OPTIMIZER_ADAM1_SGD_0 = False
+CHAR_LEVEL = False
+OPTIMIZER_ADAM1_SGD_0 = True
 
-NUM_EPOCHS = 100
+NUM_EPOCHS = 10
 
 gpuid = 1
+
+NUM_SENTENCES = 17394
+# use 90% of the data for training
+
+NUM_TRAINING_SENTENCES = 13137
+NUM_MINI_TRAINING_SENTENCES = 5000
+
+ITERS_TO_SAVE = 5
+
+NUM_DEV_SENTENCES = 2476
+NUM_MINI_DEV_SENTENCES = 500
+
+NUM_TEST_SENTENCES = 1781
+
 
 if MODEL_TYPE == MODEL_RNN:
     num_layers_enc = 4
@@ -76,7 +91,7 @@ cnn_filters = [{"ndim": 1,
                 "pad": k //2} for k in cnn_k_widths]
 
 num_highway_layers = 4
-max_pool_stride = 9
+max_pool_stride = 8
 max_pool_pad = 0
 
 print("cnn details:")
@@ -109,19 +124,6 @@ else:
     EXP_NAME_PREFIX += "_adam"
 
 
-NUM_SENTENCES = 17394
-# use 90% of the data for training
-
-NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = 13137
-
-ITERS_TO_SAVE = 5
-
-NUM_DEV_SENTENCES = 2476
-NUM_MINI_DEV_SENTENCES = 2476
-
-NUM_TEST_SENTENCES = 1781
-
 # A total of 11 buckets, with a length range of 7 each, giving total
 # BUCKET_WIDTH * NUM_BUCKETS = 77 for e.g.
 BUCKET_WIDTH = 3 if not CHAR_LEVEL else 3
@@ -142,15 +144,15 @@ BATCH_SIZE_LOOKUP = {'train':{}, 'dev':{}, 'test':{}}
 
 for i in range(SPEECH_NUM_BUCKETS):
     if i < 7:
-        BATCH_SIZE_LOOKUP['train'][i] = 64
+        BATCH_SIZE_LOOKUP['train'][i] = 32
     elif i >= 7 and i<13:
-        BATCH_SIZE_LOOKUP['train'][i] = 64
+        BATCH_SIZE_LOOKUP['train'][i] = 32
     elif i >= 13 and i<18:
-        BATCH_SIZE_LOOKUP['train'][i] = 64
+        BATCH_SIZE_LOOKUP['train'][i] = 32
     elif i>=18 and i<26:
-        BATCH_SIZE_LOOKUP['train'][i] = 64
+        BATCH_SIZE_LOOKUP['train'][i] = 32
     else:
-        BATCH_SIZE_LOOKUP['train'][i] = 64
+        BATCH_SIZE_LOOKUP['train'][i] = 32
 
 BATCH_SIZE_LOOKUP['dev'] = {}
 DEV_SPEECH_BUCKET_WIDTH = 16

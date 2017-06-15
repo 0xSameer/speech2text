@@ -190,10 +190,12 @@ class SpeechEncoderDecoder(Chain):
 
     def feed_rnn(self, rnn_in, rnn_layers, highway_layers=None):
         # feed into first rnn layer
-        hs = F.dropout(self[rnn_layers[0]](rnn_in), ratio=0.2)
+        # hs = F.dropout(self[rnn_layers[0]](rnn_in), ratio=0.2)
+        hs = self[rnn_layers[0]](rnn_in)
         # feed into remaining rnn layers
         for rnn_layer in rnn_layers[1:]:
-            hs = F.dropout(self[rnn_layer](hs), ratio=0.2)
+            # hs = F.dropout(self[rnn_layer](hs), ratio=0.2)
+            hs = self[rnn_layer](hs)
         return hs
 
     def encode(self, data_in, rnn_layers):

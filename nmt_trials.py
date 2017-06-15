@@ -29,12 +29,12 @@ if gpuid >= 0:
 
 if OPTIMIZER_ADAM1_SGD_0:
     print("using ADAM optimizer")
-    optimizer = optimizers.Adam(alpha=0.01,
+    optimizer = optimizers.Adam(alpha=0.001,
                                 beta1=0.9,
                                 beta2=0.999,
                                 eps=1e-08)
     optimizer.setup(model)
-    optimizer.add_hook(chainer.optimizer.WeightDecay(0.5))
+    optimizer.add_hook(chainer.optimizer.WeightDecay(0.1))
 else:
     print("using SGD optimizer")
     optimizer = optimizers.SGD(lr=0.05)
@@ -241,7 +241,7 @@ def compute_pplx(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES):
     loss = batch_training(num_sent,
                            BATCH_SIZE_LOOKUP[cat],
                            buckets_dict[cat],
-                           epoch=0,
+                           epoch=-1,
                            train=False)
 
     # print(loss)
@@ -310,7 +310,15 @@ def batch_training(num_training,
         total_loss = 0
         total_loss_updates = 0
 
-        for buck_indx in range(len(buckets)):
+        # random.shuffle(shuffle_buckets)
+        # shuffle_buckets = list(map(int, shuffle_buckets))
+        # buckets_order = cuda.to_gpu(shuffle_buckets, device=gpuid)
+
+        shuffle_buckets = random.shuffle(range(len(buckets)))
+
+        # for buck_indx in range(len(buckets)):
+        for buck_indx in shuffle_buckets:
+            # print("buck_indx", buck_indx, type(buck_indx))
             if total_trained >= num_training:
                 break
 
@@ -355,7 +363,7 @@ def batch_training(num_training,
         # end for all buckets
     # end with pbar
     print("-"*80)
-    print("{3:s} mean loss={0:.4f}, total={1:.4f}, updates={2:d}".format(
+    print("***********{3:s} mean loss={0:.4f}, total={1:.4f}, updates={2:d}".format(
                                                     loss_per_epoch, 
                                                     total_loss,
                                                     total_loss_updates,
@@ -372,6 +380,10 @@ def train_loop(num_training,
     # Set up log file for loss
     log_dev_fil = open(log_dev_fil_name, mode=log_mode)
     log_dev_csv = csv.writer(log_dev_fil, lineterminator="\n")
+
+    log_train_fil = open(log_train_fil_name, mode=log_mode)
+    log_train_csv = csv.writer(log_train_fil, lineterminator="\n")
+
     bleu_score = 0
 
     # initialize perplexity on dev set
@@ -381,14 +393,19 @@ def train_loop(num_training,
 
     # start epochs
     for epoch in range(num_epochs):
-        batch_training(num_training, BATCH_SIZE_LOOKUP['train'], 
-                       buckets_dict['train'], epoch, train=True)
-        # end epoch
+
+        loss_per_epoch = batch_training(num_training, 
+                                        BATCH_SIZE_LOOKUP['train'], 
+                                        buckets_dict['train'], 
+                                        epoch, train=True)
+
+        log_train_csv.writerow([(last_epoch_id+epoch+1), loss_per_epoch])
+        log_train_fil.flush()
 
         sys.stderr.flush()
 
-        print("finished training on {0:d} sentences".format(num_training))
-        print("{0:s}".format("-"*50))
+        # print("finished training on {0:d} sentences".format(num_training))
+        # print("{0:s}".format("-"*50))
         print("computing perplexity")
         pplx_new = compute_pplx(cat="dev",
                                 num_sent=NUM_MINI_DEV_SENTENCES)
@@ -409,8 +426,8 @@ def train_loop(num_training,
             print("perplexity went up during training, breaking out of loop")
             # break
         pplx = pplx_new
-        print(log_dev_fil_name)
-        print(model_fil.replace(".model", "_{0:d}.model".format(epoch+1)))
+        # print(log_dev_fil_name)
+        # print(model_fil.replace(".model", "_{0:d}.model".format(epoch+1)))
 
     # print("Simple predictions (╯°□°）╯︵ ┻━┻")
     # print("training set predictions")
@@ -424,8 +441,10 @@ def train_loop(num_training,
     print("Finished saving model")
 
     # close log file
+    log_train_fil.close()
     log_dev_fil.close()
 
+    print(log_train_fil_name)
     print(log_dev_fil_name)
     print(model_fil)
 
