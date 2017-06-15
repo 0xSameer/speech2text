@@ -23,8 +23,8 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-model_dir = "mfcc_kaldi_cnn_200_moser"
-EXP_NAME_PREFIX = ""
+model_dir = "cnn_mini"
+EXP_NAME_PREFIX = "B"
 
 print("callhome es-en word level configuration")
 
@@ -49,7 +49,7 @@ lstm1_or_gru0 = False
 CHAR_LEVEL = False
 OPTIMIZER_ADAM1_SGD_0 = True
 
-NUM_EPOCHS = 10
+NUM_EPOCHS = 0
 
 gpuid = 1
 
@@ -57,7 +57,7 @@ NUM_SENTENCES = 17394
 # use 90% of the data for training
 
 NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = 5000
+NUM_MINI_TRAINING_SENTENCES = 2000
 
 ITERS_TO_SAVE = 5
 
@@ -160,15 +160,15 @@ DEV_SPEECH_NUM_BUCKETS = 50
 
 for i in range(DEV_SPEECH_NUM_BUCKETS):
     if i < 6:
-        BATCH_SIZE_LOOKUP['dev'][i] = 64
+        BATCH_SIZE_LOOKUP['dev'][i] = 32
     elif i >= 6 and i<13:
-        BATCH_SIZE_LOOKUP['dev'][i] = 64
+        BATCH_SIZE_LOOKUP['dev'][i] = 32
     elif i >= 13 and i<18:
-        BATCH_SIZE_LOOKUP['dev'][i] = 64
+        BATCH_SIZE_LOOKUP['dev'][i] = 32
     elif i>=18 and i<26:
-        BATCH_SIZE_LOOKUP['dev'][i] = 64
+        BATCH_SIZE_LOOKUP['dev'][i] = 32
     else:
-        BATCH_SIZE_LOOKUP['dev'][i] = 64
+        BATCH_SIZE_LOOKUP['dev'][i] = 32
 
 
 # create separate widths for input and output, speech and english words/chars
