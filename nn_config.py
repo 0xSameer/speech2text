@@ -23,7 +23,7 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-model_dir = "mfcc_kaldi_cnn_mini"
+model_dir = "mfcc_kaldi_cnn_200_char"
 EXP_NAME_PREFIX = ""
 
 print("callhome es-en word level configuration")
@@ -45,10 +45,10 @@ MODEL_CNN = 1
 MODEL_TYPE = MODEL_CNN
 
 lstm1_or_gru0 = False
-CHAR_LEVEL = False
-OPTIMIZER_ADAM1_SGD_0 = True
+CHAR_LEVEL = True
+OPTIMIZER_ADAM1_SGD_0 = False
 
-NUM_EPOCHS = 1
+NUM_EPOCHS = 100
 
 gpuid = 1
 
@@ -60,7 +60,7 @@ elif MODEL_TYPE == MODEL_CNN:
     num_layers_dec = 2
 
 use_attn = SOFT_ATTN
-hidden_units = 100
+hidden_units = 256
 embedding_units = 256
 
 # cnn filter specs - tuple: (kernel size, pad, num filters)
@@ -70,21 +70,25 @@ cnn_k_widths = [i for i in range(9,99+1,10)]
 
 cnn_filters = [{"ndim": 1,
                 "in_channels": SPEECH_DIM,
-                "out_channels": 100,
+                "out_channels": 200,
                 "ksize": k,
                 "stride": 1,
                 "pad": k //2} for k in cnn_k_widths]
 
-num_highway_layers = 2
-max_pool_stride = 5
+num_highway_layers = 4
+max_pool_stride = 9
 max_pool_pad = 0
+
+print("cnn details:")
+for d in cnn_filters:
+    print(d)
 
 #------------------------------------------------------------------------------
 
 if MODEL_TYPE == MODEL_RNN:
-    EXP_NAME_PREFIX += "cnn"
-elif MODEL_TYPE == MODEL_CNN:
     EXP_NAME_PREFIX += "rnn"
+elif MODEL_TYPE == MODEL_CNN:
+    EXP_NAME_PREFIX += "cnn"
 else:
     EXP_NAME_PREFIX += "UNK"
 
@@ -109,12 +113,12 @@ NUM_SENTENCES = 17394
 # use 90% of the data for training
 
 NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = 1000
+NUM_MINI_TRAINING_SENTENCES = 13137
 
-ITERS_TO_SAVE = 2
+ITERS_TO_SAVE = 5
 
 NUM_DEV_SENTENCES = 2476
-NUM_MINI_DEV_SENTENCES = 1600
+NUM_MINI_DEV_SENTENCES = 2476
 
 NUM_TEST_SENTENCES = 1781
 
@@ -197,13 +201,14 @@ load_existing_model = True
 
 xp = cuda.cupy if gpuid >= 0 else np
 
-name_to_log = "{0:d}sen_{1:d}-{2:d}layers_{3:d}units_{4:s}_{5:d}".format(
+name_to_log = "{0:d}sen_{1:d}-{2:d}-{6:d}layers_{3:d}units_{4:s}_{5:d}".format(
                                                             NUM_SENTENCES,
                                                             num_layers_enc,
                                                             num_layers_dec,
                                                             hidden_units,
                                                             EXP_NAME,
-                                                            use_attn)
+                                                            use_attn,
+                                                            len(cnn_k_widths))
 
 log_train_fil_name = os.path.join(model_dir, "train_{0:s}.log".format(name_to_log))
 log_dev_fil_name = os.path.join(model_dir, "dev_{0:s}.log".format(name_to_log))

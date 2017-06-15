@@ -244,17 +244,17 @@ def compute_pplx(cat="dev", num_sent=NUM_MINI_DEV_SENTENCES):
                            epoch=0,
                            train=False)
 
-    print(loss)
+    # print(loss)
 
-    # pplx = 2 ** loss
-    pplx = loss
+    # # pplx = 2 ** loss
+    # pplx = loss
 
-    print("{0:s}".format("-"*50))
-    print("{0:s} | {1:0.4f}".format("loss", loss))
-    print("{0:s} | {1:0.4f}".format("dev perplexity", pplx))
-    print("{0:s}".format("-"*50))
+    # print("{0:s}".format("-"*50))
+    # print("{0:s} | {1:0.4f}".format("loss", loss))
+    # print("{0:s} | {1:0.4f}".format("dev perplexity", pplx))
+    # print("{0:s}".format("-"*50))
 
-    return pplx
+    return loss
 
 
 # In[ ]:
@@ -355,10 +355,11 @@ def batch_training(num_training,
         # end for all buckets
     # end with pbar
     print("-"*80)
-    print("mean loss={0:.4f}, total={1:.4f}, updates={2:d}".format(
+    print("{3:s} mean loss={0:.4f}, total={1:.4f}, updates={2:d}".format(
                                                     loss_per_epoch, 
                                                     total_loss,
-                                                    total_loss_updates))
+                                                    total_loss_updates,
+                                                    "train" if train else "dev"))
     print("-"*80)
     return loss_per_epoch
 
@@ -384,6 +385,8 @@ def train_loop(num_training,
                        buckets_dict['train'], epoch, train=True)
         # end epoch
 
+        sys.stderr.flush()
+
         print("finished training on {0:d} sentences".format(num_training))
         print("{0:s}".format("-"*50))
         print("computing perplexity")
@@ -404,7 +407,7 @@ def train_loop(num_training,
 
         if pplx_new > pplx:
             print("perplexity went up during training, breaking out of loop")
-            break
+            # break
         pplx = pplx_new
         print(log_dev_fil_name)
         print(model_fil.replace(".model", "_{0:d}.model".format(epoch+1)))
@@ -452,6 +455,8 @@ def start_here(num_training=1000, num_epochs=1):
             return
     else:
         print("model not found")
+
+    sys.stderr.flush()
 
     train_loop(num_training=num_training,
                num_epochs=num_epochs,
@@ -505,7 +510,7 @@ buckets_dict['dev'] = prepare_data(width_b=DEV_SPEECH_BUCKET_WIDTH,
                                     cat="dev", display=False)
 
 
-# start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS)
+start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS)
 
 # batch_training(100, BATCH_SIZE_LOOKUP , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, 0)
 
