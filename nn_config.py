@@ -23,8 +23,8 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-model_dir = "cnn_mini"
-EXP_NAME_PREFIX = "B"
+model_dir = "cnn_"
+EXP_NAME_PREFIX = "k9-199-20_pool90_mini_"
 
 print("callhome es-en word level configuration")
 
@@ -47,22 +47,22 @@ MODEL_TYPE = MODEL_CNN
 
 lstm1_or_gru0 = False
 CHAR_LEVEL = False
-OPTIMIZER_ADAM1_SGD_0 = True
+OPTIMIZER_ADAM1_SGD_0 = False
 
 NUM_EPOCHS = 0
 
-gpuid = 1
+gpuid = 3
 
 NUM_SENTENCES = 17394
 # use 90% of the data for training
 
 NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = 2000
+NUM_MINI_TRAINING_SENTENCES = 13137
 
 ITERS_TO_SAVE = 5
 
 NUM_DEV_SENTENCES = 2476
-NUM_MINI_DEV_SENTENCES = 500
+NUM_MINI_DEV_SENTENCES = 2476
 
 NUM_TEST_SENTENCES = 1781
 
@@ -75,23 +75,23 @@ elif MODEL_TYPE == MODEL_CNN:
     num_layers_dec = 2
 
 use_attn = SOFT_ATTN
-hidden_units = 256
-embedding_units = 256
+hidden_units = 512
+embedding_units = 512
 
 # cnn filter specs - tuple: (kernel size, pad, num filters)
 # for now keeping kernel widths as odd
 # this keeps the output size the same as the input
-cnn_k_widths = [i for i in range(9,99+1,10)]
+cnn_k_widths = [i for i in range(9,199+1,20)]
 
 cnn_filters = [{"ndim": 1,
                 "in_channels": SPEECH_DIM,
-                "out_channels": 200,
+                "out_channels": 100,
                 "ksize": k,
                 "stride": 1,
                 "pad": k //2} for k in cnn_k_widths]
 
-num_highway_layers = 4
-max_pool_stride = 8
+num_highway_layers = 6
+max_pool_stride = 90
 max_pool_pad = 0
 
 print("cnn details:")
@@ -144,15 +144,15 @@ BATCH_SIZE_LOOKUP = {'train':{}, 'dev':{}, 'test':{}}
 
 for i in range(SPEECH_NUM_BUCKETS):
     if i < 7:
-        BATCH_SIZE_LOOKUP['train'][i] = 32
+        BATCH_SIZE_LOOKUP['train'][i] = 24
     elif i >= 7 and i<13:
-        BATCH_SIZE_LOOKUP['train'][i] = 32
+        BATCH_SIZE_LOOKUP['train'][i] = 24
     elif i >= 13 and i<18:
-        BATCH_SIZE_LOOKUP['train'][i] = 32
+        BATCH_SIZE_LOOKUP['train'][i] = 24
     elif i>=18 and i<26:
-        BATCH_SIZE_LOOKUP['train'][i] = 32
+        BATCH_SIZE_LOOKUP['train'][i] = 24
     else:
-        BATCH_SIZE_LOOKUP['train'][i] = 32
+        BATCH_SIZE_LOOKUP['train'][i] = 24
 
 BATCH_SIZE_LOOKUP['dev'] = {}
 DEV_SPEECH_BUCKET_WIDTH = 16

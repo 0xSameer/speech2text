@@ -261,8 +261,9 @@ def predict(b_indx=0, num_sent=1, cat="train", display=True):
 
     if display:
         for p, e in zip(pred_ids, en_ids):
+            # for reference, 1st word is GO_ID, no need to display
+            display_words(e[1:], "en", "Ref")
             display_words(p, "en", "Hyp")
-            display_words(e[2:-1], "en", "Ref")
             print("-"*50)
 
 
@@ -426,7 +427,7 @@ def train_loop(num_training,
             print("perplexity went up during training, breaking out of loop")
             # break
         pplx = pplx_new
-        # print(log_dev_fil_name)
+        print("train file: {0:s}".format(os.path.basename(log_train_fil_name)))
         # print(model_fil.replace(".model", "_{0:d}.model".format(epoch+1)))
 
     # print("Simple predictions (╯°□°）╯︵ ┻━┻")
@@ -520,7 +521,7 @@ print("num sentences={0:d} and num epochs={1:d}".format(NUM_MINI_TRAINING_SENTEN
 
 buckets_dict = {}
 
-# buckets_dict['train'] = prepare_data(display=True)
+buckets_dict['train'] = prepare_data(display=False)
 buckets_dict['dev'] = prepare_data(width_b=DEV_SPEECH_BUCKET_WIDTH,
                                     num_b=DEV_SPEECH_NUM_BUCKETS,
                                     speech=True,
@@ -529,7 +530,7 @@ buckets_dict['dev'] = prepare_data(width_b=DEV_SPEECH_BUCKET_WIDTH,
                                     cat="dev", display=False)
 
 
-# start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS)
+start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS)
 
 # batch_training(100, BATCH_SIZE_LOOKUP , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, 0)
 

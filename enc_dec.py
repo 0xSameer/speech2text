@@ -241,7 +241,7 @@ class SpeechEncoderDecoder(Chain):
         compute_loss = True if y is not None else False
 
         if compute_loss:
-            stop_limit = len(y)
+            stop_limit = len(y)-1
             # get starting word to initialize decoder
             curr_word = y[0]
         else:
@@ -251,8 +251,7 @@ class SpeechEncoderDecoder(Chain):
         # flag to track if all sentences in batch have predicted EOS
         check_if_all_eos = xp.full((batch_size,), False, dtype=xp.bool_)
 
-        while npred < (stop_limit-1):
-            # for curr_word, next_word in zip(y, y[1:]):
+        while npred < (stop_limit):
             # encode tokens
             pred_out = self.decode(curr_word)
             pred_word = F.argmax(pred_out, axis=1)
@@ -274,8 +273,8 @@ class SpeechEncoderDecoder(Chain):
                 # uncomment following line if labeled data to be 
                 # used at next time step
                 # curr_word = y[npred+1]
-            else:
-                curr_word = pred_word
+            # else:
+            curr_word = pred_word
 
             # check if EOS is predicted for all sentences
             # exit function if True
