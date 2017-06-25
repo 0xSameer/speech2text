@@ -23,8 +23,8 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-model_dir = "cnn_"
-EXP_NAME_PREFIX = "k9-199-20_pool90_mini_"
+model_dir = "cnn_char"
+EXP_NAME_PREFIX = "_"
 
 print("callhome es-en word level configuration")
 
@@ -37,6 +37,7 @@ SPEECH_DIM = 39
 MAX_SPEECH_LEN = 400
 MIN_SPEECH_LEN = 16
 text_data_dict = os.path.join(input_dir, "text_split.dict")
+same_spkr_text_data_dict = os.path.join(input_dir, "same_speaker_text_split.dict")
 
 speech_extn = "_fa_vad.std.mfcc"
 
@@ -46,8 +47,9 @@ MODEL_CNN = 1
 MODEL_TYPE = MODEL_CNN
 
 lstm1_or_gru0 = False
-CHAR_LEVEL = False
+CHAR_LEVEL = True
 OPTIMIZER_ADAM1_SGD_0 = False
+CROSS_SPEAKER = False
 
 NUM_EPOCHS = 0
 
@@ -123,6 +125,11 @@ if OPTIMIZER_ADAM1_SGD_0:
 else:
     EXP_NAME_PREFIX += "_adam"
 
+if CROSS_SPEAKER:
+    EXP_NAME_PREFIX += "_xspkr"
+else:
+    EXP_NAME_PREFIX += "_sspkr"
+
 
 # A total of 11 buckets, with a length range of 7 each, giving total
 # BUCKET_WIDTH * NUM_BUCKETS = 77 for e.g.
@@ -130,7 +137,7 @@ BUCKET_WIDTH = 3 if not CHAR_LEVEL else 3
 NUM_BUCKETS = 14 if not CHAR_LEVEL else 30
 TEXT_BUCKETS = [[] for i in range(NUM_BUCKETS)]
 
-MAX_EN_LEN = 100 if not CHAR_LEVEL else 200
+MAX_EN_LEN = 150 if not CHAR_LEVEL else 300
 #------------------------------------------------
 # WARNING !!!!!!!!!!!!!!!!!!!!!!!!
 #------------------------------------------------
@@ -144,19 +151,19 @@ BATCH_SIZE_LOOKUP = {'train':{}, 'dev':{}, 'test':{}}
 
 for i in range(SPEECH_NUM_BUCKETS):
     if i < 7:
-        BATCH_SIZE_LOOKUP['train'][i] = 24
+        BATCH_SIZE_LOOKUP['train'][i] = 20
     elif i >= 7 and i<13:
-        BATCH_SIZE_LOOKUP['train'][i] = 24
+        BATCH_SIZE_LOOKUP['train'][i] = 20
     elif i >= 13 and i<18:
-        BATCH_SIZE_LOOKUP['train'][i] = 24
+        BATCH_SIZE_LOOKUP['train'][i] = 20
     elif i>=18 and i<26:
-        BATCH_SIZE_LOOKUP['train'][i] = 24
+        BATCH_SIZE_LOOKUP['train'][i] = 20
     else:
-        BATCH_SIZE_LOOKUP['train'][i] = 24
+        BATCH_SIZE_LOOKUP['train'][i] = 20
 
 BATCH_SIZE_LOOKUP['dev'] = {}
 DEV_SPEECH_BUCKET_WIDTH = 16
-DEV_SPEECH_NUM_BUCKETS = 50
+DEV_SPEECH_NUM_BUCKETS = 75
 
 for i in range(DEV_SPEECH_NUM_BUCKETS):
     if i < 6:
@@ -204,8 +211,8 @@ load_existing_model = True
 xp = cuda.cupy if gpuid >= 0 else np
 
 name_to_log = "{0:d}sen_{1:d}-{2:d}-{6:d}layers_{3:d}units_{4:s}_{5:d}".format(
-                                                            NUM_SENTENCES,
-                                                            num_layers_enc,
+                                                            NUM_MINI_TRAINING_SENTENCES,
+                                                            num_highway_layers,
                                                             num_layers_dec,
                                                             hidden_units,
                                                             EXP_NAME,

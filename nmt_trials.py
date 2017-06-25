@@ -14,7 +14,10 @@ xp = cuda.cupy if gpuid >= 0 else np
 
 # In[ ]:
 
-text_data = pickle.load(open(text_data_dict, "rb"))
+if CROSS_SPEAKER:
+    text_data = pickle.load(open(text_data_dict, "rb"))
+else:
+    text_data = pickle.load(open(same_spkr_text_data_dict, "rb"))
 
 
 # In[ ]:
@@ -34,10 +37,10 @@ if OPTIMIZER_ADAM1_SGD_0:
                                 beta2=0.999,
                                 eps=1e-08)
     optimizer.setup(model)
-    optimizer.add_hook(chainer.optimizer.WeightDecay(0.1))
+    # optimizer.add_hook(chainer.optimizer.WeightDecay(0.1))
 else:
     print("using SGD optimizer")
-    optimizer = optimizers.SGD(lr=0.05)
+    optimizer = optimizers.SGD(lr=0.01)
     optimizer.setup(model)
     # optimizer.add_hook(chainer.optimizer.WeightDecay(0.01))
 
@@ -184,9 +187,10 @@ def get_data_item(sp_fil, cat="train"):
     fr_ids = [w2i["fr"].get(w, UNK_ID) for w in fr_sent]
     en_ids = [w2i["en"].get(w, UNK_ID) for w in en_sent]
 
-    # speech_feat = xp.load(os.path.join(speech_dir, sp_fil+speech_extn)).astype(xp.float32)
-
-    speech_feat = speech_feats[cat][sp_fil]
+    if CROSS_SPEAKER:
+        speech_feat = speech_feats[cat][sp_fil]
+    else:
+        speech_feat = speech_feats["train"][sp_fil]
     return fr_ids, en_ids, speech_feat
 
 
@@ -514,14 +518,30 @@ def test_gradients(buckets):
 
 # In[ ]:
 print("Starting experiment")
-print(log_dev_fil_name)
-print(model_fil)
-print("num sentences={0:d} and num epochs={1:d}".format(NUM_MINI_TRAINING_SENTENCES, NUM_EPOCHS))
+print("train log file: {0:s}\ndev log file {1:s}".format(
+                            os.path.basename(log_dev_fil_name), 
+                            os.path.basename(log_train_fil_name)))
+
+NUM_MINI_TRAINING_SENTENCES = min(NUM_MINI_TRAINING_SENTENCES,
+                                  len(text_data["train"]))
+
+NUM_TRAINING_SENTENCES = len(text_data["train"])
+
+NUM_MINI_DEV_SENTENCES = min(NUM_MINI_DEV_SENTENCES,
+                                  len(text_data["dev"]))
+
+NUM_DEV_SENTENCES = len(text_data["dev"])
+
+print("model file: {0:s}".format(model_fil))
+print("num sentences={0:d}\nnum dev sentences={1:d}\nnum epochs={2:d}".format(
+                                NUM_MINI_TRAINING_SENTENCES, 
+                                NUM_MINI_DEV_SENTENCES,
+                                NUM_EPOCHS))
 
 
 buckets_dict = {}
-
-buckets_dict['train'] = prepare_data(display=False)
+buckets_dict['train'] = prepare_data(num_sent=NUM_TRAINING_SENTENCES,
+                                     display=False)
 buckets_dict['dev'] = prepare_data(width_b=DEV_SPEECH_BUCKET_WIDTH,
                                     num_b=DEV_SPEECH_NUM_BUCKETS,
                                     speech=True,
