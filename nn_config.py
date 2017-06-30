@@ -24,7 +24,7 @@ print("translating es to en")
 
 # model_dir = "noise_scale_weightdecay"
 model_dir = "big"
-EXP_NAME_PREFIX = "_"
+EXP_NAME_PREFIX = ""
 
 print("callhome es-en word level configuration")
 
@@ -67,7 +67,14 @@ DROPOUT_RATIO=0.5
 
 ADD_NOISE=True
 
-NOISE_STDEV = 0.2
+NOISE_STDEV=0.2
+
+WEIGHT_DECAY=True
+
+if WEIGHT_DECAY:
+    WD_RATIO=0.01
+else:
+    WD_RATIO=0
 
 NUM_EPOCHS = 100
 
@@ -96,22 +103,28 @@ elif MODEL_TYPE == MODEL_CNN:
 
 use_attn = SOFT_ATTN
 hidden_units = 512
-embedding_units = 256
+embedding_units = 512
 
 # cnn filter specs - tuple: (kernel size, pad, num filters)
 # for now keeping kernel widths as odd
 # this keeps the output size the same as the input
-cnn_k_widths = [i for i in range(9,199+1,30)]
+cnn_num_channels = 50
+cnn_filter_gap = 20
+cnn_filter_start = 9
+cnn_filter_end = 199
+cnn_k_widths = [i for i in range(cnn_filter_start,
+                                 cnn_filter_end+1, 
+                                 cnn_filter_gap)]
 
 cnn_filters = [{"ndim": 1,
                 "in_channels": SPEECH_DIM,
-                "out_channels": 50,
+                "out_channels": cnn_num_channels,
                 "ksize": k,
                 "stride": 1,
                 "pad": k //2} for k in cnn_k_widths]
 
-num_highway_layers = 4
-max_pool_stride = 30
+num_highway_layers = 2
+max_pool_stride = 50
 max_pool_pad = 0
 
 print("cnn details:")
@@ -120,12 +133,12 @@ for d in cnn_filters:
 
 #------------------------------------------------------------------------------
 
-if MODEL_TYPE == MODEL_RNN:
-    EXP_NAME_PREFIX += "rnn"
-elif MODEL_TYPE == MODEL_CNN:
-    EXP_NAME_PREFIX += "cnn"
-else:
-    EXP_NAME_PREFIX += "UNK"
+# if MODEL_TYPE == MODEL_RNN:
+#     EXP_NAME_PREFIX += "rnn"
+# elif MODEL_TYPE == MODEL_CNN:
+#     EXP_NAME_PREFIX += "cnn"
+# else:
+#     EXP_NAME_PREFIX += "UNK"
 
 
 if CHAR_LEVEL:
@@ -138,10 +151,10 @@ if lstm1_or_gru0:
 else:
     EXP_NAME_PREFIX += "_gru"
 
-if OPTIMIZER_ADAM1_SGD_0:
-    EXP_NAME_PREFIX += "_adam"
-else:
-    EXP_NAME_PREFIX += "_adam"
+# if OPTIMIZER_ADAM1_SGD_0:
+#     EXP_NAME_PREFIX += "_adam"
+# else:
+#     EXP_NAME_PREFIX += "_adam"
 
 if CROSS_SPEAKER:
     EXP_NAME_PREFIX += "_xspkr"
@@ -149,15 +162,26 @@ else:
     EXP_NAME_PREFIX += "_sspkr"
 
 if USE_DROPOUT:
-    EXP_NAME_PREFIX += "_dropout1"
+    EXP_NAME_PREFIX += "_drpt-{0:.1f}".format(DROPOUT_RATIO)
 else:
-    EXP_NAME_PREFIX += "_dropout0"
+    EXP_NAME_PREFIX += "_drpt-0"
 
 if ADD_NOISE:
-    EXP_NAME_PREFIX += "_noise-{0:.3f}".format(NOISE_STDEV)
+    EXP_NAME_PREFIX += "_noise-{0:.2f}".format(NOISE_STDEV)
 else:
     EXP_NAME_PREFIX += "_noise-0"
 
+if WEIGHT_DECAY:
+    EXP_NAME_PREFIX += "_l2-{0:.3f}".format(WD_RATIO)
+else:
+    EXP_NAME_PREFIX += "_l2-0"
+
+EXP_NAME_PREFIX += "_cnn-num{0:d}-range{1:d}-{2:d}-{3:d}-pool{4:d}".format(
+                                                    cnn_num_channels,
+                                                    cnn_filter_start,
+                                                    cnn_filter_end,
+                                                    cnn_filter_gap,
+                                                    max_pool_stride*10)
 
 # A total of 11 buckets, with a length range of 7 each, giving total
 # BUCKET_WIDTH * NUM_BUCKETS = 77 for e.g.
@@ -179,7 +203,7 @@ BATCH_SIZE_LOOKUP = {'train':{}, 'dev':{}, 'test':{}}
 
 for i in range(SPEECH_NUM_BUCKETS):
     if i < 50:
-        BATCH_SIZE_LOOKUP['train'][i] = 50
+        BATCH_SIZE_LOOKUP['train'][i] = 32
     else:
         BATCH_SIZE_LOOKUP['train'][i] = 16
 
@@ -189,7 +213,7 @@ DEV_SPEECH_NUM_BUCKETS = 60
 
 for i in range(DEV_SPEECH_NUM_BUCKETS):
     if i < 50:
-        BATCH_SIZE_LOOKUP['dev'][i] = 50
+        BATCH_SIZE_LOOKUP['dev'][i] = 32
     else:
         BATCH_SIZE_LOOKUP['dev'][i] = 16
 
@@ -206,8 +230,6 @@ text_fname = {"en": os.path.join(input_dir, "train.en"), "fr": os.path.join(inpu
 dev_fname = {"en": os.path.join(input_dir, "dev.en"), "fr": os.path.join(input_dir, "speech_dev.es")}
 
 test_fname = {"en": os.path.join(input_dir, "test.en"), "fr": os.path.join(input_dir, "speech_test.es")}
-
-EXP_NAME= "{0:s}_callhome_es_en".format(EXP_NAME_PREFIX)
 
 speech_bucket_data_fname = os.path.join(model_dir, "speech_buckets.dict")
 
@@ -226,14 +248,13 @@ load_existing_model = True
 
 xp = cuda.cupy if gpuid >= 0 else np
 
-name_to_log = "{0:d}sen_{1:d}-{2:d}-{6:d}layers_{3:d}units_{4:s}_{5:d}".format(
-                                                            NUM_MINI_TRAINING_SENTENCES,
-                                                            num_highway_layers,
-                                                            num_layers_dec,
-                                                            hidden_units,
-                                                            EXP_NAME,
-                                                            use_attn,
-                                                            len(cnn_k_widths))
+name_to_log = "sen-{0:d}_hwy{1:d}-dec{2:d}_emb-{3:d}-h-{4:d}_{5:s}".format(
+                                    NUM_MINI_TRAINING_SENTENCES,
+                                    num_highway_layers,
+                                    num_layers_dec,
+                                    embedding_units,
+                                    hidden_units,
+                                    EXP_NAME_PREFIX)
 
 log_train_fil_name = os.path.join(model_dir, "train_{0:s}.log".format(name_to_log))
 log_dev_fil_name = os.path.join(model_dir, "dev_{0:s}.log".format(name_to_log))

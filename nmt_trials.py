@@ -37,12 +37,13 @@ if OPTIMIZER_ADAM1_SGD_0:
                                 beta2=0.999,
                                 eps=1e-08)
     optimizer.setup(model)
-    optimizer.add_hook(chainer.optimizer.WeightDecay(0.01))
 else:
     print("using SGD optimizer")
     optimizer = optimizers.SGD(lr=0.01)
     optimizer.setup(model)
-    # optimizer.add_hook(chainer.optimizer.WeightDecay(0.01))
+
+if WEIGHT_DECAY:
+    optimizer.add_hook(chainer.optimizer.WeightDecay(WD_RATIO))
 
 # gradient clipping
 optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=2))
@@ -406,6 +407,7 @@ def train_loop(num_training,
 
         log_train_csv.writerow([(last_epoch_id+epoch+1), loss_per_epoch])
         log_train_fil.flush()
+        os.fsync(log_train_fil.fileno())
 
         sys.stderr.flush()
 
@@ -426,6 +428,7 @@ def train_loop(num_training,
         # log pplx and bleu score
         log_dev_csv.writerow([(last_epoch_id+epoch+1), pplx_new, bleu_score])
         log_dev_fil.flush()
+        os.fsync(log_dev_fil.fileno())
 
         if pplx_new > pplx:
             print("perplexity went up during training, breaking out of loop")
