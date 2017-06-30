@@ -37,7 +37,7 @@ if OPTIMIZER_ADAM1_SGD_0:
                                 beta2=0.999,
                                 eps=1e-08)
     optimizer.setup(model)
-    # optimizer.add_hook(chainer.optimizer.WeightDecay(0.1))
+    optimizer.add_hook(chainer.optimizer.WeightDecay(0.01))
 else:
     print("using SGD optimizer")
     optimizer = optimizers.SGD(lr=0.01)
@@ -45,7 +45,7 @@ else:
     # optimizer.add_hook(chainer.optimizer.WeightDecay(0.01))
 
 # gradient clipping
-optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
+optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=2))
 
 print("loading data")
 speech_feats = {}
@@ -518,6 +518,9 @@ def test_gradients(buckets):
 
 # In[ ]:
 print("Starting experiment")
+print("{0:s}".format("CROSS SPEAKER" if CROSS_SPEAKER else "SAME SPEAKER"))
+print("{0:s}".format("ADDING NOISE to input" if ADD_NOISE else "NOT ADDING NOISE to input"))
+
 print("train log file: {0:s}\ndev log file {1:s}".format(
                             os.path.basename(log_dev_fil_name), 
                             os.path.basename(log_train_fil_name)))
@@ -541,13 +544,13 @@ print("num sentences={0:d}\nnum dev sentences={1:d}\nnum epochs={2:d}".format(
 
 buckets_dict = {}
 buckets_dict['train'] = prepare_data(num_sent=NUM_TRAINING_SENTENCES,
-                                     display=False)
+                                     display=True)
 buckets_dict['dev'] = prepare_data(width_b=DEV_SPEECH_BUCKET_WIDTH,
                                     num_b=DEV_SPEECH_NUM_BUCKETS,
                                     speech=True,
                                     num_sent=NUM_DEV_SENTENCES,
                                     filname_b=None,
-                                    cat="dev", display=False)
+                                    cat="dev", display=True)
 
 
 start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS)

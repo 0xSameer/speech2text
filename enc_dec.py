@@ -190,12 +190,16 @@ class SpeechEncoderDecoder(Chain):
 
     def feed_rnn(self, rnn_in, rnn_layers, highway_layers=None):
         # feed into first rnn layer
-        # hs = F.dropout(self[rnn_layers[0]](rnn_in), ratio=0.2)
-        hs = self[rnn_layers[0]](rnn_in)
+        if USE_DROPOUT:
+            hs = F.dropout(self[rnn_layers[0]](rnn_in), ratio=DROPOUT_RATIO)
+        else:
+            hs = self[rnn_layers[0]](rnn_in)
         # feed into remaining rnn layers
         for rnn_layer in rnn_layers[1:]:
-            # hs = F.dropout(self[rnn_layer](hs), ratio=0.2)
-            hs = self[rnn_layer](hs)
+            if USE_DROPOUT:
+                hs = F.dropout(self[rnn_layer](hs), ratio=DROPOUT_RATIO)
+            else:
+                hs = self[rnn_layer](hs)
         return hs
 
     def encode(self, data_in, rnn_layers):
@@ -209,7 +213,7 @@ class SpeechEncoderDecoder(Chain):
         if self.attn:
             cv, _ = self.compute_context_vector(batches=True)
             cv_hdec = F.concat((cv, self[self.rnn_dec[-1]].h), axis=1)
-            # ht = F.tanh(self.context(cv_hdec))
+            ht = F.tanh(self.context(cv_hdec))
             ht = self.context(cv_hdec)
             predicted_out = self.out(ht)
         else:
@@ -306,8 +310,10 @@ class SpeechEncoderDecoder(Chain):
     def forward_highway(self, X):
         # highway
         for i in range(len(self.highway)):
-            h = self[self.highway[i]](X)
-            # print(h.shape)
+            if USE_DROPOUT:
+                h = F.dropout(self[self.highway[i]](X), ratio=DROPOUT_RATIO)
+            else:
+                h = self[self.highway[i]](X)
         return h
 
     def forward_rnn(self, X):
@@ -343,6 +349,16 @@ class SpeechEncoderDecoder(Chain):
     def forward(self, X, y=None):
         # get shape
         batch_size, in_dim, in_num_steps = X.shape
+        # check whether to add noise
+        if ADD_NOISE and not chainer.config.train:
+            # due to CUDA issues with random number generator
+            # creating a numpy array and moving to GPU
+            noise = Variable(np.random.normal(1.0, 
+                            NOISE_STDEV, 
+                            size=X.shape).astype(np.float32))
+            if gpuid >= 0:
+                noise.to_gpu()
+            X = X * noise
         # encode input
         self.forward_enc(X)
         # initialize decoder LSTM to final encoder state

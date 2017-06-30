@@ -18,22 +18,29 @@ UNK_ID = 3
 
 NO_ATTN = 0
 SOFT_ATTN = 1
-
 #------------------------------------------------------------------------------
 
 print("translating es to en")
 
-model_dir = "cnn_char"
+# model_dir = "noise_scale_weightdecay"
+model_dir = "big"
 EXP_NAME_PREFIX = "_"
 
 print("callhome es-en word level configuration")
 
 input_dir = "../../corpora/callhome/uttr_fa_vad_wavs"
 
-# speech_dir = os.path.join(input_dir, "mfcc_std")
-speech_dir = os.path.join(input_dir, "kaldi", "mfcc_cmvn_dd_vad")
+INPUT_FEAT_MFCC1_FBANK0 = True
 
-SPEECH_DIM = 39
+if INPUT_FEAT_MFCC1_FBANK0:
+    print("Using MFCCs")
+    speech_dir = os.path.join(input_dir, "kaldi", "mfcc_cmvn_dd_vad")
+    SPEECH_DIM = 39
+else:
+    print("Using Filterbanks")
+    speech_dir = os.path.join(input_dir, "kaldi", "fbank_vad")
+    SPEECH_DIM = 36
+
 MAX_SPEECH_LEN = 400
 MIN_SPEECH_LEN = 16
 text_data_dict = os.path.join(input_dir, "text_split.dict")
@@ -47,11 +54,22 @@ MODEL_CNN = 1
 MODEL_TYPE = MODEL_CNN
 
 lstm1_or_gru0 = False
-CHAR_LEVEL = True
-OPTIMIZER_ADAM1_SGD_0 = False
+
+CHAR_LEVEL = False
+
+OPTIMIZER_ADAM1_SGD_0 = True
+
 CROSS_SPEAKER = False
 
-NUM_EPOCHS = 0
+USE_DROPOUT=False
+
+DROPOUT_RATIO=0.5
+
+ADD_NOISE=True
+
+NOISE_STDEV = 0.2
+
+NUM_EPOCHS = 100
 
 gpuid = 3
 
@@ -61,7 +79,7 @@ NUM_SENTENCES = 17394
 NUM_TRAINING_SENTENCES = 13137
 NUM_MINI_TRAINING_SENTENCES = 13137
 
-ITERS_TO_SAVE = 5
+ITERS_TO_SAVE = 10
 
 NUM_DEV_SENTENCES = 2476
 NUM_MINI_DEV_SENTENCES = 2476
@@ -78,22 +96,22 @@ elif MODEL_TYPE == MODEL_CNN:
 
 use_attn = SOFT_ATTN
 hidden_units = 512
-embedding_units = 512
+embedding_units = 256
 
 # cnn filter specs - tuple: (kernel size, pad, num filters)
 # for now keeping kernel widths as odd
 # this keeps the output size the same as the input
-cnn_k_widths = [i for i in range(9,199+1,20)]
+cnn_k_widths = [i for i in range(9,199+1,30)]
 
 cnn_filters = [{"ndim": 1,
                 "in_channels": SPEECH_DIM,
-                "out_channels": 100,
+                "out_channels": 50,
                 "ksize": k,
                 "stride": 1,
                 "pad": k //2} for k in cnn_k_widths]
 
-num_highway_layers = 6
-max_pool_stride = 90
+num_highway_layers = 4
+max_pool_stride = 30
 max_pool_pad = 0
 
 print("cnn details:")
@@ -130,6 +148,16 @@ if CROSS_SPEAKER:
 else:
     EXP_NAME_PREFIX += "_sspkr"
 
+if USE_DROPOUT:
+    EXP_NAME_PREFIX += "_dropout1"
+else:
+    EXP_NAME_PREFIX += "_dropout0"
+
+if ADD_NOISE:
+    EXP_NAME_PREFIX += "_noise-{0:.3f}".format(NOISE_STDEV)
+else:
+    EXP_NAME_PREFIX += "_noise-0"
+
 
 # A total of 11 buckets, with a length range of 7 each, giving total
 # BUCKET_WIDTH * NUM_BUCKETS = 77 for e.g.
@@ -145,37 +173,25 @@ MAX_EN_LEN = 150 if not CHAR_LEVEL else 300
 #------------------------------------------------
 SPEECH_BUCKET_WIDTH = 16
 #------------------------------------------------
-SPEECH_NUM_BUCKETS = 50
+SPEECH_NUM_BUCKETS = 75
 
 BATCH_SIZE_LOOKUP = {'train':{}, 'dev':{}, 'test':{}}
 
 for i in range(SPEECH_NUM_BUCKETS):
-    if i < 7:
-        BATCH_SIZE_LOOKUP['train'][i] = 20
-    elif i >= 7 and i<13:
-        BATCH_SIZE_LOOKUP['train'][i] = 20
-    elif i >= 13 and i<18:
-        BATCH_SIZE_LOOKUP['train'][i] = 20
-    elif i>=18 and i<26:
-        BATCH_SIZE_LOOKUP['train'][i] = 20
+    if i < 50:
+        BATCH_SIZE_LOOKUP['train'][i] = 50
     else:
-        BATCH_SIZE_LOOKUP['train'][i] = 20
+        BATCH_SIZE_LOOKUP['train'][i] = 16
 
 BATCH_SIZE_LOOKUP['dev'] = {}
 DEV_SPEECH_BUCKET_WIDTH = 16
-DEV_SPEECH_NUM_BUCKETS = 75
+DEV_SPEECH_NUM_BUCKETS = 60
 
 for i in range(DEV_SPEECH_NUM_BUCKETS):
-    if i < 6:
-        BATCH_SIZE_LOOKUP['dev'][i] = 32
-    elif i >= 6 and i<13:
-        BATCH_SIZE_LOOKUP['dev'][i] = 32
-    elif i >= 13 and i<18:
-        BATCH_SIZE_LOOKUP['dev'][i] = 32
-    elif i>=18 and i<26:
-        BATCH_SIZE_LOOKUP['dev'][i] = 32
+    if i < 50:
+        BATCH_SIZE_LOOKUP['dev'][i] = 50
     else:
-        BATCH_SIZE_LOOKUP['dev'][i] = 32
+        BATCH_SIZE_LOOKUP['dev'][i] = 16
 
 
 # create separate widths for input and output, speech and english words/chars
