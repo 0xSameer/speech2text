@@ -23,14 +23,14 @@ SOFT_ATTN = 1
 print("translating es to en")
 
 # model_dir = "noise_scale_weightdecay"
-model_dir = "big"
+model_dir = "singlefilter"
 EXP_NAME_PREFIX = ""
 
 print("callhome es-en word level configuration")
 
 input_dir = "../../corpora/callhome/uttr_fa_vad_wavs"
 
-INPUT_FEAT_MFCC1_FBANK0 = True
+INPUT_FEAT_MFCC1_FBANK0 = False
 
 if INPUT_FEAT_MFCC1_FBANK0:
     print("Using MFCCs")
@@ -57,13 +57,13 @@ lstm1_or_gru0 = False
 
 CHAR_LEVEL = False
 
-OPTIMIZER_ADAM1_SGD_0 = True
+OPTIMIZER_ADAM1_SGD_0 = False
 
 CROSS_SPEAKER = False
 
 USE_DROPOUT=False
 
-DROPOUT_RATIO=0.5
+DROPOUT_RATIO=0.2
 
 ADD_NOISE=True
 
@@ -72,13 +72,14 @@ NOISE_STDEV=0.2
 WEIGHT_DECAY=True
 
 if WEIGHT_DECAY:
-    WD_RATIO=0.01
+    WD_RATIO=0.005
 else:
     WD_RATIO=0
 
+# ------------------------------------------
 NUM_EPOCHS = 100
-
 gpuid = 3
+# ------------------------------------------
 
 NUM_SENTENCES = 17394
 # use 90% of the data for training
@@ -86,12 +87,17 @@ NUM_SENTENCES = 17394
 NUM_TRAINING_SENTENCES = 13137
 NUM_MINI_TRAINING_SENTENCES = 13137
 
-ITERS_TO_SAVE = 10
+ITERS_TO_SAVE = 20
 
 NUM_DEV_SENTENCES = 2476
 NUM_MINI_DEV_SENTENCES = 2476
 
 NUM_TEST_SENTENCES = 1781
+
+if NUM_MINI_TRAINING_SENTENCES < NUM_TRAINING_SENTENCES:
+    SHUFFLE_BATCHES = False
+else:
+    SHUFFLE_BATCHES = True
 
 
 if MODEL_TYPE == MODEL_RNN:
@@ -109,11 +115,11 @@ embedding_units = 512
 # for now keeping kernel widths as odd
 # this keeps the output size the same as the input
 cnn_num_channels = 50
-cnn_filter_gap = 20
+cnn_filter_gap = 10
 cnn_filter_start = 9
-cnn_filter_end = 199
+cnn_filter_end = 29
 cnn_k_widths = [i for i in range(cnn_filter_start,
-                                 cnn_filter_end+1, 
+                                 cnn_filter_end+1,
                                  cnn_filter_gap)]
 
 cnn_filters = [{"ndim": 1,
@@ -203,19 +209,19 @@ BATCH_SIZE_LOOKUP = {'train':{}, 'dev':{}, 'test':{}}
 
 for i in range(SPEECH_NUM_BUCKETS):
     if i < 50:
-        BATCH_SIZE_LOOKUP['train'][i] = 32
+        BATCH_SIZE_LOOKUP['train'][i] = 64
     else:
-        BATCH_SIZE_LOOKUP['train'][i] = 16
+        BATCH_SIZE_LOOKUP['train'][i] = 32
 
 BATCH_SIZE_LOOKUP['dev'] = {}
-DEV_SPEECH_BUCKET_WIDTH = 16
+DEV_SPEECH_BUCKET_WIDTH = 12
 DEV_SPEECH_NUM_BUCKETS = 60
 
 for i in range(DEV_SPEECH_NUM_BUCKETS):
     if i < 50:
-        BATCH_SIZE_LOOKUP['dev'][i] = 32
+        BATCH_SIZE_LOOKUP['dev'][i] = 12
     else:
-        BATCH_SIZE_LOOKUP['dev'][i] = 16
+        BATCH_SIZE_LOOKUP['dev'][i] = 8
 
 
 # create separate widths for input and output, speech and english words/chars

@@ -32,10 +32,12 @@ if gpuid >= 0:
 
 if OPTIMIZER_ADAM1_SGD_0:
     print("using ADAM optimizer")
-    optimizer = optimizers.Adam(alpha=0.001,
-                                beta1=0.9,
-                                beta2=0.999,
-                                eps=1e-08)
+    # optimizer = optimizers.Adam(alpha=0.001,
+    #                             beta1=0.9,
+    #                             beta2=0.999,
+    #                             eps=1e-08)
+    # optimizer = optimizers.AdaGrad()
+    optimizer = optimizers.Adam()
     optimizer.setup(model)
 else:
     print("using SGD optimizer")
@@ -76,7 +78,7 @@ def prepare_data(width_b = SPEECH_BUCKET_WIDTH,
                  speech=True,
                  num_sent=NUM_TRAINING_SENTENCES,
                  filname_b=speech_bucket_data_fname,
-                 cat="train", 
+                 cat="train",
                  rev=False,
                  display=False):
 
@@ -141,9 +143,9 @@ def prepare_data(width_b = SPEECH_BUCKET_WIDTH,
     for indx_b in range(len(buckets)):
         buckets[indx_b]["X_fwd"] = F.swapaxes(buckets[indx_b]["X_fwd"], 1,2)
         if rev:
-            buckets[indx_b]["X_rev"] = F.swapaxes(buckets[indx_b]["X_rev"], 
+            buckets[indx_b]["X_rev"] = F.swapaxes(buckets[indx_b]["X_rev"],
                                                   1,2)
-        buckets[indx_b]["y"] = F.pad_sequence(buckets[indx_b]["y"], 
+        buckets[indx_b]["y"] = F.pad_sequence(buckets[indx_b]["y"],
                                           padding=PAD_ID)
         if display:
             print('''{0:d} items in bucket={1:d}, each of length={2:d}, max en ids={3:d}'''.format(len(buckets[indx_b]["X_fwd"]),
@@ -332,8 +334,12 @@ def batch_training(num_training,
 
             for i in range(0, items_to_train_in_bucket, batch_size):
                 # get the next batch of data
-                X = buckets[buck_indx]['X_fwd'][i:i+batch_size]
-                y = buckets[buck_indx]['y'][i:i+batch_size]
+                if items_to_train_in_bucket < batch_size:
+                    X = buckets[buck_indx]['X_fwd'][i:i+items_to_train_in_bucket]
+                    y = buckets[buck_indx]['y'][i:i+items_to_train_in_bucket]
+                else:
+                    X = buckets[buck_indx]['X_fwd'][i:i+batch_size]
+                    y = buckets[buck_indx]['y'][i:i+batch_size]
 
                 # compute loss
                 if len(X) > 0:
@@ -360,18 +366,23 @@ def batch_training(num_training,
                         # update parameters
                         optimizer.update()
 
-                    out_str = "epoch={0:d}, bucket={1:d}, i={2:d}, loss={3:.4f}, mean loss={4:.4f}".format((epoch+1), (buck_indx+1), i,loss_val, loss_per_epoch)
+                    out_str = "epoch={0:d}, bucket={1:d}, i={2:d}, loss={3:.2f}, mean loss={4:.2f}".format((epoch+1), (buck_indx+1), i,loss_val, loss_per_epoch)
                     pbar.set_description(out_str)
                 pbar.update(len(X))
             # end for current bucket
         # end for all buckets
     # end with pbar
     print("-"*80)
-    print("***********{3:s} mean loss={0:.4f}, total={1:.4f}, updates={2:d}".format(
-                                                    loss_per_epoch, 
-                                                    total_loss,
-                                                    total_loss_updates,
-                                                    "train" if train else "dev"))
+    print("-")
+    # print("***********{3:s} mean loss={0:.4f}, total={1:.2f}, updates={2:d}".format(
+    #                                                 loss_per_epoch,
+    #                                                 total_loss,
+    #                                                 total_loss_updates,
+    #                                                 "train" if train else "dev"))
+    print("{0:s} {1:s} {0:s} mean loss={2:.4f}".format("*" * 10,
+                                            "train" if train else "dev",
+                                            loss_per_epoch))
+    print("-")
     print("-"*80)
     return pred_sents, loss_per_epoch
 
@@ -394,14 +405,14 @@ def train_loop(num_training,
     # save model when new epoch value is lower than previous
     pplx = float("inf")
     sys.stderr.flush()
-    shuffle = True
+    shuffle = SHUFFLE_BATCHES
 
     # start epochs
     for epoch in range(num_epochs):
 
-        _, loss_per_epoch = batch_training(num_training, 
-                                        BATCH_SIZE_LOOKUP['train'], 
-                                        buckets_dict['train'], 
+        _, loss_per_epoch = batch_training(num_training,
+                                        BATCH_SIZE_LOOKUP['train'],
+                                        buckets_dict['train'],
                                         epoch, train=True,
                                         shuffle=shuffle)
 
@@ -525,8 +536,8 @@ print("{0:s}".format("CROSS SPEAKER" if CROSS_SPEAKER else "SAME SPEAKER"))
 print("{0:s}".format("ADDING NOISE to input" if ADD_NOISE else "NOT ADDING NOISE to input"))
 
 print("train log file: {0:s}\ndev log file {1:s}".format(
-                            os.path.basename(log_dev_fil_name), 
-                            os.path.basename(log_train_fil_name)))
+                            os.path.basename(log_train_fil_name),
+                            os.path.basename(log_dev_fil_name)))
 
 NUM_MINI_TRAINING_SENTENCES = min(NUM_MINI_TRAINING_SENTENCES,
                                   len(text_data["train"]))
@@ -540,20 +551,20 @@ NUM_DEV_SENTENCES = len(text_data["dev"])
 
 print("model file: {0:s}".format(model_fil))
 print("num sentences={0:d}\nnum dev sentences={1:d}\nnum epochs={2:d}".format(
-                                NUM_MINI_TRAINING_SENTENCES, 
+                                NUM_MINI_TRAINING_SENTENCES,
                                 NUM_MINI_DEV_SENTENCES,
                                 NUM_EPOCHS))
 
 
 buckets_dict = {}
 buckets_dict['train'] = prepare_data(num_sent=NUM_TRAINING_SENTENCES,
-                                     display=True)
+                                     display=False)
 buckets_dict['dev'] = prepare_data(width_b=DEV_SPEECH_BUCKET_WIDTH,
                                     num_b=DEV_SPEECH_NUM_BUCKETS,
                                     speech=True,
                                     num_sent=NUM_DEV_SENTENCES,
                                     filname_b=None,
-                                    cat="dev", display=True)
+                                    cat="dev", display=False)
 
 
 start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS)
