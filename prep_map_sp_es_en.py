@@ -36,7 +36,8 @@ def basic_tokenizer(sentence):
     words = []
     for space_separated_fragment in sentence.strip().split():
         words.extend(_WORD_SPLIT.sub(b"", w) for w in _WORD_SPLIT.split(space_separated_fragment))
-    return b" ".join([w.lower() for w in words if w])
+    # return b" ".join([w.lower() for w in words if w])
+    return [w.lower() for w in words if w]
 
 # UGLY FUNCTION
 # ಠ_ಠ
