@@ -13,23 +13,21 @@ create vocabulary dict
 
 '''
 example:
-python prep_map_sp_es_en.py -o $PWD/out/
+python prep_vocab.py -o $PWD/out/
 '''
 def get_vocab_units(train_map_dict, key):
     out = {"w2i":{}, "i2w":{}, "freq":{}}
     # loop over each speaker data
     for spk_id in train_map_dict:
         # loop over each utterance with transcriptions+translations
-        for units in train_map_dict[spk_id]:
-            for unit in units[key]:
-                if unit not in out["w2i"]:
-                    out["w2i"][unit] = len(out["w2i"])
-                    out["freq"][unit] = 1
-                else:
-                    out["freq"][unit] += 1
-            # end for over words/chars in segment
-        # end for line in speech segment
-    # end for speaker file
+        for unit in train_map_dict[spk_id][key]:
+            if unit not in out["w2i"]:
+                out["w2i"][unit] = len(out["w2i"])
+                out["freq"][unit] = 1
+            else:
+                out["freq"][unit] += 1
+        # end for over words/chars in segment
+    # end for line in speech segment
     out["i2w"] = {val:key for key, val in out["w2i"].items()}
 
     return out
@@ -90,12 +88,9 @@ quick test code
 map_dict = pickle.load(open("out/map.dict", "rb"))
 train_map_dict = map_dict["fisher_train"]
 for spk_id in train_map_dict:
-    for unit in train_map_dict[spk_id]:
+    for unit in train_map_dict[spk_id]["en_w"]:
         print(unit)
-        print(unit["en_w"])
-        break
     break
-
 
 train_vocab_dict = pickle.load(open("out/train_vocab.dict", "rb"))
 max(train_vocab_dict["en_w"]["i2w"].keys())

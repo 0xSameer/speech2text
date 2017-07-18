@@ -116,6 +116,7 @@ def read_map_file(cat, segment_map, map_loc):
                 print([len(en_words_per_file[f]) for f in en_words_per_file])
 
     # preparing output
+    speech_fil_cnt = {}
     out_dict = {}
     print("reading map file: {0:s}".format(es_en_map_file))
     with open(es_en_map_file, "r") as map_f:
@@ -131,14 +132,26 @@ def read_map_file(cat, segment_map, map_loc):
             # "20050908_182943_22_fsp-A-000055-000156"
             speech_fil = speech_ids[0]["seg_name"].rsplit("-",2)[0]
 
-            if speech_fil not in out_dict:
-                out_dict[speech_fil] = []
+            if speech_fil not in speech_fil_cnt:
+                speech_fil_cnt[speech_fil] = 1
 
-            out_dict[speech_fil].append({"es_w": es_words[i],
+            # print(fid, speech_fil)
+            # print(speech_fil_set)
+
+            entry_key = "{0:s}-{1:d}".format(speech_fil,
+                                             speech_fil_cnt[speech_fil])
+            speech_fil_cnt[speech_fil] += 1
+            out_dict[entry_key] = {"es_w": es_words[i],
                                          "es_c": es_chars[i],
                                          "en_w": en_words[i],
                                          "en_c": en_chars[i],
-                                         "seg": speech_ids})
+                                         "seg": speech_ids}
+
+            # out_dict[speech_fil].append({"es_w": es_words[i],
+            #                              "es_c": es_chars[i],
+            #                              "en_w": en_words[i],
+            #                              "en_c": en_chars[i],
+            #                              "seg": speech_ids})
         # end for
     # end with open map
     return out_dict
