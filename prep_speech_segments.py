@@ -19,7 +19,7 @@ export SPEECH_FEATS=/afs/inf.ed.ac.uk/group/project/lowres/work/corpora/fisher_k
 python prep_speech_segments.py -m $SPEECH_FEATS -o $PWD/out/
 
 '''
-def map_speech_segments(cat_dict, cat_speech_path, cat_out_path):
+def map_speech_segments(cat_dict, cat_speech_path, cat_out_path, split=False):
     print("mapping speech data, output in: {0:s}".format(cat_out_path))
     if not os.path.isdir(cat_out_path):
         # creating directory
@@ -48,9 +48,23 @@ def map_speech_segments(cat_dict, cat_speech_path, cat_out_path):
             if len(missing_files) > 0:
                 print("{0:s} files missing".format(" ".join(missing_files)))
             if len(utt_data) == 0:
-                print(utt_id)
-            utt_data = np.concatenate(utt_data, axis=0)
-            np.save(os.path.join(cat_out_path, "{0:s}".format(utt_id)), utt_data)
+                print("{0:s} file missing".format(utt_id))
+            else:
+                utt_data = np.concatenate(utt_data, axis=0)
+                # check if sub-dir needs to be create
+                if split:
+                    # extract year+month from utt_id
+                    # e.g. - 20050927_181232_134_fsp-A-15
+                    cat_sub_out_path = os.path.join(cat_out_path,
+                                                   utt_id.split('_',1)[0])
+
+                    if not os.path.isdir(cat_sub_out_path):
+                        # creating directory
+                        print("creating directory")
+                        os.makedirs(cat_sub_out_path)
+                    np.save(os.path.join(cat_sub_out_path, "{0:s}".format(utt_id)), utt_data)
+                else:
+                    np.save(os.path.join(cat_out_path, "{0:s}".format(utt_id)), utt_data)
 
     print("done...")
 
@@ -95,11 +109,10 @@ def main():
             return 0
         cat_speech_path = os.path.join(speech_dir, cat)
         cat_out_path = os.path.join(out_path, cat)
-        map_speech_segments(map_dict[cat], cat_speech_path, cat_out_path)
+        split = "train" in cat
+        map_speech_segments(map_dict[cat], cat_speech_path, cat_out_path, split)
 
     print("-"*50)
-    print("saving map dict in: {0:s}".format(map_dict_path))
-    pickle.dump(map_dict, open(map_dict_path, "wb"))
     print("all done ...")
 
 if __name__ == "__main__":
