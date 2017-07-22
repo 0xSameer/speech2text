@@ -93,6 +93,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     with tqdm(total=total_utts) as pbar:
         for b in b_shuffled:
             bucket = b_dict['buckets'][b]
+            random.shuffle(bucket)
             b_len = len(bucket)
             for i in range(0,b_len, batch_size):
                 utt_list = bucket[i:i+batch_size]
@@ -124,7 +125,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                     # update parameters
                     optimizer.update()
 
-                out_str = "bucket={0:d}, i={1:d}, loss={2:.2f}, mean loss={3:.2f}".format((b+1),i,loss_val, loss_per_epoch)
+                out_str = "bucket={0:d}, i={1:d}/{2:d}, loss={3:.2f}, mean loss={3:.2f}".format((b+1),i,b_len,loss_val,loss_per_epoch)
 
                 pbar.set_description('{0:s}'.format(out_str))
 
@@ -222,6 +223,8 @@ def main():
     out_path = args['out_path']
     epochs = int(args['epochs'])
     key = args['key']
+
+    print("number of epochs={0:d}".format(epochs))
 
     my_main(out_path, epochs, key)
 # end main

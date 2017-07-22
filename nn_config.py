@@ -25,7 +25,7 @@ print("translating es to en")
 
 out_path = "./out/"
 
-model_dir = "fisher"
+model_dir = "fisher_text"
 EXP_NAME_PREFIX = ""
 
 print("callhome es-en configuration")
@@ -59,7 +59,7 @@ else:
 # ------------------------------------------
 NUM_EPOCHS = 100
 gpuid = 3
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 # ------------------------------------------
 
 ITERS_TO_SAVE = 10
@@ -78,10 +78,23 @@ SPEECH_DIM = 69
 # cnn filter specs - tuple: (kernel size, pad, num filters)
 # for now keeping kernel widths as odd
 # this keeps the output size the same as the input
-cnn_num_channels = 50
-cnn_filter_gap = 10
-cnn_filter_start = 9
-cnn_filter_end = 29
+if enc_key == 'sp':
+    cnn_num_channels = 50
+    cnn_filter_gap = 10
+    cnn_filter_start = 9
+    cnn_filter_end = 29
+    num_highway_layers = 2
+    max_pool_stride = 50
+    max_pool_pad = 0
+else:
+    cnn_num_channels = 200
+    cnn_filter_gap = 2
+    cnn_filter_start = 1
+    cnn_filter_end = 9
+    num_highway_layers = 2
+    max_pool_stride = 5
+    max_pool_pad = 0
+
 cnn_k_widths = [i for i in range(cnn_filter_start,
                                  cnn_filter_end+1,
                                  cnn_filter_gap)]
@@ -111,10 +124,6 @@ cnn_filters = [{"ndim": 1,
                 "ksize": k,
                 "stride": 1,
                 "pad": k //2} for k in cnn_k_widths]
-
-num_highway_layers = 2
-max_pool_stride = 50
-max_pool_pad = 0
 
 print("cnn details:")
 for d in cnn_filters:
