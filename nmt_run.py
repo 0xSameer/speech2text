@@ -81,7 +81,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     width_b = b_dict['width_b']
     b_shuffled = [i for i in range(num_b)]
     # shuffle buckets
-    # random.shuffle(b_shuffled)
+    random.shuffle(b_shuffled)
 
     pred_sents = []
     total_loss = 0
@@ -91,8 +91,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     sys.stderr.flush()
     total_utts = len(m_dict)
     with tqdm(total=total_utts) as pbar:
-        for b in b_shuffled[18:19]:
-            # bucket = bucket_dict['fisher_train']['buckets'][b]
+        for b in b_shuffled:
             bucket = b_dict['buckets'][b]
             b_len = len(bucket)
             for i in range(0,b_len, batch_size):
