@@ -1,4 +1,5 @@
 from basics import *
+import prep_buckets
 #---------------------------------------------------------------------
 # Data Parameters
 #---------------------------------------------------------------------
@@ -22,50 +23,29 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-# model_dir = "noise_scale_weightdecay"
-model_dir = "singlefilter"
+out_path = "./out/"
+
+model_dir = "fisher"
 EXP_NAME_PREFIX = ""
 
-print("callhome es-en word level configuration")
+print("callhome es-en configuration")
 
-input_dir = "../../corpora/callhome/uttr_fa_vad_wavs"
+# encoder key
+# 'es_w', 'es_c', or 'sp'
+enc_key = 'es_w'
+# 'en_w', 'en_c', or 'sp'
+dec_key = 'en_w'
 
-INPUT_FEAT_MFCC1_FBANK0 = False
-
-if INPUT_FEAT_MFCC1_FBANK0:
-    print("Using MFCCs")
-    speech_dir = os.path.join(input_dir, "kaldi", "mfcc_cmvn_dd_vad")
-    SPEECH_DIM = 39
-else:
-    print("Using Filterbanks")
-    speech_dir = os.path.join(input_dir, "kaldi", "fbank_vad")
-    SPEECH_DIM = 36
-
-MAX_SPEECH_LEN = 400
-MIN_SPEECH_LEN = 16
-text_data_dict = os.path.join(input_dir, "text_split.dict")
-same_spkr_text_data_dict = os.path.join(input_dir, "same_speaker_text_split.dict")
-
-speech_extn = "_fa_vad.std.mfcc"
-
-MODEL_RNN = 0
-MODEL_CNN = 1
-
-MODEL_TYPE = MODEL_CNN
-
-lstm1_or_gru0 = False
-
-CHAR_LEVEL = False
 
 OPTIMIZER_ADAM1_SGD_0 = False
 
-CROSS_SPEAKER = False
+lstm1_or_gru0 = False
 
 USE_DROPOUT=False
 
 DROPOUT_RATIO=0.2
 
-ADD_NOISE=True
+ADD_NOISE=False
 
 NOISE_STDEV=0.2
 
@@ -79,37 +59,21 @@ else:
 # ------------------------------------------
 NUM_EPOCHS = 100
 gpuid = 3
+BATCH_SIZE = 32
 # ------------------------------------------
 
-NUM_SENTENCES = 17394
-# use 90% of the data for training
+ITERS_TO_SAVE = 10
 
-NUM_TRAINING_SENTENCES = 13137
-NUM_MINI_TRAINING_SENTENCES = 13137
+SHUFFLE_BATCHES = True
 
-ITERS_TO_SAVE = 20
-
-NUM_DEV_SENTENCES = 2476
-NUM_MINI_DEV_SENTENCES = 2476
-
-NUM_TEST_SENTENCES = 1781
-
-if NUM_MINI_TRAINING_SENTENCES < NUM_TRAINING_SENTENCES:
-    SHUFFLE_BATCHES = False
-else:
-    SHUFFLE_BATCHES = True
-
-
-if MODEL_TYPE == MODEL_RNN:
-    num_layers_enc = 4
-    num_layers_dec = 1
-elif MODEL_TYPE == MODEL_CNN:
-    num_layers_enc = 1
-    num_layers_dec = 2
+num_layers_enc = 1
+num_layers_dec = 2
 
 use_attn = SOFT_ATTN
 hidden_units = 512
 embedding_units = 512
+# FBANK speech dimensions
+SPEECH_DIM = 69
 
 # cnn filter specs - tuple: (kernel size, pad, num filters)
 # for now keeping kernel widths as odd
@@ -122,8 +86,27 @@ cnn_k_widths = [i for i in range(cnn_filter_start,
                                  cnn_filter_end+1,
                                  cnn_filter_gap)]
 
+
+if enc_key == 'sp':
+    CNN_IN_DIM = SPEECH_DIM
+    num_b = 60
+    width_b = 50
+elif enc_key == 'es_c':
+    CNN_IN_DIM = embedding_units
+    num_b = 50
+    width_b = 8
+else:
+    CNN_IN_DIM = embedding_units
+    num_b = 20
+    width_b = 3
+
+MAX_EN_LEN = num_b * width_b
+
+prep_buckets.buckets_main(out_path, num_b, width_b, enc_key)
+
+
 cnn_filters = [{"ndim": 1,
-                "in_channels": SPEECH_DIM,
+                "in_channels": CNN_IN_DIM,
                 "out_channels": cnn_num_channels,
                 "ksize": k,
                 "stride": 1,
@@ -139,33 +122,12 @@ for d in cnn_filters:
 
 #------------------------------------------------------------------------------
 
-# if MODEL_TYPE == MODEL_RNN:
-#     EXP_NAME_PREFIX += "rnn"
-# elif MODEL_TYPE == MODEL_CNN:
-#     EXP_NAME_PREFIX += "cnn"
-# else:
-#     EXP_NAME_PREFIX += "UNK"
-
-
-if CHAR_LEVEL:
-    EXP_NAME_PREFIX += "_char"
-else:
-    EXP_NAME_PREFIX += "_word"
+EXP_NAME_PREFIX += "_{0:s}_{1:s}".format(enc_key, dec_key)
 
 if lstm1_or_gru0:
     EXP_NAME_PREFIX += "_lstm"
 else:
     EXP_NAME_PREFIX += "_gru"
-
-# if OPTIMIZER_ADAM1_SGD_0:
-#     EXP_NAME_PREFIX += "_adam"
-# else:
-#     EXP_NAME_PREFIX += "_adam"
-
-if CROSS_SPEAKER:
-    EXP_NAME_PREFIX += "_xspkr"
-else:
-    EXP_NAME_PREFIX += "_sspkr"
 
 if USE_DROPOUT:
     EXP_NAME_PREFIX += "_drpt-{0:.1f}".format(DROPOUT_RATIO)
@@ -189,66 +151,36 @@ EXP_NAME_PREFIX += "_cnn-num{0:d}-range{1:d}-{2:d}-{3:d}-pool{4:d}".format(
                                                     cnn_filter_gap,
                                                     max_pool_stride*10)
 
-# A total of 11 buckets, with a length range of 7 each, giving total
-# BUCKET_WIDTH * NUM_BUCKETS = 77 for e.g.
-BUCKET_WIDTH = 3 if not CHAR_LEVEL else 3
-NUM_BUCKETS = 14 if not CHAR_LEVEL else 30
-TEXT_BUCKETS = [[] for i in range(NUM_BUCKETS)]
 
-MAX_EN_LEN = 150 if not CHAR_LEVEL else 300
-#------------------------------------------------
-# WARNING !!!!!!!!!!!!!!!!!!!!!!!!
-#------------------------------------------------
-# SPEECH_BUCKET_WIDTH should be a multiple of 8
-#------------------------------------------------
-SPEECH_BUCKET_WIDTH = 16
-#------------------------------------------------
-SPEECH_NUM_BUCKETS = 75
+if not os.path.exists(out_path):
+    print("Input folder not found".format(out_path))
 
-BATCH_SIZE_LOOKUP = {'train':{}, 'dev':{}, 'test':{}}
+print("-"*50)
+# load dictionaries
+map_dict_path = os.path.join(out_path,'map.dict')
+print("loading dict: {0:s}".format(map_dict_path))
+map_dict = pickle.load(open(map_dict_path, "rb"))
 
-for i in range(SPEECH_NUM_BUCKETS):
-    if i < 50:
-        BATCH_SIZE_LOOKUP['train'][i] = 64
-    else:
-        BATCH_SIZE_LOOKUP['train'][i] = 32
+vocab_dict_path = os.path.join(out_path, 'train_vocab.dict')
+print("loading dict: {0:s}".format(vocab_dict_path))
+vocab_dict = pickle.load(open(vocab_dict_path, "rb"))
+print("-"*50)
 
-BATCH_SIZE_LOOKUP['dev'] = {}
-DEV_SPEECH_BUCKET_WIDTH = 12
-DEV_SPEECH_NUM_BUCKETS = 60
+bucket_dict_path = os.path.join(out_path,'buckets_{0:s}.dict'.format(enc_key))
+print("loading dict: {0:s}".format(bucket_dict_path))
+bucket_dict = pickle.load(open(bucket_dict_path, "rb"))
+print("-"*50)
 
-for i in range(DEV_SPEECH_NUM_BUCKETS):
-    if i < 50:
-        BATCH_SIZE_LOOKUP['dev'][i] = 12
-    else:
-        BATCH_SIZE_LOOKUP['dev'][i] = 8
+for cat in map_dict:
+    print('utterances in {0:s} = {1:d}'.format(cat, len(map_dict[cat])))
 
+vocab_size_es = len(vocab_dict[enc_key]['w2i'])
+vocab_size_en = len(vocab_dict[dec_key]['w2i'])
 
-# create separate widths for input and output, speech and english words/chars
-MAX_PREDICT_LEN = BUCKET_WIDTH*NUM_BUCKETS
+print('vocab size for {0:s} = {1:d}'.format(enc_key, vocab_size_es))
+print('vocab size for {0:s} = {1:d}'.format(dec_key, vocab_size_en))
 
-vocab_path = os.path.join(input_dir, "vocab.dict" if not CHAR_LEVEL else "char_vocab.dict")
-w2i_path = os.path.join(input_dir, "w2i.dict" if not CHAR_LEVEL else "char_w2i.dict")
-i2w_path = os.path.join(input_dir, "i2w.dict" if not CHAR_LEVEL else "char_i2w.dict")
-
-text_fname = {"en": os.path.join(input_dir, "train.en"), "fr": os.path.join(input_dir, "speech_train.es")}
-
-dev_fname = {"en": os.path.join(input_dir, "dev.en"), "fr": os.path.join(input_dir, "speech_dev.es")}
-
-test_fname = {"en": os.path.join(input_dir, "test.en"), "fr": os.path.join(input_dir, "speech_test.es")}
-
-speech_bucket_data_fname = os.path.join(model_dir, "speech_buckets.dict")
-
-bucket_data_fname = os.path.join(model_dir, "buckets_{0:d}.list" if not CHAR_LEVEL else "buckets_{0:d}_char.list")
-
-
-if os.path.exists(w2i_path):
-    w2i = pickle.load(open(w2i_path, "rb"))
-    i2w = pickle.load(open(i2w_path, "rb"))
-    vocab = pickle.load(open(vocab_path, "rb"))
-    vocab_size_en = min(len(i2w["en"]), max_vocab_size["en"])
-    vocab_size_fr = min(len(i2w["fr"]), max_vocab_size["fr"])
-    print("vocab size, en={0:d}, fr={1:d}".format(vocab_size_en, vocab_size_fr))
+NUM_MINI_TRAINING_SENTENCES = len(map_dict['fisher_train'])
 
 load_existing_model = True
 
@@ -269,6 +201,5 @@ model_fil = os.path.join(model_dir, "seq2seq_{0:s}.model".format(name_to_log))
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
 
-if not os.path.exists(input_dir):
-    print("Input folder not found".format(input_dir))
-
+print('model file name: {0:s}'.format(model_fil))
+print('log file name: {0:s}'.format(log_train_fil_name))

@@ -50,28 +50,7 @@ def create_buckets(cat_dict, num_b, width_b, key):
     print("done...")
 # end def
 
-
-
-def main():
-    parser = argparse.ArgumentParser(description=program_descrp)
-    parser.add_argument('-o','--out_path', help='output path',
-                        required=True)
-
-    parser.add_argument('-n','--num_b', help='number of buckets',
-                        required=True)
-
-    parser.add_argument('-w','--width_b', help='width of buckets',
-                        required=True)
-
-    parser.add_argument('-k','--key', help='category to use for length/duration',
-                        required=True)
-
-    args = vars(parser.parse_args())
-    out_path = args['out_path']
-    num_b = int(args['num_b'])
-    width_b = int(args['width_b'])
-    key = args['key']
-
+def buckets_main(out_path, num_b, width_b, key):
     # create output file directory:
     if not os.path.exists(out_path):
         print("{0:s} does not exist. Exiting".format(out_path))
@@ -107,6 +86,29 @@ def main():
     for cat in bucket_dict:
         print("-"*50)
         display_buckets(bucket_dict, cat)
+
+
+
+def main():
+    parser = argparse.ArgumentParser(description=program_descrp)
+    parser.add_argument('-o','--out_path', help='output path',
+                        required=True)
+
+    parser.add_argument('-n','--num_b', help='number of buckets',
+                        required=True)
+
+    parser.add_argument('-w','--width_b', help='width of buckets',
+                        required=True)
+
+    parser.add_argument('-k','--key', help='category to use for length/duration',
+                        required=True)
+
+    args = vars(parser.parse_args())
+    out_path = args['out_path']
+    num_b = int(args['num_b'])
+    width_b = int(args['width_b'])
+    key = args['key']
+    buckets_main(out_path, num_b, width_b, key)
 
 if __name__ == "__main__":
     main()

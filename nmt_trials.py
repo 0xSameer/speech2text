@@ -572,3 +572,4 @@ start_here(num_training=NUM_MINI_TRAINING_SENTENCES, num_epochs=NUM_EPOCHS)
 # batch_training(100, BATCH_SIZE_LOOKUP , buckets, bucket_lengths, SPEECH_BUCKET_WIDTH, 0)
 
 # In[ ]:
+

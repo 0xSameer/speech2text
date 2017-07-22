@@ -43,6 +43,8 @@ class SpeechEncoderDecoder(Chain):
 
         self.attn =  use_attn
 
+        self.vocab_size_es = vocab_size_es
+
         self.vocab_size_en = vocab_size_en
 
         self.max_pool_stride = max_pool_stride
@@ -113,15 +115,15 @@ class SpeechEncoderDecoder(Chain):
 
 
     def init_model(self):
-        if MODEL_TYPE == MODEL_RNN:
-            self.scale = 2
-            rnn_in_units = self.speech_dim
-        elif MODEL_TYPE == MODEL_CNN:
-            self.scale = 1
-            self.init_cnn_model()
-            rnn_in_units = self.cnn_out_dim
-        else:
-            print("Nooooooooooooooooooo")
+
+        if enc_key != 'sp':
+            # add embedding layer
+            self.add_link("embed_enc", L.EmbedID(self.vocab_size_es,
+                                                 self.embed_units))
+
+        self.scale = 1
+        self.init_cnn_model()
+        rnn_in_units = self.cnn_out_dim
 
         # initialize RNN layers
         print("rnn_in_units", rnn_in_units)
@@ -340,15 +342,20 @@ class SpeechEncoderDecoder(Chain):
         return h_fwd, h_rev
 
     def forward_enc(self, X):
-        if MODEL_TYPE == MODEL_CNN:
-            h = self.forward_cnn(X)
-            h = F.rollaxis(h, 2)
+        if enc_key != 'sp':
+            h = F.swapaxes(self.embed_enc(X),1,2)
+        else:
+            h = F.swapaxes(X, 0, 1)
+
+        h = self.forward_cnn(h)
+        
+        h = F.rollaxis(h, 2)
         _, _ = self.forward_rnn(h)
 
 
     def forward(self, X, y=None):
         # get shape
-        batch_size, in_dim, in_num_steps = X.shape
+        batch_size = X.shape[0]
         # check whether to add noise
         if ADD_NOISE and not chainer.config.train:
             # due to CUDA issues with random number generator

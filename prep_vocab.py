@@ -10,6 +10,10 @@ import re
 program_descrp = """
 create vocabulary dict
 """
+PAD = b"_PAD"
+GO = b"_GO"
+EOS = b"_EOS"
+UNK = b"_UNK"
 
 '''
 example:
@@ -17,6 +21,11 @@ python prep_vocab.py -o $PWD/out/
 '''
 def get_vocab_units(train_map_dict, key):
     out = {"w2i":{}, "i2w":{}, "freq":{}}
+    START_VOCAB = [PAD, GO, EOS, UNK]
+    for w in START_VOCAB:
+        out['w2i'][w] = len(out["w2i"])
+        out["freq"][w] = 1
+
     # loop over each speaker data
     for spk_id in train_map_dict:
         # loop over each utterance with transcriptions+translations
