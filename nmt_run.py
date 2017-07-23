@@ -54,28 +54,33 @@ def get_batch(m_dict, x_key, y_key,
         if x_key == 'sp':
             utt_sp_path = os.path.join(cat_speech_path,
                                       "{0:s}.npy".format(u))
-            if not os.path.exists():
+            if not os.path.exists(utt_sp_path):
                 utt_sp_path = os.path.join(cat_speech_path,
-                                           utt_id.split('_',1)[0],
-                                           "{0:s}.npy".format(utt_id))
-            batch_data['X'].append(xp.load(utt_sp_path))
+                                           u.split('_',1)[0],
+                                           "{0:s}.npy".format(u))
+            x_data = xp.load(utt_sp_path)
+            batch_data['X'].append(x_data[:max_enc])
         else:
-            u_x_ids = [vocab_dict[x_key]['w2i'][w] for w in m_dict[u][x_key]]
-            batch_data['X'].append(xp.asarray(u_x_ids, dtype=xp.int32))
+            u_x_ids = [vocab_dict[x_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][x_key]]
+            u_x_ids = xp.asarray(u_x_ids, dtype=xp.int32)
+            batch_data['X'].append(u_x_ids[:max_dec])
         #  add english labels
-        en_ids = [vocab_dict[y_key]['w2i'][w] for w in m_dict[u][y_key]]
+        if type(m_dict[u][y_key]) == list:
+            en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]]
+        else:
+            # dev and test data have multiple translations
+            # choose the first one for computing perplexity
+            en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]]
         u_y_ids = [GO_ID] + en_ids[:MAX_EN_LEN-2] + [EOS_ID]
         batch_data['y'].append(xp.asarray(u_y_ids, dtype=xp.int32))
     # end for all utterances in batch
     batch_data['X'] = F.pad_sequence(batch_data['X'], padding=PAD_ID)
-    # batch_data['X'] = F.expand_dims(batch_data['X'], axis=0)
     batch_data['y'] = F.pad_sequence(batch_data['y'], padding=PAD_ID)
-    # batch_data['y'] = F.expand_dims(batch_data['y'], axis=0)
     return batch_data
 
 
 def feed_model(m_dict, b_dict, batch_size, vocab_dict,
-               x_key, y_key, train, cat_speech_path=''):
+               x_key, y_key, train, cat_speech_path, use_y=True):
     # number of buckets
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
@@ -104,14 +109,22 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                                        vocab_dict,
                                        ((i+1) * width_b),
                                        (num_b * width_b),
-                                       cat_speech_path=out_path)
-                with chainer.using_config('train', train):
-                    p, loss = model.forward(batch_data['X'], batch_data['y'])
+                                       cat_speech_path=cat_speech_path)
+                if use_y:
+                    with chainer.using_config('train', train):
+                        p, loss = model.forward(batch_data['X'], batch_data['y'])
+                    # store loss values for printing
+                    loss_val = float(loss.data)
+                else:
+                    with chainer.using_config('train', False):
+                        p, loss = model.forward(batch_data['X'])
+                    loss_val = 0.0
+
                 if len(p) > 0:
                     pred_sents.extend(p.tolist())
 
-                # store loss values for printing
-                loss_val = float(loss.data)
+                
+                # loss_val = float(loss.data)
 
                 total_loss += loss_val
                 total_loss_updates += 1
@@ -125,7 +138,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                     # update parameters
                     optimizer.update()
 
-                out_str = "b={0:d},i={1:d}/{2:d},l={3:.2f},avg={3:.2f}".format((b+1),i,b_len,loss_val,loss_per_epoch)
+                out_str = "b={0:d},i={1:d}/{2:d},l={3:.2f},avg={4:.2f}".format((b+1),i,b_len,loss_val,loss_per_epoch)
 
                 pbar.set_description('{0:s}'.format(out_str))
 
@@ -158,11 +171,60 @@ def check_model():
     return max_epoch
 # end check_model
 
+def train_loop(cat_speech_path, epochs, key, last_epoch, use_y):
+    with open(log_train_fil_name, mode='a') as train_log, open(log_dev_fil_name, mode='a') as dev_log:
+        for i in range(epochs):
+            print("-"*80)
+            print("EPOCH = {0:d}".format(last_epoch+i+1))
+            # call train
+            pred_sents, train_loss = feed_model(map_dict['fisher_train'],
+                              b_dict=bucket_dict['fisher_train'],
+                              vocab_dict=vocab_dict,
+                              batch_size=BATCH_SIZE,
+                              x_key=enc_key,
+                              y_key=dec_key,
+                              train=True,
+                              cat_speech_path=cat_speech_path, use_y=use_y)
+            # log train loss
+            train_log.write("{0:d}, {1:.4f}\n".format(last_epoch+i+1, loss))
+            train_log.flush()
+            os.fsync(train_log.fileno())
 
-def my_main(out_path, epochs, key):
+            # compute dev loss
+            pred_sents, dev_loss = feed_model(map_dict['fisher_dev'],
+                              b_dict=bucket_dict['fisher_dev'],
+                              vocab_dict=vocab_dict,
+                              batch_size=BATCH_SIZE,
+                              x_key=enc_key,
+                              y_key=dec_key,
+                              train=False,
+                              cat_speech_path=cat_speech_path, use_y=use_y)
+
+            # log dev loss
+            dev_log.write("{0:d}, {1:.4f}\n".format(last_epoch+i+1, dev_loss))
+            dev_log.flush()
+            os.fsync(dev_log.fileno())
+
+            print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}".format("*" * 10, loss, dev_loss))
+            print("-")
+            print("-"*80)
+
+            # save model
+            if train and (((i+1) % ITERS_TO_SAVE == 0) or (i == (epochs-1))):
+                print("Saving model")
+                serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch+i+1)), model)
+                print("Finished saving model")
+            # end if save model
+        # end for epochs
+    # end open log files
+# end train loop
+
+
+def my_main(out_path, epochs, key, use_y):
     train = True if 'train' in key else False
 
-    log_fname = log_train_fil_name if train else log_dev_fil_name
+    # check for existing model
+    last_epoch = check_model()
 
     # check output file directory
     if not os.path.exists(out_path):
@@ -170,40 +232,32 @@ def my_main(out_path, epochs, key):
         return 0
     # end if
 
-    # check for existing model
-    last_epoch = check_model()
+    cat_speech_path = os.path.join(out_path, key)
 
-    with open(log_fname, mode='a') as log_fil:
+    if train:
+        train_loop(cat_speech_path, epochs, key, last_epoch, use_y=use_y)
+    else:
+        # call compute perplexity
+        print("-"*80)
+        print("EPOCH = {0:d}".format(last_epoch+1))
+        pred_sents, loss = feed_model(map_dict[key],
+                          b_dict=bucket_dict[key],
+                          vocab_dict=vocab_dict,
+                          batch_size=BATCH_SIZE,
+                          x_key=enc_key,
+                          y_key=dec_key,
+                          train=False,
+                          cat_speech_path=cat_speech_path, use_y=use_y)
 
-        for i in range(epochs):
-            print("-"*80)
-            print("EPOCH = {0:d}".format(last_epoch+i+1))
-            _, loss = feed_model(map_dict[key],
-                              b_dict=bucket_dict[key],
-                              vocab_dict=vocab_dict,
-                              batch_size=BATCH_SIZE,
-                              x_key=enc_key,
-                              y_key=dec_key,
-                              train=True,
-                              cat_speech_path=out_path)
+        print("{0:s} {1:s} mean loss={2:.4f}".format("*" * 10,
+                                            "train" if train else "dev",
+                                            loss))
+        print("-")
+        print("-"*80)
 
-            print("{0:s} {1:s} mean loss={2:.4f}".format("*" * 10,
-                                                "train" if train else "dev",
-                                                loss))
-            print("-")
-            print("-"*80)
 
-            # log loss
-            log_fil.write("{0:d}, {1:.4f}\n".format(last_epoch+i+1, loss))
-            log_fil.flush()
-            os.fsync(log_fil.fileno())
-
-            if ((i+1) % ITERS_TO_SAVE == 0) or (i == (epochs-1)):
-                print("Saving model")
-                serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch+i+1)), model)
-                print("Finished saving model")
-        # end for epochs
-    # end with open log files
+    print(len(pred_sents))
+    print(use_y)
 
     print("all done ...")
 # end my_main
@@ -216,17 +270,21 @@ def main():
     parser.add_argument('-e','--epochs', help='num epochs',
                         required=True)
 
-    parser.add_argument('-k','--key', help='length/duration key cat',
+    parser.add_argument('-k','--key', help='length/duration key cat, e.g. fisher_train, fisher_dev',
+                        required=True)
+
+    parser.add_argument('-y','--use_y', help='use y or just make predictions',
                         required=True)
 
     args = vars(parser.parse_args())
     out_path = args['out_path']
     epochs = int(args['epochs'])
     key = args['key']
+    use_y = False if int(args['use_y']) == 0 else True
 
     print("number of epochs={0:d}".format(epochs))
 
-    my_main(out_path, epochs, key)
+    my_main(out_path, epochs, key, use_y)
 # end main
 
 if __name__ == "__main__":

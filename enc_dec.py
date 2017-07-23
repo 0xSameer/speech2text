@@ -321,7 +321,6 @@ class SpeechEncoderDecoder(Chain):
     def forward_rnn(self, X):
         self.reset_state()
         in_size, batch_size, in_dim = X.shape
-        # print("X", X.shape)
         for i in range(in_size):
             if i > 0:
                 h_fwd = F.concat((h_fwd,
@@ -345,10 +344,8 @@ class SpeechEncoderDecoder(Chain):
         if enc_key != 'sp':
             h = F.swapaxes(self.embed_enc(X),1,2)
         else:
-            h = F.swapaxes(X, 0, 1)
-
+            h = F.swapaxes(X,1,2)
         h = self.forward_cnn(h)
-        
         h = F.rollaxis(h, 2)
         _, _ = self.forward_rnn(h)
 
@@ -377,6 +374,7 @@ class SpeechEncoderDecoder(Chain):
         if chainer.config.train:
             # decode
             self.loss = self.decode_batch(y)
+            print("oye")
             # consistent return statement
             return [], self.loss
         else:

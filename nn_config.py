@@ -31,14 +31,13 @@ EXP_NAME_PREFIX = ""
 print("callhome es-en configuration")
 
 # encoder key
-# 'es_w', 'es_c', or 'sp'
-enc_key = 'es_c'
-# 'en_w', 'en_c', or 'sp'
-dec_key = 'en_c'
+# 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
+enc_key = 'sp'
+dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 100
-gpuid = 3
+gpuid = 2
 BATCH_SIZE = 64
 # ------------------------------------------
 
@@ -57,7 +56,7 @@ NOISE_STDEV=0.2
 WEIGHT_DECAY=True
 
 if WEIGHT_DECAY:
-    WD_RATIO=0.01
+    WD_RATIO=0.005
 else:
     WD_RATIO=0
 
@@ -91,7 +90,7 @@ else:
     cnn_filter_gap = 2
     cnn_filter_start = 1
     cnn_filter_end = 9
-    num_highway_layers = 4
+    num_highway_layers = 2
     max_pool_stride = 5
     max_pool_pad = 0
 
@@ -113,7 +112,10 @@ else:
     num_b = 20
     width_b = 3
 
-MAX_EN_LEN = num_b * width_b
+if dec_key == 'en_w':
+    MAX_EN_LEN = 400
+else:
+    MAX_EN_LEN = 80
 
 prep_buckets.buckets_main(out_path, num_b, width_b, enc_key)
 
@@ -183,9 +185,11 @@ print("-"*50)
 for cat in map_dict:
     print('utterances in {0:s} = {1:d}'.format(cat, len(map_dict[cat])))
 
-vocab_size_es = len(vocab_dict[enc_key]['w2i'])
+if enc_key != 'sp':
+    vocab_size_es = len(vocab_dict[enc_key]['w2i'])
+else:
+    vocab_size_es = 0
 vocab_size_en = len(vocab_dict[dec_key]['w2i'])
-
 print('vocab size for {0:s} = {1:d}'.format(enc_key, vocab_size_es))
 print('vocab size for {0:s} = {1:d}'.format(dec_key, vocab_size_en))
 
