@@ -44,19 +44,19 @@ if WEIGHT_DECAY:
 optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=2))
 
 
-def get_batch(m_dict, x_key, y_key, 
-              utt_list, vocab_dict, 
+def get_batch(m_dict, x_key, y_key,
+              utt_list, vocab_dict,
               max_enc, max_dec, cat_speech_path=''):
-    
+
     batch_data = {'X':[], 'y':[]}
     for u in utt_list:
         # for speech data
         if x_key == 'sp':
-            utt_sp_path = os.path.join(cat_speech_path, 
+            utt_sp_path = os.path.join(cat_speech_path,
                                       "{0:s}.npy".format(u))
             if not os.path.exists():
-                utt_sp_path = os.path.join(cat_speech_path, 
-                                           utt_id.split('_',1)[0], 
+                utt_sp_path = os.path.join(cat_speech_path,
+                                           utt_id.split('_',1)[0],
                                            "{0:s}.npy".format(utt_id))
             batch_data['X'].append(xp.load(utt_sp_path))
         else:
@@ -98,12 +98,12 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
             for i in range(0,b_len, batch_size):
                 utt_list = bucket[i:i+batch_size]
                 # get batch_data
-                batch_data = get_batch(m_dict, 
-                                       x_key, y_key, 
-                                       utt_list, 
-                                       vocab_dict, 
-                                       ((i+1) * width_b), 
-                                       (num_b * width_b), 
+                batch_data = get_batch(m_dict,
+                                       x_key, y_key,
+                                       utt_list,
+                                       vocab_dict,
+                                       ((i+1) * width_b),
+                                       (num_b * width_b),
                                        cat_speech_path=out_path)
                 with chainer.using_config('train', train):
                     p, loss = model.forward(batch_data['X'], batch_data['y'])
@@ -125,7 +125,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                     # update parameters
                     optimizer.update()
 
-                out_str = "bucket={0:d}, i={1:d}/{2:d}, loss={3:.2f}, mean loss={3:.2f}".format((b+1),i,b_len,loss_val,loss_per_epoch)
+                out_str = "b={0:d},i={1:d}/{2:d},l={3:.2f},avg={3:.2f}".format((b+1),i,b_len,loss_val,loss_per_epoch)
 
                 pbar.set_description('{0:s}'.format(out_str))
 
@@ -138,12 +138,12 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
 def check_model():
     max_epoch = 0
 
-    model_files = [f for f in os.listdir(os.path.dirname(model_fil)) 
+    model_files = [f for f in os.listdir(os.path.dirname(model_fil))
                    if os.path.basename(model_fil).replace('.model','') in f]
     if len(model_files) > 0:
         print("-"*80)
         max_model_fil = max(model_files, key=lambda s: int(s.split('_')[-1].split('.')[0]))
-        max_model_fil = os.path.join(os.path.dirname(model_fil), 
+        max_model_fil = os.path.join(os.path.dirname(model_fil),
                                      max_model_fil)
         print('model found = \n{0:s}'.format(max_model_fil))
         print('loading ...')
@@ -178,13 +178,13 @@ def my_main(out_path, epochs, key):
         for i in range(epochs):
             print("-"*80)
             print("EPOCH = {0:d}".format(last_epoch+i+1))
-            _, loss = feed_model(map_dict[key], 
-                              b_dict=bucket_dict[key], 
-                              vocab_dict=vocab_dict, 
-                              batch_size=BATCH_SIZE, 
-                              x_key=enc_key, 
-                              y_key=dec_key, 
-                              train=True, 
+            _, loss = feed_model(map_dict[key],
+                              b_dict=bucket_dict[key],
+                              vocab_dict=vocab_dict,
+                              batch_size=BATCH_SIZE,
+                              x_key=enc_key,
+                              y_key=dec_key,
+                              train=True,
                               cat_speech_path=out_path)
 
             print("{0:s} {1:s} mean loss={2:.4f}".format("*" * 10,

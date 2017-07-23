@@ -32,10 +32,15 @@ print("callhome es-en configuration")
 
 # encoder key
 # 'es_w', 'es_c', or 'sp'
-enc_key = 'es_w'
+enc_key = 'es_c'
 # 'en_w', 'en_c', or 'sp'
-dec_key = 'en_w'
+dec_key = 'en_c'
 
+# ------------------------------------------
+NUM_EPOCHS = 100
+gpuid = 3
+BATCH_SIZE = 64
+# ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = False
 
@@ -52,15 +57,10 @@ NOISE_STDEV=0.2
 WEIGHT_DECAY=True
 
 if WEIGHT_DECAY:
-    WD_RATIO=0.005
+    WD_RATIO=0.01
 else:
     WD_RATIO=0
 
-# ------------------------------------------
-NUM_EPOCHS = 100
-gpuid = 3
-BATCH_SIZE = 64
-# ------------------------------------------
 
 ITERS_TO_SAVE = 10
 
@@ -91,7 +91,7 @@ else:
     cnn_filter_gap = 2
     cnn_filter_start = 1
     cnn_filter_end = 9
-    num_highway_layers = 2
+    num_highway_layers = 4
     max_pool_stride = 5
     max_pool_pad = 0
 
