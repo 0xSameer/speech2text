@@ -32,16 +32,15 @@ print("callhome es-en configuration")
 
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'sp'
+enc_key = 'es_w'
 dec_key = 'en_w'
 
 # ------------------------------------------
-NUM_EPOCHS = 100
-gpuid = 2
-BATCH_SIZE = 64
+NUM_EPOCHS = 110
+gpuid = 1
 # ------------------------------------------
 
-OPTIMIZER_ADAM1_SGD_0 = False
+OPTIMIZER_ADAM1_SGD_0 = True
 
 lstm1_or_gru0 = False
 
@@ -56,7 +55,7 @@ NOISE_STDEV=0.2
 WEIGHT_DECAY=True
 
 if WEIGHT_DECAY:
-    WD_RATIO=0.005
+    WD_RATIO=0.001
 else:
     WD_RATIO=0
 
@@ -81,18 +80,29 @@ if enc_key == 'sp':
     cnn_num_channels = 50
     cnn_filter_gap = 10
     cnn_filter_start = 9
-    cnn_filter_end = 29
+    cnn_filter_end = 99
     num_highway_layers = 2
-    max_pool_stride = 50
+    max_pool_stride = 40
     max_pool_pad = 0
-else:
-    cnn_num_channels = 200
+    BATCH_SIZE = 16
+elif enc_key == 'es_c':
+    cnn_num_channels = 100
     cnn_filter_gap = 2
     cnn_filter_start = 1
     cnn_filter_end = 9
-    num_highway_layers = 2
+    num_highway_layers = 4
     max_pool_stride = 5
     max_pool_pad = 0
+    BATCH_SIZE = 64
+elif enc_key == 'es_w':
+    cnn_num_channels = 100
+    cnn_filter_gap = 2
+    cnn_filter_start = 1
+    cnn_filter_end = 9
+    num_highway_layers = 4
+    max_pool_stride = 1
+    max_pool_pad = 0
+    BATCH_SIZE = 64
 
 cnn_k_widths = [i for i in range(cnn_filter_start,
                                  cnn_filter_end+1,
@@ -101,21 +111,21 @@ cnn_k_widths = [i for i in range(cnn_filter_start,
 
 if enc_key == 'sp':
     CNN_IN_DIM = SPEECH_DIM
-    num_b = 60
-    width_b = 50
+    num_b = 120
+    width_b = 16
 elif enc_key == 'es_c':
     CNN_IN_DIM = embedding_units
     num_b = 50
-    width_b = 8
+    width_b = 6
 else:
     CNN_IN_DIM = embedding_units
     num_b = 20
     width_b = 3
 
 if dec_key == 'en_w':
-    MAX_EN_LEN = 400
-else:
     MAX_EN_LEN = 80
+else:
+    MAX_EN_LEN = 300
 
 prep_buckets.buckets_main(out_path, num_b, width_b, enc_key)
 

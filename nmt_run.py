@@ -186,7 +186,7 @@ def train_loop(cat_speech_path, epochs, key, last_epoch, use_y):
                               train=True,
                               cat_speech_path=cat_speech_path, use_y=use_y)
             # log train loss
-            train_log.write("{0:d}, {1:.4f}\n".format(last_epoch+i+1, loss))
+            train_log.write("{0:d}, {1:.4f}\n".format(last_epoch+i+1, train_loss))
             train_log.flush()
             os.fsync(train_log.fileno())
 
@@ -205,16 +205,17 @@ def train_loop(cat_speech_path, epochs, key, last_epoch, use_y):
             dev_log.flush()
             os.fsync(dev_log.fileno())
 
-            print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}".format("*" * 10, loss, dev_loss))
+            print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}".format("*" * 10, train_loss, dev_loss))
             print("-")
             print("-"*80)
 
             # save model
-            if train and (((i+1) % ITERS_TO_SAVE == 0) or (i == (epochs-1))):
+            if ((i+1) % ITERS_TO_SAVE == 0) or (i == (epochs-1)):
                 print("Saving model")
                 serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch+i+1)), model)
                 print("Finished saving model")
             # end if save model
+            print("MODEL NAME: {0:s}".format(os.path.basename(model_fil)))
         # end for epochs
     # end open log files
 # end train loop
@@ -254,10 +255,6 @@ def my_main(out_path, epochs, key, use_y):
                                             loss))
         print("-")
         print("-"*80)
-
-
-    print(len(pred_sents))
-    print(use_y)
 
     print("all done ...")
 # end my_main

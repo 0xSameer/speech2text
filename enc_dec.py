@@ -374,7 +374,6 @@ class SpeechEncoderDecoder(Chain):
         if chainer.config.train:
             # decode
             self.loss = self.decode_batch(y)
-            print("oye")
             # consistent return statement
             return [], self.loss
         else:
