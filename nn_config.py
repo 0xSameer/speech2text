@@ -32,15 +32,15 @@ print("callhome es-en configuration")
 
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'es_w'
-dec_key = 'en_w'
+enc_key = 'es_c'
+dec_key = 'en_c'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 1
+gpuid = 3
 # ------------------------------------------
 
-OPTIMIZER_ADAM1_SGD_0 = True
+OPTIMIZER_ADAM1_SGD_0 = False
 
 lstm1_or_gru0 = False
 
@@ -86,7 +86,7 @@ if enc_key == 'sp':
     max_pool_pad = 0
     BATCH_SIZE = 16
 elif enc_key == 'es_c':
-    cnn_num_channels = 100
+    cnn_num_channels = 300
     cnn_filter_gap = 2
     cnn_filter_start = 1
     cnn_filter_end = 9
@@ -116,7 +116,7 @@ if enc_key == 'sp':
 elif enc_key == 'es_c':
     CNN_IN_DIM = embedding_units
     num_b = 50
-    width_b = 6
+    width_b = 5
 else:
     CNN_IN_DIM = embedding_units
     num_b = 20
@@ -125,7 +125,7 @@ else:
 if dec_key == 'en_w':
     MAX_EN_LEN = 80
 else:
-    MAX_EN_LEN = 300
+    MAX_EN_LEN = 250
 
 prep_buckets.buckets_main(out_path, num_b, width_b, enc_key)
 
