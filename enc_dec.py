@@ -98,21 +98,23 @@ class SpeechEncoderDecoder(Chain):
         self.cnns = []
         # add CNN layers
         cnn_out_dim = 0
-        for l in cnn_filters:
-            lname = "CNN_{0:d}".format(l['ksize'])
-            cnn_out_dim += l["out_channels"]
-            self.cnns.append(lname)
-            self.add_link(lname, L.ConvolutionND(**l))
+        if len(cnn_filters) > 0:
+            for l in cnn_filters:
+                lname = "CNN_{0:d}".format(l['ksize'])
+                cnn_out_dim += l["out_channels"]
+                self.cnns.append(lname)
+                self.add_link(lname, L.ConvolutionND(**l))
 
-        self.cnn_out_dim = cnn_out_dim
+            self.cnn_out_dim = cnn_out_dim
 
-        # add highway layers
-        self.highway = ["highway_{0:d}".format(i)
-                         for i in range(num_highway_layers)]
+            # add highway layers
+            self.highway = ["highway_{0:d}".format(i)
+                             for i in range(num_highway_layers)]
 
-        for hname in self.highway:
-            self.add_link(hname, L.Highway(self.cnn_out_dim))
-
+            for hname in self.highway:
+                self.add_link(hname, L.Highway(self.cnn_out_dim))
+        else:
+            self.cnn_out_dim = CNN_IN_DIM
 
     def init_model(self):
 
@@ -205,8 +207,12 @@ class SpeechEncoderDecoder(Chain):
         return hs
 
     def encode(self, data_in, rnn_layers):
-        h = self.forward_highway(data_in)
-        h = self.feed_rnn(h, rnn_layers)
+        # if cnn + highways used
+        if len(cnn_filters) > 0:
+            h = self.forward_highway(data_in)
+            h = self.feed_rnn(h, rnn_layers)
+        else:
+            h = self.feed_rnn(data_in, rnn_layers)
         return h
 
     def decode(self, word):
@@ -345,7 +351,9 @@ class SpeechEncoderDecoder(Chain):
             h = F.swapaxes(self.embed_enc(X),1,2)
         else:
             h = F.swapaxes(X,1,2)
-        h = self.forward_cnn(h)
+        if len(self.cnns) > 0:
+            h = self.forward_cnn(h)
+        # end check for cnns
         h = F.rollaxis(h, 2)
         _, _ = self.forward_rnn(h)
 

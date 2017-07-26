@@ -107,7 +107,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                                        x_key, y_key,
                                        utt_list,
                                        vocab_dict,
-                                       ((i+1) * width_b),
+                                       ((b+1) * width_b),
                                        (num_b * width_b),
                                        cat_speech_path=cat_speech_path)
                 if use_y:

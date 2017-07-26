@@ -25,22 +25,24 @@ print("translating es to en")
 
 out_path = "./out/"
 
-model_dir = "fisher_text"
+# model_dir = "fisher_sp"
+model_dir = "fisher_text_only_lstm"
+
 EXP_NAME_PREFIX = ""
 
 print("callhome es-en configuration")
 
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'es_c'
-dec_key = 'en_c'
+enc_key = 'es_w'
+dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 3
+gpuid = 2
 # ------------------------------------------
 
-OPTIMIZER_ADAM1_SGD_0 = False
+OPTIMIZER_ADAM1_SGD_0 = True
 
 lstm1_or_gru0 = False
 
@@ -59,13 +61,11 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
+ONLY_LSTM = True
 
 ITERS_TO_SAVE = 10
 
 SHUFFLE_BATCHES = True
-
-num_layers_enc = 1
-num_layers_dec = 2
 
 use_attn = SOFT_ATTN
 hidden_units = 512
@@ -77,25 +77,25 @@ SPEECH_DIM = 69
 # for now keeping kernel widths as odd
 # this keeps the output size the same as the input
 if enc_key == 'sp':
-    cnn_num_channels = 50
+    cnn_num_channels = 200
     cnn_filter_gap = 10
     cnn_filter_start = 9
     cnn_filter_end = 99
     num_highway_layers = 2
-    max_pool_stride = 40
+    max_pool_stride = 50
     max_pool_pad = 0
-    BATCH_SIZE = 16
+    BATCH_SIZE = 12
 elif enc_key == 'es_c':
-    cnn_num_channels = 300
+    cnn_num_channels = 400
     cnn_filter_gap = 2
     cnn_filter_start = 1
     cnn_filter_end = 9
     num_highway_layers = 4
     max_pool_stride = 5
     max_pool_pad = 0
-    BATCH_SIZE = 64
+    BATCH_SIZE = 32
 elif enc_key == 'es_w':
-    cnn_num_channels = 100
+    cnn_num_channels = 400
     cnn_filter_gap = 2
     cnn_filter_start = 1
     cnn_filter_end = 9
@@ -104,28 +104,60 @@ elif enc_key == 'es_w':
     max_pool_pad = 0
     BATCH_SIZE = 64
 
-cnn_k_widths = [i for i in range(cnn_filter_start,
+# if using CNNs, we can have more parameters as sequences are shorter
+# due to max pooling
+if ONLY_LSTM == False:
+    cnn_k_widths = [i for i in range(cnn_filter_start,
                                  cnn_filter_end+1,
                                  cnn_filter_gap)]
+    if enc_key == 'sp':
+        num_layers_enc = 1
+        num_layers_dec = 2
+        CNN_IN_DIM = SPEECH_DIM
+        num_b = 100
+        width_b = 16
+        # num_layers_enc = 2
 
+    elif enc_key == 'es_c':
+        num_layers_enc = 2
+        num_layers_dec = 2
+        CNN_IN_DIM = embedding_units
+        num_b = 50
+        width_b = 5
+    else:
+        num_layers_enc = 2
+        num_layers_dec = 2
+        CNN_IN_DIM = embedding_units
+        num_b = 20
+        width_b = 3
 
-if enc_key == 'sp':
-    CNN_IN_DIM = SPEECH_DIM
-    num_b = 120
-    width_b = 16
-elif enc_key == 'es_c':
-    CNN_IN_DIM = embedding_units
-    num_b = 50
-    width_b = 5
+    if dec_key.endswith('_w'):
+        MAX_EN_LEN = 60
+    else:
+        MAX_EN_LEN = 250
+
 else:
-    CNN_IN_DIM = embedding_units
-    num_b = 20
-    width_b = 3
+    cnn_k_widths = []
+    num_layers_enc = 4
+    num_layers_dec = 2
 
-if dec_key == 'en_w':
-    MAX_EN_LEN = 80
-else:
-    MAX_EN_LEN = 250
+    if enc_key == 'sp':
+        print("Cannot train speech using only LSTM")
+
+    elif enc_key == 'es_c':
+        CNN_IN_DIM = embedding_units
+        num_b = 50
+        width_b = 4
+    else:
+        CNN_IN_DIM = embedding_units
+        num_b = 20
+        width_b = 3
+
+    if dec_key.endswith('_w'):
+        MAX_EN_LEN = 60
+    else:
+        MAX_EN_LEN = 200
+
 
 prep_buckets.buckets_main(out_path, num_b, width_b, enc_key)
 
@@ -165,13 +197,14 @@ if WEIGHT_DECAY:
 else:
     EXP_NAME_PREFIX += "_l2-0"
 
-EXP_NAME_PREFIX += "_cnn-num{0:d}-range{1:d}-{2:d}-{3:d}-pool{4:d}".format(
+CNN_PREFIX = "_cnn-num{0:d}-range{1:d}-{2:d}-{3:d}-pool{4:d}".format(
                                                     cnn_num_channels,
                                                     cnn_filter_start,
                                                     cnn_filter_end,
                                                     cnn_filter_gap,
                                                     max_pool_stride*10)
 
+EXP_NAME_PREFIX += "_LSTM" if ONLY_LSTM else CNN_PREFIX
 
 if not os.path.exists(out_path):
     print("Input folder not found".format(out_path))
@@ -209,13 +242,23 @@ load_existing_model = True
 
 xp = cuda.cupy if gpuid >= 0 else np
 
-name_to_log = "sen-{0:d}_hwy{1:d}-dec{2:d}_emb-{3:d}-h-{4:d}_{5:s}".format(
+if ONLY_LSTM == False:
+    name_to_log = "sen-{0:d}_hwy{1:d}-dec{2:d}_emb-{3:d}-h-{4:d}_{5:s}".format(
                                     NUM_MINI_TRAINING_SENTENCES,
                                     num_highway_layers,
                                     num_layers_dec,
                                     embedding_units,
                                     hidden_units,
                                     EXP_NAME_PREFIX)
+else:
+    name_to_log = "sen-{0:d}_enc{1:d}-dec{2:d}_emb-{3:d}-h-{4:d}_{5:s}".format(
+                                    NUM_MINI_TRAINING_SENTENCES,
+                                    num_layers_enc,
+                                    num_layers_dec,
+                                    embedding_units,
+                                    hidden_units,
+                                    EXP_NAME_PREFIX)
+
 
 log_train_fil_name = os.path.join(model_dir, "train_{0:s}.log".format(name_to_log))
 log_dev_fil_name = os.path.join(model_dir, "dev_{0:s}.log".format(name_to_log))
