@@ -3,8 +3,9 @@
 from basics import *
 from nn_config import *
 from enc_dec import *
-
+from prettytable import PrettyTable
 import argparse
+import textwrap
 
 program_descrp = """
 run nmt experiments
@@ -258,6 +259,108 @@ def my_main(out_path, epochs, key, use_y):
 
     print("all done ...")
 # end my_main
+
+
+
+def display_words(m_dict, v_dict, preds, utts, dec_key):
+    es_ref = []
+    en_ref = []
+    for u in utts:
+        es_ref.append(" ".join([w.decode() for w in m_dict[u]['es_w']]))
+        en_ref.append(" ".join([w.decode() for w in m_dict[u]['en_w']]))
+
+    en_pred = []
+    join_str = ' ' if dec_key.endswith('_w') else ''
+
+    for p in preds:
+        en_pred.append(join_str.join([v_dict['i2w'][i].decode() for i in p if i != EOS_ID]))
+
+    for u, es, en, p in zip(utts, es_ref, en_ref, en_pred):
+        # for reference, 1st word is GO_ID, no need to display
+        print("Utterance: {0:s}".format(u))
+        display_pp = PrettyTable(["cat","sent"], hrules=True)
+        display_pp.align = "l"
+        display_pp.header = False
+        display_pp.add_row(["es ref", textwrap.fill(es,50)])
+        display_pp.add_row(["en ref", textwrap.fill(en,50)])
+        display_pp.add_row(["en pred", textwrap.fill(p,50)])
+
+        print(display_pp)
+
+def test_func(out_path, batch_size, bucket_id, num_sent):
+    m_dict = map_dict["fisher_train"]
+    b_dict = bucket_dict["fisher_train"]
+
+    cat_speech_path = os.path.join(out_path, "fisher_train")
+
+    # number of buckets
+    num_b = b_dict['num_b']
+    width_b = b_dict['width_b']
+
+    pred_sents = []
+    utts = []
+    total_loss = 0
+    loss_per_epoch = 0
+    total_loss_updates= 0
+
+    sys.stderr.flush()
+    total_utts = len(b_dict['buckets'][bucket_id])
+
+    with tqdm(total=min(total_utts, num_sent)) as pbar:
+        bucket = b_dict['buckets'][bucket_id]
+        # random.shuffle(bucket)
+        b_len = len(bucket)
+        for i in range(0, min(b_len, num_sent), batch_size):
+            utt_list = bucket[i:i+batch_size]
+            utts.extend(utt_list)
+            # get batch_data
+            batch_data = get_batch(m_dict,
+                                   enc_key, dec_key,
+                                   utt_list,
+                                   vocab_dict,
+                                   ((bucket_id+1) * width_b),
+                                   (num_b * width_b),
+                                   cat_speech_path=cat_speech_path)
+            with chainer.using_config('train', True):
+                _, loss = model.forward(batch_data['X'], batch_data['y'])
+            # store loss values for printing
+            loss_val = float(loss.data)
+
+
+            batch_data = get_batch(m_dict,
+                                   enc_key, dec_key,
+                                   utt_list,
+                                   vocab_dict,
+                                   ((bucket_id+1) * width_b),
+                                   (num_b * width_b),
+                                   cat_speech_path=cat_speech_path)
+            with chainer.using_config('train', False):
+                p, _ = model.forward(batch_data['X'])
+
+            if len(p) > 0:
+                pred_sents.extend(p.tolist())
+
+            total_loss += loss_val
+            total_loss_updates += 1
+
+            loss_per_epoch = (total_loss / total_loss_updates)
+
+            # set up for backprop
+            model.cleargrads()
+            loss.backward()
+            # update parameters
+            optimizer.update()
+
+            out_str = "b={0:d},i={1:d}/{2:d},l={3:.2f},avg={4:.2f}".format((bucket_id+1),i,b_len,loss_val,loss_per_epoch)
+
+            pbar.set_description('{0:s}'.format(out_str))
+
+            pbar.update(len(utt_list))
+        # end for batches
+    # end tqdm
+
+    return pred_sents, utts, loss_per_epoch
+# end feed_model
 
 def main():
     parser = argparse.ArgumentParser(description=program_descrp)

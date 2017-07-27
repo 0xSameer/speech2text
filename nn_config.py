@@ -34,15 +34,15 @@ print("callhome es-en configuration")
 
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'es_w'
-dec_key = 'en_w'
+enc_key = 'es_c'
+dec_key = 'en_c'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 2
+gpuid = 0
 # ------------------------------------------
 
-OPTIMIZER_ADAM1_SGD_0 = True
+OPTIMIZER_ADAM1_SGD_0 = False
 
 lstm1_or_gru0 = False
 
@@ -61,7 +61,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-ONLY_LSTM = True
+ONLY_LSTM = False
 
 ITERS_TO_SAVE = 10
 
@@ -134,7 +134,7 @@ if ONLY_LSTM == False:
     if dec_key.endswith('_w'):
         MAX_EN_LEN = 60
     else:
-        MAX_EN_LEN = 250
+        MAX_EN_LEN = 150
 
 else:
     cnn_k_widths = []

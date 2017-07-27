@@ -23,7 +23,7 @@ def display_buckets(buckets_info, cat):
     print("showing buckets for category: {0:s}".format(cat))
     width_b = buckets_info[cat]['width_b']
     num_b = buckets_info[cat]['num_b']
-    print('number of buckets={0:d}, width of each bucket={1:d}'.format(width_b, num_b))
+    print('number of buckets={0:d}, width of each bucket={1:d}'.format(num_b, width_b))
     print("{0:5s} | {1:5s} | {2:6s}".format("index", "width", "num"))
 
     for i, b in enumerate(buckets_info[cat]['buckets']):
