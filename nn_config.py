@@ -26,7 +26,7 @@ print("translating es to en")
 out_path = "./out/"
 
 # model_dir = "fisher_sp"
-model_dir = "fisher_text_only_lstm"
+model_dir = "fsh_lr_reg"
 
 EXP_NAME_PREFIX = ""
 
@@ -34,12 +34,12 @@ print("callhome es-en configuration")
 
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'es_c'
-dec_key = 'en_c'
+enc_key = 'sp'
+dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 0
+gpuid = 2
 # ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = False
@@ -50,7 +50,7 @@ USE_DROPOUT=False
 
 DROPOUT_RATIO=0.2
 
-ADD_NOISE=False
+ADD_NOISE=True
 
 NOISE_STDEV=0.2
 
@@ -60,6 +60,8 @@ if WEIGHT_DECAY:
     WD_RATIO=0.001
 else:
     WD_RATIO=0
+
+LEARNING_RATE = 0.05
 
 ONLY_LSTM = False
 
@@ -80,26 +82,26 @@ if enc_key == 'sp':
     cnn_num_channels = 200
     cnn_filter_gap = 10
     cnn_filter_start = 9
-    cnn_filter_end = 99
-    num_highway_layers = 2
+    cnn_filter_end = 49
+    num_highway_layers = 4
     max_pool_stride = 50
     max_pool_pad = 0
     BATCH_SIZE = 12
 elif enc_key == 'es_c':
-    cnn_num_channels = 400
+    cnn_num_channels = 100
     cnn_filter_gap = 2
     cnn_filter_start = 1
-    cnn_filter_end = 9
+    cnn_filter_end = 19
     num_highway_layers = 4
     max_pool_stride = 5
     max_pool_pad = 0
-    BATCH_SIZE = 32
+    BATCH_SIZE = 64
 elif enc_key == 'es_w':
-    cnn_num_channels = 400
+    cnn_num_channels = 100
     cnn_filter_gap = 2
     cnn_filter_start = 1
-    cnn_filter_end = 9
-    num_highway_layers = 4
+    cnn_filter_end = 19
+    num_highway_layers = 2
     max_pool_stride = 1
     max_pool_pad = 0
     BATCH_SIZE = 64
@@ -114,31 +116,31 @@ if ONLY_LSTM == False:
         num_layers_enc = 1
         num_layers_dec = 2
         CNN_IN_DIM = SPEECH_DIM
-        num_b = 100
+        num_b = 64
         width_b = 16
         # num_layers_enc = 2
 
     elif enc_key == 'es_c':
-        num_layers_enc = 2
+        num_layers_enc = 1
         num_layers_dec = 2
         CNN_IN_DIM = embedding_units
         num_b = 50
-        width_b = 5
+        width_b = 6
     else:
-        num_layers_enc = 2
+        num_layers_enc = 1
         num_layers_dec = 2
         CNN_IN_DIM = embedding_units
         num_b = 20
         width_b = 3
 
     if dec_key.endswith('_w'):
-        MAX_EN_LEN = 60
+        MAX_EN_LEN = 50
     else:
         MAX_EN_LEN = 150
 
 else:
     cnn_k_widths = []
-    num_layers_enc = 4
+    num_layers_enc = 2
     num_layers_dec = 2
 
     if enc_key == 'sp':

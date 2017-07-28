@@ -344,7 +344,7 @@ class SpeechEncoderDecoder(Chain):
         h_rev = F.flipud(h_rev)
         self.enc_states = F.concat((h_fwd, h_rev), axis=2)
         self.enc_states = F.swapaxes(self.enc_states, 0, 1)
-        return h_fwd, h_rev
+        # return h_fwd, h_rev
 
     def forward_enc(self, X):
         if enc_key != 'sp':
@@ -355,7 +355,7 @@ class SpeechEncoderDecoder(Chain):
             h = self.forward_cnn(h)
         # end check for cnns
         h = F.rollaxis(h, 2)
-        _, _ = self.forward_rnn(h)
+        self.forward_rnn(h)
 
 
     def forward(self, X, y=None):
@@ -382,11 +382,13 @@ class SpeechEncoderDecoder(Chain):
         if chainer.config.train:
             # decode
             self.loss = self.decode_batch(y)
+            # self.enc_states = []
             # consistent return statement
             return [], self.loss
         else:
             # predict
-            return self.predict_batch(batch_size=batch_size, pred_limit=MAX_EN_LEN, y=y)
+            return(self.predict_batch(batch_size=batch_size, pred_limit=MAX_EN_LEN, y=y))
+            # consistent return statement
 
 # In[ ]:
 

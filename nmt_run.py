@@ -35,7 +35,7 @@ if OPTIMIZER_ADAM1_SGD_0:
     optimizer.setup(model)
 else:
     print("using SGD optimizer")
-    optimizer = optimizers.SGD(lr=0.01)
+    optimizer = optimizers.SGD(lr=LEARNING_RATE)
     optimizer.setup(model)
 
 if WEIGHT_DECAY:
@@ -64,7 +64,7 @@ def get_batch(m_dict, x_key, y_key,
         else:
             u_x_ids = [vocab_dict[x_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][x_key]]
             u_x_ids = xp.asarray(u_x_ids, dtype=xp.int32)
-            batch_data['X'].append(u_x_ids[:max_dec])
+            batch_data['X'].append(u_x_ids[:max_enc])
         #  add english labels
         if type(m_dict[u][y_key]) == list:
             en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]]
@@ -90,6 +90,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     random.shuffle(b_shuffled)
 
     pred_sents = []
+    utts = []
     total_loss = 0
     loss_per_epoch = 0
     total_loss_updates= 0
@@ -99,6 +100,24 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     with tqdm(total=total_utts) as pbar:
         for b in b_shuffled:
             bucket = b_dict['buckets'][b]
+            # compute max ids in bucket
+            max_ids_in_bucket = (b+1) * width_b
+            # compute batch size
+            if x_key == 'sp':
+                if max_ids_in_bucket <= 800:
+                    batch_size=60
+                elif max_ids_in_bucket > 800 and max_ids_in_bucket <= 1200:
+                    batch_size=32
+                else:
+                    batch_size=32
+            else:
+                if max_ids_in_bucket <= 100:
+                    batch_size=128
+                elif max_ids_in_bucket > 100 and max_ids_in_bucket <= 200:
+                    batch_size=64
+                else:
+                    batch_size=50
+            # print("batch size = {0:d}".format(batch_size))
             random.shuffle(bucket)
             b_len = len(bucket)
             for i in range(0,b_len, batch_size):
@@ -120,6 +139,8 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                     with chainer.using_config('train', False):
                         p, loss = model.forward(batch_data['X'])
                     loss_val = 0.0
+
+                utts.extend(utt_list)
 
                 if len(p) > 0:
                     pred_sents.extend(p.tolist())
@@ -146,7 +167,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                 pbar.update(len(utt_list))
             # end for batches
     # end tqdm
-    return pred_sents, loss_per_epoch
+    return pred_sents, utts, loss_per_epoch
 # end feed_model
 
 def check_model():
@@ -178,7 +199,7 @@ def train_loop(cat_speech_path, epochs, key, last_epoch, use_y):
             print("-"*80)
             print("EPOCH = {0:d}".format(last_epoch+i+1))
             # call train
-            pred_sents, train_loss = feed_model(map_dict['fisher_train'],
+            pred_sents, utts, train_loss = feed_model(map_dict['fisher_train'],
                               b_dict=bucket_dict['fisher_train'],
                               vocab_dict=vocab_dict,
                               batch_size=BATCH_SIZE,
@@ -192,7 +213,7 @@ def train_loop(cat_speech_path, epochs, key, last_epoch, use_y):
             os.fsync(train_log.fileno())
 
             # compute dev loss
-            pred_sents, dev_loss = feed_model(map_dict['fisher_dev'],
+            pred_sents, utts, dev_loss = feed_model(map_dict['fisher_dev'],
                               b_dict=bucket_dict['fisher_dev'],
                               vocab_dict=vocab_dict,
                               batch_size=BATCH_SIZE,
@@ -242,7 +263,7 @@ def my_main(out_path, epochs, key, use_y):
         # call compute perplexity
         print("-"*80)
         print("EPOCH = {0:d}".format(last_epoch+1))
-        pred_sents, loss = feed_model(map_dict[key],
+        pred_sents, utts, loss = feed_model(map_dict[key],
                           b_dict=bucket_dict[key],
                           vocab_dict=vocab_dict,
                           batch_size=BATCH_SIZE,
@@ -273,7 +294,9 @@ def display_words(m_dict, v_dict, preds, utts, dec_key):
     join_str = ' ' if dec_key.endswith('_w') else ''
 
     for p in preds:
-        en_pred.append(join_str.join([v_dict['i2w'][i].decode() for i in p if i != EOS_ID]))
+        t_str = join_str.join([v_dict['i2w'][i].decode() for i in p])
+        t_str = t_str[:t_str.find('_EOS')]
+        en_pred.append(t_str)
 
     for u, es, en, p in zip(utts, es_ref, en_ref, en_pred):
         # for reference, 1st word is GO_ID, no need to display
@@ -306,6 +329,9 @@ def test_func(out_path, batch_size, bucket_id, num_sent):
     sys.stderr.flush()
     total_utts = len(b_dict['buckets'][bucket_id])
 
+    # a = input("pehla")
+    # print("a")
+
     with tqdm(total=min(total_utts, num_sent)) as pbar:
         bucket = b_dict['buckets'][bucket_id]
         # random.shuffle(bucket)
@@ -321,11 +347,31 @@ def test_func(out_path, batch_size, bucket_id, num_sent):
                                    ((bucket_id+1) * width_b),
                                    (num_b * width_b),
                                    cat_speech_path=cat_speech_path)
+
+            # a = input("bhook")
+            # print("a")
+
             with chainer.using_config('train', True):
                 _, loss = model.forward(batch_data['X'], batch_data['y'])
             # store loss values for printing
             loss_val = float(loss.data)
 
+            total_loss += loss_val
+            total_loss_updates += 1
+
+            loss_per_epoch = (total_loss / total_loss_updates)
+
+            # a = input("doosra")
+            # print("a")
+
+            # set up for backprop
+            model.cleargrads()
+            loss.backward()
+            # update parameters
+            optimizer.update()
+
+            # a = input("maar diya")
+            # print("a")
 
             batch_data = get_batch(m_dict,
                                    enc_key, dec_key,
@@ -337,19 +383,14 @@ def test_func(out_path, batch_size, bucket_id, num_sent):
             with chainer.using_config('train', False):
                 p, _ = model.forward(batch_data['X'])
 
+            # a = input("tijja")
+            # print("a")
+
             if len(p) > 0:
                 pred_sents.extend(p.tolist())
 
-            total_loss += loss_val
-            total_loss_updates += 1
-
-            loss_per_epoch = (total_loss / total_loss_updates)
-
-            # set up for backprop
-            model.cleargrads()
-            loss.backward()
-            # update parameters
-            optimizer.update()
+            # a = input("oooooooo")
+            # print("a")
 
             out_str = "b={0:d},i={1:d}/{2:d},l={3:.2f},avg={4:.2f}".format((bucket_id+1),i,b_len,loss_val,loss_per_epoch)
 
