@@ -34,12 +34,12 @@ print("callhome es-en configuration")
 
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'sp'
+enc_key = 'es_w'
 dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 2
+gpuid = 0
 # ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = False
@@ -51,6 +51,9 @@ USE_DROPOUT=False
 DROPOUT_RATIO=0.2
 
 ADD_NOISE=True
+
+if enc_key != 'sp':
+    ADD_NOISE=False
 
 NOISE_STDEV=0.2
 
@@ -83,7 +86,7 @@ if enc_key == 'sp':
     cnn_filter_gap = 10
     cnn_filter_start = 9
     cnn_filter_end = 49
-    num_highway_layers = 4
+    num_highway_layers = 2
     max_pool_stride = 50
     max_pool_pad = 0
     BATCH_SIZE = 12
@@ -91,8 +94,8 @@ elif enc_key == 'es_c':
     cnn_num_channels = 100
     cnn_filter_gap = 2
     cnn_filter_start = 1
-    cnn_filter_end = 19
-    num_highway_layers = 4
+    cnn_filter_end = 11
+    num_highway_layers = 2
     max_pool_stride = 5
     max_pool_pad = 0
     BATCH_SIZE = 64
@@ -140,7 +143,7 @@ if ONLY_LSTM == False:
 
 else:
     cnn_k_widths = []
-    num_layers_enc = 2
+    num_layers_enc = 4
     num_layers_dec = 2
 
     if enc_key == 'sp':
@@ -156,9 +159,9 @@ else:
         width_b = 3
 
     if dec_key.endswith('_w'):
-        MAX_EN_LEN = 60
+        MAX_EN_LEN = 50
     else:
-        MAX_EN_LEN = 200
+        MAX_EN_LEN = 150
 
 
 prep_buckets.buckets_main(out_path, num_b, width_b, enc_key)

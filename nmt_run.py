@@ -52,6 +52,7 @@ def get_batch(m_dict, x_key, y_key,
     batch_data = {'X':[], 'y':[]}
     for u in utt_list:
         # for speech data
+        x_data_found = False
         if x_key == 'sp':
             utt_sp_path = os.path.join(cat_speech_path,
                                       "{0:s}.npy".format(u))
@@ -59,24 +60,33 @@ def get_batch(m_dict, x_key, y_key,
                 utt_sp_path = os.path.join(cat_speech_path,
                                            u.split('_',1)[0],
                                            "{0:s}.npy".format(u))
-            x_data = xp.load(utt_sp_path)
-            batch_data['X'].append(x_data[:max_enc])
+            if os.path.exists(utt_sp_path):
+                x_data_found = True
+                x_data = xp.load(utt_sp_path)
+                batch_data['X'].append(x_data[:max_enc])
+            else:
+                print("ERROR!! file not found: {0:s}".format(utt_sp_path))
         else:
             u_x_ids = [vocab_dict[x_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][x_key]]
             u_x_ids = xp.asarray(u_x_ids, dtype=xp.int32)
+            x_data_found = True
             batch_data['X'].append(u_x_ids[:max_enc])
         #  add english labels
-        if type(m_dict[u][y_key]) == list:
-            en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]]
-        else:
-            # dev and test data have multiple translations
-            # choose the first one for computing perplexity
-            en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]]
-        u_y_ids = [GO_ID] + en_ids[:MAX_EN_LEN-2] + [EOS_ID]
-        batch_data['y'].append(xp.asarray(u_y_ids, dtype=xp.int32))
+
+        if x_data_found:
+            if type(m_dict[u][y_key]) == list:
+                en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]]
+            else:
+                # dev and test data have multiple translations
+                # choose the first one for computing perplexity
+                en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]]
+            u_y_ids = [GO_ID] + en_ids[:MAX_EN_LEN-2] + [EOS_ID]
+            if x_data_found == True:
+                batch_data['y'].append(xp.asarray(u_y_ids, dtype=xp.int32))
     # end for all utterances in batch
-    batch_data['X'] = F.pad_sequence(batch_data['X'], padding=PAD_ID)
-    batch_data['y'] = F.pad_sequence(batch_data['y'], padding=PAD_ID)
+    if len(batch_data['X']) > 0 and len(batch_data['y']) > 0:
+        batch_data['X'] = F.pad_sequence(batch_data['X'], padding=PAD_ID)
+        batch_data['y'] = F.pad_sequence(batch_data['y'], padding=PAD_ID)
     return batch_data
 
 
@@ -112,11 +122,11 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                     batch_size=32
             else:
                 if max_ids_in_bucket <= 100:
-                    batch_size=128
-                elif max_ids_in_bucket > 100 and max_ids_in_bucket <= 200:
                     batch_size=64
-                else:
+                elif max_ids_in_bucket > 100 and max_ids_in_bucket <= 200:
                     batch_size=50
+                else:
+                    batch_size=32
             # print("batch size = {0:d}".format(batch_size))
             random.shuffle(bucket)
             b_len = len(bucket)
@@ -130,39 +140,42 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                                        ((b+1) * width_b),
                                        (num_b * width_b),
                                        cat_speech_path=cat_speech_path)
-                if use_y:
-                    with chainer.using_config('train', train):
-                        p, loss = model.forward(batch_data['X'], batch_data['y'])
-                    # store loss values for printing
-                    loss_val = float(loss.data)
+                if len(batch_data['X']) > 0 and len(batch_data['y']) > 0:
+                    if use_y:
+                        with chainer.using_config('train', train):
+                            p, loss = model.forward(batch_data['X'], batch_data['y'])
+                        # store loss values for printing
+                        loss_val = float(loss.data)
+                    else:
+                        with chainer.using_config('train', False):
+                            p, loss = model.forward(batch_data['X'])
+                        loss_val = 0.0
+
+                    utts.extend(utt_list)
+
+                    if len(p) > 0:
+                        pred_sents.extend(p.tolist())
+
+
+                    # loss_val = float(loss.data)
+
+                    total_loss += loss_val
+                    total_loss_updates += 1
+
+                    loss_per_epoch = (total_loss / total_loss_updates)
+
+                    if train:
+                        # set up for backprop
+                        model.cleargrads()
+                        loss.backward()
+                        # update parameters
+                        optimizer.update()
+
+                    out_str = "b={0:d},i={1:d}/{2:d},l={3:.2f},avg={4:.2f}".format((b+1),i,b_len,loss_val,loss_per_epoch)
+
+                    pbar.set_description('{0:s}'.format(out_str))
                 else:
-                    with chainer.using_config('train', False):
-                        p, loss = model.forward(batch_data['X'])
-                    loss_val = 0.0
-
-                utts.extend(utt_list)
-
-                if len(p) > 0:
-                    pred_sents.extend(p.tolist())
-
-                
-                # loss_val = float(loss.data)
-
-                total_loss += loss_val
-                total_loss_updates += 1
-
-                loss_per_epoch = (total_loss / total_loss_updates)
-
-                if train:
-                    # set up for backprop
-                    model.cleargrads()
-                    loss.backward()
-                    # update parameters
-                    optimizer.update()
-
-                out_str = "b={0:d},i={1:d}/{2:d},l={3:.2f},avg={4:.2f}".format((b+1),i,b_len,loss_val,loss_per_epoch)
-
-                pbar.set_description('{0:s}'.format(out_str))
+                    print("no data in batch")
 
                 pbar.update(len(utt_list))
             # end for batches
@@ -193,12 +206,13 @@ def check_model():
     return max_epoch
 # end check_model
 
-def train_loop(cat_speech_path, epochs, key, last_epoch, use_y):
+def train_loop(out_path, epochs, key, last_epoch, use_y):
     with open(log_train_fil_name, mode='a') as train_log, open(log_dev_fil_name, mode='a') as dev_log:
         for i in range(epochs):
             print("-"*80)
             print("EPOCH = {0:d}".format(last_epoch+i+1))
             # call train
+            cat_speech_path = os.path.join(out_path, 'fisher_train')
             pred_sents, utts, train_loss = feed_model(map_dict['fisher_train'],
                               b_dict=bucket_dict['fisher_train'],
                               vocab_dict=vocab_dict,
@@ -213,6 +227,7 @@ def train_loop(cat_speech_path, epochs, key, last_epoch, use_y):
             os.fsync(train_log.fileno())
 
             # compute dev loss
+            cat_speech_path = os.path.join(out_path, 'fisher_dev')
             pred_sents, utts, dev_loss = feed_model(map_dict['fisher_dev'],
                               b_dict=bucket_dict['fisher_dev'],
                               vocab_dict=vocab_dict,
@@ -258,7 +273,7 @@ def my_main(out_path, epochs, key, use_y):
     cat_speech_path = os.path.join(out_path, key)
 
     if train:
-        train_loop(cat_speech_path, epochs, key, last_epoch, use_y=use_y)
+        train_loop(out_path, epochs, key, last_epoch, use_y=use_y)
     else:
         # call compute perplexity
         print("-"*80)
@@ -380,8 +395,9 @@ def test_func(out_path, batch_size, bucket_id, num_sent):
                                    ((bucket_id+1) * width_b),
                                    (num_b * width_b),
                                    cat_speech_path=cat_speech_path)
-            with chainer.using_config('train', False):
-                p, _ = model.forward(batch_data['X'])
+            if len(batch_data['X']) > 0 and len(batch_data['y']) > 0:
+                with chainer.using_config('train', False):
+                    p, _ = model.forward(batch_data['X'])
 
             # a = input("tijja")
             # print("a")
