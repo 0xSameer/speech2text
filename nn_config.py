@@ -34,12 +34,12 @@ print("callhome es-en configuration")
 
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'es_w'
+enc_key = 'es_c'
 dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 0
+gpuid = 3
 # ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = False
@@ -94,7 +94,7 @@ elif enc_key == 'es_c':
     cnn_num_channels = 100
     cnn_filter_gap = 2
     cnn_filter_start = 1
-    cnn_filter_end = 11
+    cnn_filter_end = 19
     num_highway_layers = 2
     max_pool_stride = 5
     max_pool_pad = 0
