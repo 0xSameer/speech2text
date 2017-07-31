@@ -39,7 +39,7 @@ dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 2
+gpuid = 3
 # ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = False
@@ -58,7 +58,7 @@ ADD_NOISE=True
 if enc_key != 'sp':
     ADD_NOISE=False
 
-NOISE_STDEV=0.1
+NOISE_STDEV=0.2
 
 WEIGHT_DECAY=True
 
@@ -76,7 +76,7 @@ ITERS_TO_SAVE = 10
 SHUFFLE_BATCHES = True
 
 use_attn = SOFT_ATTN
-hidden_units = 256
+hidden_units = 512
 embedding_units = 512
 # FBANK speech dimensions
 SPEECH_DIM = 69

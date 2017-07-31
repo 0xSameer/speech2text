@@ -99,7 +99,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
     if mini:
-        b_shuffled = list(range(11))
+        b_shuffled = list(range(min(51, num_b)))
     else:
         b_shuffled = [i for i in range(num_b)]
     # shuffle buckets
@@ -110,8 +110,6 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     total_loss = 0
     loss_per_epoch = 0
     total_loss_updates= 0
-
-    mini_buckets = random.shuffle(list(range(min(num_b, 51))))
 
     sys.stderr.flush()
     total_utts = len(m_dict)
