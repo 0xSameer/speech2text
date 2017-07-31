@@ -107,12 +107,21 @@ class SpeechEncoderDecoder(Chain):
 
             self.cnn_out_dim = cnn_out_dim
 
+            if USE_BN:
+                # add batch normalization layer on the output of the conv layer
+                self.add_link('cnn_bn', L.BatchNormalization(self.cnn_out_dim))
+
             # add highway layers
             self.highway = ["highway_{0:d}".format(i)
                              for i in range(num_highway_layers)]
 
-            for hname in self.highway:
+            self.highway_bn = ["highway_bn_{0:d}".format(i)
+                               for i in range(num_highway_layers)]
+
+            for hname, hbn_name in zip(self.highway, self.highway_bn):
                 self.add_link(hname, L.Highway(self.cnn_out_dim))
+                if USE_BN:
+                    self.add_link(hbn_name, L.BatchNormalization(self.cnn_out_dim))
         else:
             self.cnn_out_dim = CNN_IN_DIM
 
@@ -311,6 +320,10 @@ class SpeechEncoderDecoder(Chain):
                              stride=max_pool_stride,
                              pad=max_pool_pad)
 
+        # batch normalization
+        if USE_BN:
+            h = self.cnn_bn(h, finetune=FINE_TUNE)
+
         # out dimension:
         # batch size * cnn out dim * num time frames after pooling
         return h
@@ -320,8 +333,12 @@ class SpeechEncoderDecoder(Chain):
         for i in range(len(self.highway)):
             if USE_DROPOUT:
                 h = F.dropout(self[self.highway[i]](X), ratio=DROPOUT_RATIO)
+                if USE_BN:
+                    h = self[self.highway_bn[i]](h, finetune=FINE_TUNE)
             else:
                 h = self[self.highway[i]](X)
+                if USE_BN:
+                    h = self[self.highway_bn[i]](h, finetune=FINE_TUNE)
         return h
 
     def forward_rnn(self, X):

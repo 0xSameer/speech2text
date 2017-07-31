@@ -34,12 +34,12 @@ print("callhome es-en configuration")
 
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'es_c'
+enc_key = 'sp'
 dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 3
+gpuid = 2
 # ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = False
@@ -50,12 +50,15 @@ USE_DROPOUT=False
 
 DROPOUT_RATIO=0.2
 
+USE_BN = False
+FINE_TUNE = True
+
 ADD_NOISE=True
 
 if enc_key != 'sp':
     ADD_NOISE=False
 
-NOISE_STDEV=0.2
+NOISE_STDEV=0.1
 
 WEIGHT_DECAY=True
 
@@ -64,7 +67,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.05
+LEARNING_RATE = 0.1
 
 ONLY_LSTM = False
 
@@ -73,7 +76,7 @@ ITERS_TO_SAVE = 10
 SHUFFLE_BATCHES = True
 
 use_attn = SOFT_ATTN
-hidden_units = 512
+hidden_units = 256
 embedding_units = 512
 # FBANK speech dimensions
 SPEECH_DIM = 69
@@ -82,19 +85,19 @@ SPEECH_DIM = 69
 # for now keeping kernel widths as odd
 # this keeps the output size the same as the input
 if enc_key == 'sp':
-    cnn_num_channels = 200
+    cnn_num_channels = 512
     cnn_filter_gap = 10
-    cnn_filter_start = 9
-    cnn_filter_end = 49
+    cnn_filter_start = 11
+    cnn_filter_end = 11
     num_highway_layers = 2
     max_pool_stride = 50
     max_pool_pad = 0
     BATCH_SIZE = 12
 elif enc_key == 'es_c':
-    cnn_num_channels = 100
+    cnn_num_channels = 50
     cnn_filter_gap = 2
     cnn_filter_start = 1
-    cnn_filter_end = 19
+    cnn_filter_end = 9
     num_highway_layers = 2
     max_pool_stride = 5
     max_pool_pad = 0
@@ -164,6 +167,13 @@ else:
         MAX_EN_LEN = 150
 
 
+# map_dict['fisher_mini_train'] = {}
+# num_mini_trn = 10000
+# print("creating mini train set of ")
+# mini_trn_list = random.sample(list(map_dict['fisher_train'].keys()), num_mini_trn)
+# for u in mini_trn_list:
+#     map_dict['fisher_mini_train'][u] = map_dict['fisher_train'][u]
+
 prep_buckets.buckets_main(out_path, num_b, width_b, enc_key)
 
 
@@ -210,6 +220,8 @@ CNN_PREFIX = "_cnn-num{0:d}-range{1:d}-{2:d}-{3:d}-pool{4:d}".format(
                                                     max_pool_stride*10)
 
 EXP_NAME_PREFIX += "_LSTM" if ONLY_LSTM else CNN_PREFIX
+
+EXP_NAME_PREFIX += "_BN" if USE_BN else ''
 
 if not os.path.exists(out_path):
     print("Input folder not found".format(out_path))

@@ -6,6 +6,8 @@ from enc_dec import *
 from prettytable import PrettyTable
 import argparse
 import textwrap
+import nltk
+from nltk.translate.bleu_score import sentence_bleu, corpus_bleu
 
 program_descrp = """
 run nmt experiments
@@ -91,11 +93,15 @@ def get_batch(m_dict, x_key, y_key,
 
 
 def feed_model(m_dict, b_dict, batch_size, vocab_dict,
-               x_key, y_key, train, cat_speech_path, use_y=True):
+               x_key, y_key, train, cat_speech_path, use_y=True, 
+               mini=False):
     # number of buckets
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
-    b_shuffled = [i for i in range(num_b)]
+    if mini:
+        b_shuffled = list(range(11))
+    else:
+        b_shuffled = [i for i in range(num_b)]
     # shuffle buckets
     random.shuffle(b_shuffled)
 
@@ -104,6 +110,8 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     total_loss = 0
     loss_per_epoch = 0
     total_loss_updates= 0
+
+    mini_buckets = random.shuffle(list(range(min(num_b, 51))))
 
     sys.stderr.flush()
     total_utts = len(m_dict)
@@ -206,7 +214,7 @@ def check_model():
     return max_epoch
 # end check_model
 
-def train_loop(out_path, epochs, key, last_epoch, use_y):
+def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
     with open(log_train_fil_name, mode='a') as train_log, open(log_dev_fil_name, mode='a') as dev_log:
         for i in range(epochs):
             print("-"*80)
@@ -220,7 +228,9 @@ def train_loop(out_path, epochs, key, last_epoch, use_y):
                               x_key=enc_key,
                               y_key=dec_key,
                               train=True,
-                              cat_speech_path=cat_speech_path, use_y=use_y)
+                              cat_speech_path=cat_speech_path, 
+                              use_y=use_y,
+                              mini=mini)
             # log train loss
             train_log.write("{0:d}, {1:.4f}\n".format(last_epoch+i+1, train_loss))
             train_log.flush()
@@ -235,14 +245,21 @@ def train_loop(out_path, epochs, key, last_epoch, use_y):
                               x_key=enc_key,
                               y_key=dec_key,
                               train=False,
-                              cat_speech_path=cat_speech_path, use_y=use_y)
+                              cat_speech_path=cat_speech_path, 
+                              use_y=use_y,
+                              mini=False)
+
+            dev_b_score, _, _ = calc_bleu(map_dict['fisher_dev'], 
+                                          vocab_dict[dec_key],
+                                          pred_sents, utts, 
+                                          dec_key)
 
             # log dev loss
-            dev_log.write("{0:d}, {1:.4f}\n".format(last_epoch+i+1, dev_loss))
+            dev_log.write("{0:d}, {1:.4f}, {2:.4f}\n".format(last_epoch+i+1, dev_loss, dev_b_score))
             dev_log.flush()
             os.fsync(dev_log.fileno())
 
-            print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}".format("*" * 10, train_loss, dev_loss))
+            print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}, dev bleu={3:.4f}".format("*" * 10, train_loss, dev_loss, dev_b_score))
             print("-")
             print("-"*80)
 
@@ -258,7 +275,7 @@ def train_loop(out_path, epochs, key, last_epoch, use_y):
 # end train loop
 
 
-def my_main(out_path, epochs, key, use_y):
+def my_main(out_path, epochs, key, use_y, mini):
     train = True if 'train' in key else False
 
     # check for existing model
@@ -273,7 +290,7 @@ def my_main(out_path, epochs, key, use_y):
     cat_speech_path = os.path.join(out_path, key)
 
     if train:
-        train_loop(out_path, epochs, key, last_epoch, use_y=use_y)
+        train_loop(out_path, epochs, key, last_epoch, use_y=use_y, mini=mini)
     else:
         # call compute perplexity
         print("-"*80)
@@ -285,25 +302,30 @@ def my_main(out_path, epochs, key, use_y):
                           x_key=enc_key,
                           y_key=dec_key,
                           train=False,
-                          cat_speech_path=cat_speech_path, use_y=use_y)
+                          cat_speech_path=cat_speech_path, 
+                          use_y=use_y,
+                          mini=False)
 
         print("{0:s} {1:s} mean loss={2:.4f}".format("*" * 10,
                                             "train" if train else "dev",
                                             loss))
         print("-")
         print("-"*80)
+        # print(model.cnn_bn.avg_mean)
+        # print(model.cnn_bn.avg_var)
 
     print("all done ...")
 # end my_main
-
-
 
 def display_words(m_dict, v_dict, preds, utts, dec_key):
     es_ref = []
     en_ref = []
     for u in utts:
         es_ref.append(" ".join([w.decode() for w in m_dict[u]['es_w']]))
-        en_ref.append(" ".join([w.decode() for w in m_dict[u]['en_w']]))
+        if type(m_dict[u][dec_key]) == list: 
+            en_ref.append(" ".join([w.decode() for w in m_dict[u]['en_w']]))
+        else:
+            en_ref.append(" ".join([w.decode() for w in m_dict[u]['en_w'][0]]))
 
     en_pred = []
     join_str = ' ' if dec_key.endswith('_w') else ''
@@ -324,6 +346,29 @@ def display_words(m_dict, v_dict, preds, utts, dec_key):
         display_pp.add_row(["en pred", textwrap.fill(p,50)])
 
         print(display_pp)
+
+def calc_bleu(m_dict, v_dict, preds, utts, dec_key):
+    en_hyp = []
+    en_ref = []
+    for u in utts:
+        if type(m_dict[u][dec_key]) == list: 
+            en_ref.append([w.decode() for w in m_dict[u]['en_w']])
+        else:
+            en_r_list = []
+            for r in m_dict[u]['en_w']:
+                en_r_list.append([w.decode() for w in r])
+            en_ref.append(en_r_list)
+
+    join_str = ' ' if dec_key.endswith('_w') else ''
+
+    for p in preds:
+        t_str = join_str.join([v_dict['i2w'][i].decode() for i in p])
+        t_str = t_str[:t_str.find('_EOS')]
+        en_hyp.append(t_str.split())
+
+    b_score = corpus_bleu(en_ref, en_hyp)
+
+    return b_score, en_hyp, en_ref
 
 def test_func(out_path, batch_size, bucket_id, num_sent):
     m_dict = map_dict["fisher_train"]
@@ -417,7 +462,7 @@ def test_func(out_path, batch_size, bucket_id, num_sent):
     # end tqdm
 
     return pred_sents, utts, loss_per_epoch
-# end feed_model
+# end test_func
 
 def main():
     parser = argparse.ArgumentParser(description=program_descrp)
@@ -433,15 +478,19 @@ def main():
     parser.add_argument('-y','--use_y', help='use y or just make predictions',
                         required=True)
 
+    parser.add_argument('-m','--mini', help='use subset of training data',
+                        required=True)
+
     args = vars(parser.parse_args())
     out_path = args['out_path']
     epochs = int(args['epochs'])
     key = args['key']
     use_y = False if int(args['use_y']) == 0 else True
+    mini = False if int(args['mini']) == 0 else True
 
     print("number of epochs={0:d}".format(epochs))
 
-    my_main(out_path, epochs, key, use_y)
+    my_main(out_path, epochs, key, use_y, mini)
 # end main
 
 if __name__ == "__main__":
