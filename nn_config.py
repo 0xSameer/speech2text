@@ -39,7 +39,7 @@ dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 3
+gpuid = 1
 # ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = False
@@ -48,12 +48,12 @@ lstm1_or_gru0 = False
 
 USE_DROPOUT=False
 
-DROPOUT_RATIO=0.2
+DROPOUT_RATIO=0.3
 
-USE_BN = False
-FINE_TUNE = True
+USE_BN = True
+FINE_TUNE = False
 
-ADD_NOISE=True
+ADD_NOISE=False
 
 if enc_key != 'sp':
     ADD_NOISE=False
@@ -67,7 +67,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.1
+LEARNING_RATE = 0.05
 
 ONLY_LSTM = False
 
@@ -76,7 +76,7 @@ ITERS_TO_SAVE = 10
 SHUFFLE_BATCHES = True
 
 use_attn = SOFT_ATTN
-hidden_units = 512
+hidden_units = 256
 embedding_units = 512
 # FBANK speech dimensions
 SPEECH_DIM = 69
@@ -85,19 +85,19 @@ SPEECH_DIM = 69
 # for now keeping kernel widths as odd
 # this keeps the output size the same as the input
 if enc_key == 'sp':
-    cnn_num_channels = 512
+    cnn_num_channels = 100
     cnn_filter_gap = 10
-    cnn_filter_start = 11
-    cnn_filter_end = 11
-    num_highway_layers = 2
-    max_pool_stride = 50
+    cnn_filter_start = 9
+    cnn_filter_end = 9
+    num_highway_layers = 4
+    max_pool_stride = 30
     max_pool_pad = 0
     BATCH_SIZE = 12
 elif enc_key == 'es_c':
-    cnn_num_channels = 50
+    cnn_num_channels = 100
     cnn_filter_gap = 2
     cnn_filter_start = 1
-    cnn_filter_end = 9
+    cnn_filter_end = 11
     num_highway_layers = 2
     max_pool_stride = 5
     max_pool_pad = 0

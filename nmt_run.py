@@ -99,7 +99,10 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
     if mini:
-        b_shuffled = list(range(min(51, num_b)))
+        # leave out the last bucket as it includes pruned utterances
+        # b_shuffled = random.sample(list(range(num_b-1)),num_b // 10)
+        # b_shuffled = list(range(num_b-1))
+        b_shuffled = list(range(0,10,2)) + list(range(10,50,10))
     else:
         b_shuffled = [i for i in range(num_b)]
     # shuffle buckets
@@ -123,8 +126,10 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                 if max_ids_in_bucket <= 800:
                     batch_size=60
                 elif max_ids_in_bucket > 800 and max_ids_in_bucket <= 1200:
-                    batch_size=32
+                    # batch_size=32
+                    batch_size=50
                 else:
+                    # batch_size=32
                     batch_size=32
             else:
                 if max_ids_in_bucket <= 100:
@@ -151,7 +156,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                         with chainer.using_config('train', train):
                             p, loss = model.forward(batch_data['X'], batch_data['y'])
                         # store loss values for printing
-                        loss_val = float(loss.data)
+                        loss_val = float(loss.data) / batch_data['y'].shape[1]
                     else:
                         with chainer.using_config('train', False):
                             p, loss = model.forward(batch_data['X'])
@@ -161,7 +166,6 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
 
                     if len(p) > 0:
                         pred_sents.extend(p.tolist())
-
 
                     # loss_val = float(loss.data)
 

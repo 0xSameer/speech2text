@@ -120,8 +120,8 @@ class SpeechEncoderDecoder(Chain):
 
             for hname, hbn_name in zip(self.highway, self.highway_bn):
                 self.add_link(hname, L.Highway(self.cnn_out_dim))
-                if USE_BN:
-                    self.add_link(hbn_name, L.BatchNormalization(self.cnn_out_dim))
+                # if USE_BN:
+                #     self.add_link(hbn_name, L.BatchNormalization(self.cnn_out_dim))
         else:
             self.cnn_out_dim = CNN_IN_DIM
 
@@ -222,7 +222,8 @@ class SpeechEncoderDecoder(Chain):
             h = self.feed_rnn(h, rnn_layers)
         else:
             h = self.feed_rnn(data_in, rnn_layers)
-        return h
+        return F.relu(h)
+        # return h
 
     def decode(self, word):
         embed_id = self.embed_dec(word)
@@ -333,12 +334,12 @@ class SpeechEncoderDecoder(Chain):
         for i in range(len(self.highway)):
             if USE_DROPOUT:
                 h = F.dropout(self[self.highway[i]](X), ratio=DROPOUT_RATIO)
-                if USE_BN:
-                    h = self[self.highway_bn[i]](h, finetune=FINE_TUNE)
+                # if USE_BN:
+                #     h = self[self.highway_bn[i]](h, finetune=FINE_TUNE)
             else:
                 h = self[self.highway[i]](X)
-                if USE_BN:
-                    h = self[self.highway_bn[i]](h, finetune=FINE_TUNE)
+                # if USE_BN:
+                #     h = self[self.highway_bn[i]](h, finetune=FINE_TUNE)
         return h
 
     def forward_rnn(self, X):
