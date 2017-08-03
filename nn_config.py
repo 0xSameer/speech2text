@@ -25,7 +25,7 @@ print("translating es to en")
 
 out_path = "./out/"
 
-# model_dir = "fisher_sp"
+# model_dir = "fsh_dcnn_maxpool-2"
 model_dir = "fsh_lr_reg"
 
 EXP_NAME_PREFIX = ""
@@ -39,18 +39,16 @@ dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 1
+gpuid = 0
 # ------------------------------------------
 
-OPTIMIZER_ADAM1_SGD_0 = False
+OPTIMIZER_ADAM1_SGD_0 = True
 
 lstm1_or_gru0 = False
 
-USE_DROPOUT=False
+SINGLE_LAYER_CNN = False
 
-DROPOUT_RATIO=0.3
-
-USE_BN = True
+USE_BN = False
 FINE_TUNE = False
 
 ADD_NOISE=False
@@ -60,20 +58,24 @@ if enc_key != 'sp':
 
 NOISE_STDEV=0.2
 
-WEIGHT_DECAY=True
+WEIGHT_DECAY=False
 
 if WEIGHT_DECAY:
-    WD_RATIO=0.001
+    WD_RATIO=0.0001
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.05
+LEARNING_RATE = 0.001
 
 ONLY_LSTM = False
 
 ITERS_TO_SAVE = 10
 
 SHUFFLE_BATCHES = True
+
+USE_DROPOUT=False
+
+DROPOUT_RATIO=0.3
 
 use_attn = SOFT_ATTN
 hidden_units = 256
@@ -87,10 +89,10 @@ SPEECH_DIM = 69
 if enc_key == 'sp':
     cnn_num_channels = 100
     cnn_filter_gap = 10
-    cnn_filter_start = 9
-    cnn_filter_end = 9
-    num_highway_layers = 4
-    max_pool_stride = 30
+    cnn_filter_start = 11
+    cnn_filter_end = 51
+    num_highway_layers = 2
+    max_pool_stride = 8
     max_pool_pad = 0
     BATCH_SIZE = 12
 elif enc_key == 'es_c':
@@ -122,16 +124,16 @@ if ONLY_LSTM == False:
         num_layers_enc = 1
         num_layers_dec = 2
         CNN_IN_DIM = SPEECH_DIM
-        num_b = 64
-        width_b = 16
+        num_b = 10
+        width_b = 128
         # num_layers_enc = 2
 
     elif enc_key == 'es_c':
         num_layers_enc = 1
         num_layers_dec = 2
         CNN_IN_DIM = embedding_units
-        num_b = 50
-        width_b = 6
+        num_b = 10
+        width_b = 30
     else:
         num_layers_enc = 1
         num_layers_dec = 2
@@ -176,13 +178,36 @@ else:
 
 prep_buckets.buckets_main(out_path, num_b, width_b, enc_key)
 
-
-cnn_filters = [{"ndim": 1,
-                "in_channels": CNN_IN_DIM,
-                "out_channels": cnn_num_channels,
-                "ksize": k,
-                "stride": 1,
-                "pad": k //2} for k in cnn_k_widths]
+if SINGLE_LAYER_CNN == True:
+    cnn_filters = [{"ndim": 1,
+                    "in_channels": CNN_IN_DIM,
+                    "out_channels": cnn_num_channels,
+                    "ksize": k,
+                    "stride": 1,
+                    "pad": k //2} for k in cnn_k_widths]
+else:
+    # static CNN configuration
+    cnn_filters = [
+        {"ndim": 1,
+        "in_channels": CNN_IN_DIM,
+        "out_channels": 96,
+        "ksize": 9,
+        "stride": 1,
+        "pad": 9 // 2},
+        {"ndim": 1,
+        "in_channels": 96,
+        "out_channels": 256,
+        "ksize": 5,
+        "stride": 1,
+        "pad": 5 // 2},
+        {"ndim": 1,
+        "in_channels": 256,
+        "out_channels": 384,
+        "ksize": 3,
+        "stride": 1,
+        "pad": 3 // 2},
+    ]
+    cnn_max_pool = [2,2,2]
 
 print("cnn details:")
 for d in cnn_filters:
@@ -208,16 +233,21 @@ else:
     EXP_NAME_PREFIX += "_noise-0"
 
 if WEIGHT_DECAY:
-    EXP_NAME_PREFIX += "_l2-{0:.3f}".format(WD_RATIO)
+    EXP_NAME_PREFIX += "_l2-{0:.4f}".format(WD_RATIO)
 else:
     EXP_NAME_PREFIX += "_l2-0"
 
-CNN_PREFIX = "_cnn-num{0:d}-range{1:d}-{2:d}-{3:d}-pool{4:d}".format(
+
+if SINGLE_LAYER_CNN:
+    CNN_PREFIX = "_cnn-num{0:d}-range{1:d}-{2:d}-{3:d}-pool{4:d}".format(
                                                     cnn_num_channels,
                                                     cnn_filter_start,
                                                     cnn_filter_end,
                                                     cnn_filter_gap,
                                                     max_pool_stride*10)
+
+else:
+    CNN_PREFIX = "_{0:s}_DCNN".format("_".join(map(str,cnn_max_pool)))
 
 EXP_NAME_PREFIX += "_LSTM" if ONLY_LSTM else CNN_PREFIX
 

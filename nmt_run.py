@@ -93,18 +93,20 @@ def get_batch(m_dict, x_key, y_key,
 
 
 def feed_model(m_dict, b_dict, batch_size, vocab_dict,
-               x_key, y_key, train, cat_speech_path, use_y=True, 
+               x_key, y_key, train, cat_speech_path, use_y=True,
                mini=False):
     # number of buckets
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
     if mini:
         # leave out the last bucket as it includes pruned utterances
-        # b_shuffled = random.sample(list(range(num_b-1)),num_b // 10)
+        # b_shuffled = random.sample(list(range(num_b-1)), 1)
+        # b_shuffled = [num_b-2]
         # b_shuffled = list(range(num_b-1))
-        b_shuffled = list(range(0,10,2)) + list(range(10,50,10))
+        # b_shuffled = list(range(0,10,2)) + list(range(10,50,10))
+        b_shuffled = [2]
     else:
-        b_shuffled = [i for i in range(num_b)]
+        b_shuffled = [i for i in range(num_b-2)]
     # shuffle buckets
     random.shuffle(b_shuffled)
 
@@ -115,7 +117,11 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     total_loss_updates= 0
 
     sys.stderr.flush()
-    total_utts = len(m_dict)
+    # total_utts = len(m_dict)
+    total_utts = 0
+    for b in b_shuffled:
+        total_utts += len(b_dict['buckets'][b])
+
     with tqdm(total=total_utts) as pbar:
         for b in b_shuffled:
             bucket = b_dict['buckets'][b]
@@ -124,10 +130,10 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
             # compute batch size
             if x_key == 'sp':
                 if max_ids_in_bucket <= 800:
-                    batch_size=60
+                    batch_size=64
                 elif max_ids_in_bucket > 800 and max_ids_in_bucket <= 1200:
                     # batch_size=32
-                    batch_size=50
+                    batch_size=32
                 else:
                     # batch_size=32
                     batch_size=32
@@ -135,9 +141,9 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                 if max_ids_in_bucket <= 100:
                     batch_size=64
                 elif max_ids_in_bucket > 100 and max_ids_in_bucket <= 200:
-                    batch_size=50
-                else:
                     batch_size=32
+                else:
+                    batch_size=24
             # print("batch size = {0:d}".format(batch_size))
             random.shuffle(bucket)
             b_len = len(bucket)
@@ -230,7 +236,7 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
                               x_key=enc_key,
                               y_key=dec_key,
                               train=True,
-                              cat_speech_path=cat_speech_path, 
+                              cat_speech_path=cat_speech_path,
                               use_y=use_y,
                               mini=mini)
             # log train loss
@@ -247,13 +253,13 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
                               x_key=enc_key,
                               y_key=dec_key,
                               train=False,
-                              cat_speech_path=cat_speech_path, 
+                              cat_speech_path=cat_speech_path,
                               use_y=use_y,
                               mini=False)
 
-            dev_b_score, _, _ = calc_bleu(map_dict['fisher_dev'], 
+            dev_b_score, _, _ = calc_bleu(map_dict['fisher_dev'],
                                           vocab_dict[dec_key],
-                                          pred_sents, utts, 
+                                          pred_sents, utts,
                                           dec_key)
 
             # log dev loss
@@ -304,7 +310,7 @@ def my_main(out_path, epochs, key, use_y, mini):
                           x_key=enc_key,
                           y_key=dec_key,
                           train=False,
-                          cat_speech_path=cat_speech_path, 
+                          cat_speech_path=cat_speech_path,
                           use_y=use_y,
                           mini=False)
 
@@ -324,7 +330,7 @@ def display_words(m_dict, v_dict, preds, utts, dec_key):
     en_ref = []
     for u in utts:
         es_ref.append(" ".join([w.decode() for w in m_dict[u]['es_w']]))
-        if type(m_dict[u][dec_key]) == list: 
+        if type(m_dict[u][dec_key]) == list:
             en_ref.append(" ".join([w.decode() for w in m_dict[u]['en_w']]))
         else:
             en_ref.append(" ".join([w.decode() for w in m_dict[u]['en_w'][0]]))
@@ -352,12 +358,13 @@ def display_words(m_dict, v_dict, preds, utts, dec_key):
 def calc_bleu(m_dict, v_dict, preds, utts, dec_key):
     en_hyp = []
     en_ref = []
+    ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
     for u in utts:
-        if type(m_dict[u][dec_key]) == list: 
-            en_ref.append([w.decode() for w in m_dict[u]['en_w']])
+        if type(m_dict[u][ref_key]) == list:
+            en_ref.append([w.decode() for w in m_dict[u][ref_key]])
         else:
             en_r_list = []
-            for r in m_dict[u]['en_w']:
+            for r in m_dict[u][ref_key]:
                 en_r_list.append([w.decode() for w in r])
             en_ref.append(en_r_list)
 
