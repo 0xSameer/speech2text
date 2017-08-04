@@ -54,13 +54,13 @@ class SpeechEncoderDecoder(Chain):
     def add_rnn_layers(self, layer_names, in_units, out_units, scale):
         # add first layer
         self.add_link(layer_names[0], self.RNN(in_units, out_units))
-        if USE_BN:
-            self.add_link("{0:s}_bn".format(layer_names[0]), L.BatchNormalization(out_units))
+        if USE_LN:
+            self.add_link("{0:s}_ln".format(layer_names[0]), L.LayerNormalization(out_units))
         # add remaining layers
         for rnn_name in layer_names[1:]:
             self.add_link(rnn_name, self.RNN(out_units*scale, out_units))
-            if USE_BN:
-                self.add_link("{0:s}_bn".format(rnn_name), L.BatchNormalization(out_units))
+            if USE_LN:
+                self.add_link("{0:s}_ln".format(rnn_name), L.LayerNormalization(out_units))
 
 
     def add_cnn_layers(self, layer_name, in_channels, out_channels,
@@ -79,8 +79,6 @@ class SpeechEncoderDecoder(Chain):
         # add encoder layers
         #--------------------------------------------------------------------
         self.rnn_enc = ["L{0:d}_enc".format(i) for i in range(num_layers_enc)]
-        if USE_BN:
-            self.rnn_enc_bn = ["L{0:d}_enc_bn_".format(i) for i in range(num_layers_enc)]
         self.add_rnn_layers(self.rnn_enc,
                             in_dim,
                             self.n_units,
@@ -136,6 +134,8 @@ class SpeechEncoderDecoder(Chain):
                 cnn_out_dim += l["out_channels"]
                 self.cnns.append(lname)
                 self.add_link(lname, L.ConvolutionND(**l))
+                if USE_BN:
+                    self.add_link('{0:s}_bn'.format(lname), L.BatchNormalization(l["out_channels"]))
 
             self.cnn_out_dim = cnn_filters[-1]["out_channels"]
 
@@ -238,9 +238,9 @@ class SpeechEncoderDecoder(Chain):
         else:
             hs = self[rnn_layers[0]](rnn_in)
         
-        if USE_BN:
-            bn_name = "{0:s}_bn".format(rnn_layers[0])
-            hs = self[bn_name](hs, finetune=FINE_TUNE)
+        if USE_LN:
+            bn_name = "{0:s}_ln".format(rnn_layers[0])
+            hs = self[bn_name](hs)
         
         # feed into remaining rnn layers
         for rnn_layer in rnn_layers[1:]:
@@ -249,9 +249,9 @@ class SpeechEncoderDecoder(Chain):
             else:
                 hs = self[rnn_layer](hs)
 
-            if USE_BN:
-                bn_name = "{0:s}_bn".format(rnn_layer)
-                hs = self[bn_name](hs, finetune=FINE_TUNE)
+            if USE_LN:
+                bn_name = "{0:s}_ln".format(rnn_layer)
+                hs = self[bn_name](hs)
         return hs
 
     def encode(self, data_in, rnn_layers):
@@ -386,15 +386,9 @@ class SpeechEncoderDecoder(Chain):
             h = F.max_pooling_nd(h, ksize=cnn_max_pool[i],
                                  stride=cnn_max_pool[i],
                                  pad=max_pool_pad)
-
-        # # max pooling
-        # h = F.max_pooling_nd(h, ksize=max_pool_stride,
-        #                      stride=max_pool_stride,
-        #                      pad=max_pool_pad)
-
-        # batch normalization
-        if USE_BN:
-            h = self.cnn_bn(h, finetune=FINE_TUNE)
+            if USE_BN:
+                bn_lname = '{0:s}_bn'.format(cnn_layer)
+                h = self[bn_lname](h)
 
         # out dimension:
         # batch size * cnn out dim * num time frames after pooling

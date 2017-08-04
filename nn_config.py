@@ -39,7 +39,7 @@ dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 0
+gpuid = 2
 # ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = True
@@ -48,8 +48,11 @@ lstm1_or_gru0 = False
 
 SINGLE_LAYER_CNN = False
 
+USE_LN = False
+
 USE_BN = False
 FINE_TUNE = False
+
 
 ADD_NOISE=False
 
@@ -65,7 +68,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.01 / 2
 
 ONLY_LSTM = False
 
@@ -73,7 +76,7 @@ ITERS_TO_SAVE = 10
 
 SHUFFLE_BATCHES = True
 
-USE_DROPOUT=False
+USE_DROPOUT=True
 
 DROPOUT_RATIO=0.3
 
@@ -252,6 +255,8 @@ else:
 EXP_NAME_PREFIX += "_LSTM" if ONLY_LSTM else CNN_PREFIX
 
 EXP_NAME_PREFIX += "_BN" if USE_BN else ''
+
+EXP_NAME_PREFIX += "_LN" if USE_LN else ''
 
 if not os.path.exists(out_path):
     print("Input folder not found".format(out_path))

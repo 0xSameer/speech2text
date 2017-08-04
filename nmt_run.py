@@ -104,9 +104,10 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
         # b_shuffled = [num_b-2]
         # b_shuffled = list(range(num_b-1))
         # b_shuffled = list(range(0,10,2)) + list(range(10,50,10))
-        b_shuffled = [2]
+        b_shuffled = [3,4,5,6,7]
+        # b_shuffled = list(range(num_b-2))
     else:
-        b_shuffled = [i for i in range(num_b-2)]
+        b_shuffled = list(range(num_b-1))
     # shuffle buckets
     random.shuffle(b_shuffled)
 
@@ -133,10 +134,10 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                     batch_size=64
                 elif max_ids_in_bucket > 800 and max_ids_in_bucket <= 1200:
                     # batch_size=32
-                    batch_size=32
+                    batch_size=64
                 else:
                     # batch_size=32
-                    batch_size=32
+                    batch_size=64
             else:
                 if max_ids_in_bucket <= 100:
                     batch_size=64
