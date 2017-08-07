@@ -68,7 +68,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.01 / 4
+LEARNING_RATE = 0.01 / 6
 
 ONLY_LSTM = False
 
