@@ -39,7 +39,7 @@ dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 2
+gpuid = 0
 # ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = True
@@ -49,8 +49,8 @@ lstm1_or_gru0 = False
 SINGLE_LAYER_CNN = False
 
 USE_LN = False
-
 USE_BN = False
+
 FINE_TUNE = False
 
 
@@ -68,11 +68,11 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.01 / 2
+LEARNING_RATE = 0.01 / 4
 
 ONLY_LSTM = False
 
-ITERS_TO_SAVE = 10
+ITERS_TO_SAVE = 5
 
 SHUFFLE_BATCHES = True
 
@@ -124,7 +124,7 @@ if ONLY_LSTM == False:
                                  cnn_filter_end+1,
                                  cnn_filter_gap)]
     if enc_key == 'sp':
-        num_layers_enc = 1
+        num_layers_enc = 2
         num_layers_dec = 2
         CNN_IN_DIM = SPEECH_DIM
         num_b = 10
@@ -209,8 +209,22 @@ else:
         "ksize": 3,
         "stride": 1,
         "pad": 3 // 2},
+        # {"ndim": 1,
+        # "in_channels": 384,
+        # "out_channels": 384,
+        # "ksize": 1,
+        # "stride": 1,
+        # "pad": 1 // 2},
+        # {"ndim": 1,
+        # "in_channels": 384,
+        # "out_channels": 256,
+        # "ksize": 3,
+        # "stride": 1,
+        # "pad": 3 // 2},
     ]
     cnn_max_pool = [2,2,2]
+    # cnn_max_pool = [3,3,3,3]
+    # cnn_max_pool = [5,5]
 
 print("cnn details:")
 for d in cnn_filters:
@@ -250,13 +264,17 @@ if SINGLE_LAYER_CNN:
                                                     max_pool_stride*10)
 
 else:
-    CNN_PREFIX = "_{0:s}_DCNN".format("_".join(map(str,cnn_max_pool)))
+    str_cnn_sizes = "_".join([str(d['out_channels']) for d in cnn_filters])
+    CNN_PREFIX = "_{0:s}_{1:s}_DCNN".format(str_cnn_sizes,
+                                            "_".join(map(str,cnn_max_pool)))
 
 EXP_NAME_PREFIX += "_LSTM" if ONLY_LSTM else CNN_PREFIX
 
 EXP_NAME_PREFIX += "_BN" if USE_BN else ''
 
 EXP_NAME_PREFIX += "_LN" if USE_LN else ''
+
+EXP_NAME_PREFIX += "_enc-{0:d}".format(num_layers_enc) if num_layers_enc > 1 else ""
 
 if not os.path.exists(out_path):
     print("Input folder not found".format(out_path))

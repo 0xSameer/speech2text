@@ -104,7 +104,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
         # b_shuffled = [num_b-2]
         # b_shuffled = list(range(num_b-1))
         # b_shuffled = list(range(0,10,2)) + list(range(10,50,10))
-        b_shuffled = [3,4,5,6,7]
+        b_shuffled = random.sample([0,1,2],1) + random.sample([3,4,5],1) + random.sample([6,7],1)
         # b_shuffled = list(range(num_b-2))
     else:
         b_shuffled = list(range(num_b-1))
