@@ -39,10 +39,10 @@ dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 0
+gpuid = 2
 # ------------------------------------------
 
-OPTIMIZER_ADAM1_SGD_0 = True
+OPTIMIZER_ADAM1_SGD_0 = False
 
 lstm1_or_gru0 = False
 
@@ -68,7 +68,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.01 / 6
+LEARNING_RATE = 0.01
 
 ONLY_LSTM = False
 
@@ -222,7 +222,7 @@ else:
         # "stride": 1,
         # "pad": 3 // 2},
     ]
-    cnn_max_pool = [2,2,2]
+    cnn_max_pool = [4,4,2]
     # cnn_max_pool = [3,3,3,3]
     # cnn_max_pool = [5,5]
 

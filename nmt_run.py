@@ -123,11 +123,11 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     utt_list_batches = []
     for b in b_shuffled:
         if b < num_b // 2:
-            batch_size = 100
+            batch_size = 32
         elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
-            batch_size = 64
+            batch_size = 32
         else:
-            batch_size = 64
+            batch_size = 32
 
         bucket = b_dict['buckets'][b]
         b_len = len(bucket)
