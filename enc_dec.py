@@ -85,17 +85,21 @@ class SpeechEncoderDecoder(Chain):
                             scale=scale)
 
         # reverse LSTM layer
-        self.rnn_rev_enc = ["L{0:d}_rev_enc".format(i) for i in range(num_layers_enc)]
-        self.add_rnn_layers(self.rnn_rev_enc,
-                            in_dim,
-                            self.n_units,
-                            scale=scale)
+        # self.rnn_rev_enc = ["L{0:d}_rev_enc".format(i) for i in range(num_layers_enc)]
+        # self.add_rnn_layers(self.rnn_rev_enc,
+        #                     in_dim,
+        #                     self.n_units,
+        #                     scale=scale)
 
         # add LSTM layers
         self.rnn_dec = ["L{0:d}_dec".format(i) for i in range(num_layers_dec)]
+        # self.add_rnn_layers(self.rnn_dec,
+        #                     self.embed_units,
+        #                     2*self.n_units,
+        #                     scale=scale)
         self.add_rnn_layers(self.rnn_dec,
                             self.embed_units,
-                            2*self.n_units,
+                            self.n_units,
                             scale=scale)
 
     def init_cnn_model(self):
@@ -173,7 +177,13 @@ class SpeechEncoderDecoder(Chain):
 
         if self.attn > 0:
             # add context layer for attention
-            self.add_link("context", L.Linear(4*self.n_units, 2*self.n_units))
+            # self.add_link("context", L.Linear(4*self.n_units, 2*self.n_units))
+            # if USE_BN:
+            #     self.add_link("context_bn", 
+            #                    L.BatchNormalization(2*self.n_units))
+            if ATTN_W:
+                self.add_link("attn_Wa", L.Linear(self.n_units, self.n_units))
+            self.add_link("context", L.Linear(2*self.n_units, 2*self.n_units))
             if USE_BN:
                 self.add_link("context_bn", 
                                L.BatchNormalization(2*self.n_units))
@@ -190,7 +200,8 @@ class SpeechEncoderDecoder(Chain):
 
     def reset_state(self):
         # reset the state of LSTM layers
-        for rnn_name in self.rnn_enc + self.rnn_rev_enc + self.rnn_dec:
+        # for rnn_name in self.rnn_enc + self.rnn_rev_enc + self.rnn_dec:
+        for rnn_name in self.rnn_enc + self.rnn_dec:
             self[rnn_name].reset_state()
         self.loss = 0
 
@@ -198,35 +209,38 @@ class SpeechEncoderDecoder(Chain):
         # set the hidden and cell state (if LSTM) of the first RNN in the decoder
         if self.lstm1_or_gru0:
             # concatenate cell state of both enc LSTMs
-            c_state = F.concat((self[self.rnn_enc[-1]].c, self[self.rnn_rev_enc[-1]].c))
+            # c_state = F.concat((self[self.rnn_enc[-1]].c, self[self.rnn_rev_enc[-1]].c))
+            c_state = self[self.rnn_enc[-1]].c
         # concatenate hidden state of both enc LSTMs
-        h_state = F.concat((self[self.rnn_enc[-1]].h, self[self.rnn_rev_enc[-1]].h))
+        # h_state = F.concat((self[self.rnn_enc[-1]].h, self[self.rnn_rev_enc[-1]].h))
+        h_state = self[self.rnn_enc[-1]].h
+
         if self.lstm1_or_gru0:
             self[self.rnn_dec[0]].set_state(c_state, h_state)
         else:
             self[self.rnn_dec[0]].set_state(h_state)
 
-
-    def compute_context_vector(self, batches=True):
-        batch_size, n_units = self[self.rnn_dec[-1]].h.shape
+    def compute_context_vector(self, dec_h):
+        batch_size, n_units = dec_h.shape
         # attention weights for the hidden states of each word in the input list
 
-        if batches:
-            weights = F.batch_matmul(self.enc_states, self[self.rnn_dec[-1]].h)
-            # weights = F.where(self.mask, weights, self.minf)
-            alphas = F.softmax(weights)
-            # compute context vector
-            cv = F.squeeze(F.batch_matmul(F.swapaxes(self.enc_states, 2, 1), alphas), axis=2)
-
+        if ATTN_W:
+            # learnable parameters
+            ht = self.attn_Wa(dec_h)
         else:
-            # without batches
-            alphas = F.softmax(F.matmul(self[self.rnn_dec[-1]].h, self.enc_states, transb=True))
-            # compute context vector
-            if self.attn == SOFT_ATTN:
-                cv = F.batch_matmul(self.enc_states, F.transpose(alphas))
-                cv = F.transpose(F.sum(cv, axis=0))
-            else:
-                print("nothing to see here ...")
+            # dot product attention
+            ht = dec_h
+
+        weights = F.batch_matmul(self.enc_states, ht)
+
+        '''
+        # this line is valid when no max pooling or sequence length manipulation is performed
+        weights = F.where(self.mask, weights, self.minf)
+            '''
+
+        alphas = F.softmax(weights)
+        # compute context vector
+        cv = F.squeeze(F.batch_matmul(F.swapaxes(self.enc_states, 2, 1), alphas), axis=2)
 
         return cv, alphas
 
@@ -268,8 +282,8 @@ class SpeechEncoderDecoder(Chain):
         embed_id = self.embed_dec(word)
         h = self.feed_rnn(embed_id, self.rnn_dec)
         if self.attn:
-            cv, _ = self.compute_context_vector(batches=True)
-            cv_hdec = F.concat((cv, self[self.rnn_dec[-1]].h), axis=1)
+            cv, _ = self.compute_context_vector(h)
+            cv_hdec = F.concat((cv, h), axis=1)
             ht = F.tanh(self.context(cv_hdec))
             # ht = F.relu(self.context(cv_hdec))
             # ht = self.context(cv_hdec)
@@ -381,7 +395,7 @@ class SpeechEncoderDecoder(Chain):
                              stride=cnn_max_pool[0],
                              pad=max_pool_pad)
 
-        for i, cnn_layer in enumerate(self.cnns[1:]):
+        for i, cnn_layer in enumerate(self.cnns[1:], start=1):
             h = F.relu(self[cnn_layer](h))
             h = F.max_pooling_nd(h, ksize=cnn_max_pool[i],
                                  stride=cnn_max_pool[i],
@@ -416,16 +430,17 @@ class SpeechEncoderDecoder(Chain):
                                   F.expand_dims(self.encode(X[i],
                                     self.rnn_enc), 0)),
                                   axis=0)
-                h_rev = F.concat((h_rev,
-                                  F.expand_dims(self.encode(X[-i],
-                                    self.rnn_rev_enc), 0)),
-                                  axis=0)
+                # h_rev = F.concat((h_rev,
+                #                   F.expand_dims(self.encode(X[-i],
+                #                     self.rnn_rev_enc), 0)),
+                #                   axis=0)
             else:
                 h_fwd = F.expand_dims(self.encode(X[i], self.rnn_enc), 0)
-                h_rev = F.expand_dims(self.encode(X[-i], self.rnn_rev_enc), 0)
+                # h_rev = F.expand_dims(self.encode(X[-i], self.rnn_rev_enc), 0)
 
-        h_rev = F.flipud(h_rev)
-        self.enc_states = F.concat((h_fwd, h_rev), axis=2)
+        # h_rev = F.flipud(h_rev)
+        # self.enc_states = F.concat((h_fwd, h_rev), axis=2)
+        self.enc_states = h_fwd
         self.enc_states = F.swapaxes(self.enc_states, 0, 1)
         # return h_fwd, h_rev
 
@@ -447,7 +462,7 @@ class SpeechEncoderDecoder(Chain):
     def forward(self, X, y=None):
         # get shape
         batch_size = X.shape[0]
-        # check whether to add noise
+        # check whether to add noi, start=1se
         if ADD_NOISE and not chainer.config.train:
             # due to CUDA issues with random number generator
             # creating a numpy array and moving to GPU

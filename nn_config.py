@@ -25,8 +25,8 @@ print("translating es to en")
 
 out_path = "./out/"
 
-# model_dir = "fsh_dcnn_maxpool-2"
-model_dir = "fsh_lr_reg"
+model_dir = "fsh_new_attn"
+# model_dir = "fsh_fwd_rnn"
 
 EXP_NAME_PREFIX = ""
 
@@ -39,7 +39,7 @@ dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 2
+gpuid = 0
 # ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = False
@@ -68,11 +68,11 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.01
+LEARNING_RATE = 0.5 / 2
 
 ONLY_LSTM = False
 
-ITERS_TO_SAVE = 5
+ITERS_TO_SAVE = 10
 
 SHUFFLE_BATCHES = True
 
@@ -81,6 +81,8 @@ USE_DROPOUT=True
 DROPOUT_RATIO=0.3
 
 use_attn = SOFT_ATTN
+ATTN_W = True
+
 hidden_units = 256
 embedding_units = 512
 # FBANK speech dimensions
@@ -222,7 +224,7 @@ else:
         # "stride": 1,
         # "pad": 3 // 2},
     ]
-    cnn_max_pool = [4,4,2]
+    cnn_max_pool = [2,3,4]
     # cnn_max_pool = [3,3,3,3]
     # cnn_max_pool = [5,5]
 
