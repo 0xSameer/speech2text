@@ -102,10 +102,11 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
         # leave out the last bucket as it includes pruned utterances
         # b_shuffled = random.sample(list(range(num_b-1)), 1)
         # b_shuffled = list(range(0,10,2)) + list(range(10,50,10))
-        b_shuffled = random.sample([0,1,2],1) + random.sample([3,4,5],1) + random.sample([6,7],1)
+        # b_shuffled = random.sample([0,1,2],1) + random.sample([3,4,5],1) + random.sample([6,7],1)
         # b_shuffled = list(range(num_b-2))
         # b_shuffled = random.sample(list(range(num_b-1)),3)
         # b_shuffled = [2]
+        b_shuffled = list(range(num_b-1))
     else:
         b_shuffled = list(range(num_b-1))
     # shuffle buckets
@@ -118,7 +119,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     total_loss_updates= 0
 
     sys.stderr.flush()
-    # total_utts = len(m_dict)
+
     total_utts = 0
     utt_list_batches = []
     for b in b_shuffled:
@@ -130,6 +131,10 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
             batch_size = 64
 
         bucket = b_dict['buckets'][b]
+        if mini:
+            # select 25% of the dataset for training
+            bucket = random.sample(bucket, len(bucket) // 4)
+
         b_len = len(bucket)
         total_utts += b_len
         random.shuffle(bucket)

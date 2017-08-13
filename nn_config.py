@@ -26,7 +26,7 @@ print("translating es to en")
 out_path = "./out/"
 
 # model_dir = "fsh_new_attn"
-model_dir = "scratch"
+model_dir = "fsh_new_set_state"
 
 EXP_NAME_PREFIX = ""
 
@@ -42,7 +42,7 @@ NUM_EPOCHS = 110
 gpuid = 0
 # ------------------------------------------
 
-OPTIMIZER_ADAM1_SGD_0 = False
+OPTIMIZER_ADAM1_SGD_0 = True
 
 lstm1_or_gru0 = False
 
@@ -95,7 +95,6 @@ if enc_key == 'sp':
     cnn_filter_gap = 10
     cnn_filter_start = 11
     cnn_filter_end = 51
-    num_highway_layers = 1
     max_pool_stride = 8
     max_pool_pad = 0
     BATCH_SIZE = 12
@@ -125,12 +124,12 @@ if ONLY_LSTM == False:
                                  cnn_filter_end+1,
                                  cnn_filter_gap)]
     if enc_key == 'sp':
-        num_layers_enc = 3
+        num_layers_enc = 2
         num_layers_dec = 2
+        num_highway_layers = 1
         CNN_IN_DIM = SPEECH_DIM
         num_b = 10
         width_b = 128
-        # num_layers_enc = 2
 
     elif enc_key == 'es_c':
         num_layers_enc = 1
@@ -154,6 +153,7 @@ else:
     cnn_k_widths = []
     num_layers_enc = 4
     num_layers_dec = 2
+    num_highway_layers = 2
 
     if enc_key == 'sp':
         print("Cannot train speech using only LSTM")

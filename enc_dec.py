@@ -207,18 +207,18 @@ class SpeechEncoderDecoder(Chain):
 
     def set_decoder_state(self):
         # set the hidden and cell state (if LSTM) of the first RNN in the decoder
-        if self.lstm1_or_gru0:
-            # concatenate cell state of both enc LSTMs
-            # c_state = F.concat((self[self.rnn_enc[-1]].c, self[self.rnn_rev_enc[-1]].c))
-            c_state = self[self.rnn_enc[-1]].c
+
+        # concatenate cell state of both enc LSTMs
+        # c_state = F.concat((self[self.rnn_enc[-1]].c, self[self.rnn_rev_enc[-1]].c))
         # concatenate hidden state of both enc LSTMs
         # h_state = F.concat((self[self.rnn_enc[-1]].h, self[self.rnn_rev_enc[-1]].h))
-        h_state = self[self.rnn_enc[-1]].h
 
-        if self.lstm1_or_gru0:
-            self[self.rnn_dec[0]].set_state(c_state, h_state)
-        else:
-            self[self.rnn_dec[0]].set_state(h_state)
+        for enc_name, dec_name in zip(self.rnn_enc, self.rnn_dec):
+            if self.lstm1_or_gru0:
+                self[dec_name].set_state(self[enc_name].c, self[enc_name].h)
+            else:
+                self[dec_name].set_state(self[enc_name].h)
+
 
     def compute_context_vector(self, dec_h):
         batch_size, n_units = dec_h.shape
@@ -233,10 +233,10 @@ class SpeechEncoderDecoder(Chain):
 
         weights = F.batch_matmul(self.enc_states, ht)
 
-        '''
+        # '''
         # this line is valid when no max pooling or sequence length manipulation is performed
-        weights = F.where(self.mask, weights, self.minf)
-            '''
+        # weights = F.where(self.mask, weights, self.minf)
+            # '''
 
         alphas = F.softmax(weights)
         # compute context vector
@@ -247,17 +247,9 @@ class SpeechEncoderDecoder(Chain):
 
     def feed_rnn(self, rnn_in, rnn_layers, highway_layers=None):
         # feed into first rnn layer
-        if USE_DROPOUT:
-            hs = F.dropout(self[rnn_layers[0]](rnn_in), ratio=DROPOUT_RATIO)
-        else:
-            hs = self[rnn_layers[0]](rnn_in)
-        
-        if USE_LN:
-            bn_name = "{0:s}_ln".format(rnn_layers[0])
-            hs = self[bn_name](hs)
-        
+        hs = rnn_in
         # feed into remaining rnn layers
-        for rnn_layer in rnn_layers[1:]:
+        for rnn_layer in rnn_layers:
             if USE_DROPOUT:
                 hs = F.dropout(self[rnn_layer](hs), ratio=DROPOUT_RATIO)
             else:
@@ -275,8 +267,8 @@ class SpeechEncoderDecoder(Chain):
             h = self.feed_rnn(h, rnn_layers)
         else:
             h = self.feed_rnn(data_in, rnn_layers)
-        return F.relu(h)
-        # return h
+        # return F.relu(h)
+        return h
 
     def decode(self, word):
         embed_id = self.embed_dec(word)
