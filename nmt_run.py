@@ -44,7 +44,7 @@ if WEIGHT_DECAY:
     optimizer.add_hook(chainer.optimizer.WeightDecay(WD_RATIO))
 
 # gradient clipping
-optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=2))
+optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
 
 
 def get_batch(m_dict, x_key, y_key,
@@ -101,11 +101,11 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     if mini:
         # leave out the last bucket as it includes pruned utterances
         # b_shuffled = random.sample(list(range(num_b-1)), 1)
-        # b_shuffled = [num_b-2]
-        # b_shuffled = list(range(num_b-1))
         # b_shuffled = list(range(0,10,2)) + list(range(10,50,10))
         b_shuffled = random.sample([0,1,2],1) + random.sample([3,4,5],1) + random.sample([6,7],1)
         # b_shuffled = list(range(num_b-2))
+        # b_shuffled = random.sample(list(range(num_b-1)),3)
+        # b_shuffled = [2]
     else:
         b_shuffled = list(range(num_b-1))
     # shuffle buckets
@@ -123,11 +123,11 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     utt_list_batches = []
     for b in b_shuffled:
         if b < num_b // 2:
-            batch_size = 32
+            batch_size = 64
         elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
-            batch_size = 32
+            batch_size = 64
         else:
-            batch_size = 32
+            batch_size = 64
 
         bucket = b_dict['buckets'][b]
         b_len = len(bucket)

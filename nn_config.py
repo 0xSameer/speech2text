@@ -25,8 +25,8 @@ print("translating es to en")
 
 out_path = "./out/"
 
-model_dir = "fsh_new_attn"
-# model_dir = "fsh_fwd_rnn"
+# model_dir = "fsh_new_attn"
+model_dir = "scratch"
 
 EXP_NAME_PREFIX = ""
 
@@ -53,7 +53,6 @@ USE_BN = False
 
 FINE_TUNE = False
 
-
 ADD_NOISE=False
 
 if enc_key != 'sp':
@@ -68,7 +67,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.5 / 2
+LEARNING_RATE = 0.1
 
 ONLY_LSTM = False
 
@@ -96,7 +95,7 @@ if enc_key == 'sp':
     cnn_filter_gap = 10
     cnn_filter_start = 11
     cnn_filter_end = 51
-    num_highway_layers = 2
+    num_highway_layers = 1
     max_pool_stride = 8
     max_pool_pad = 0
     BATCH_SIZE = 12
@@ -126,7 +125,7 @@ if ONLY_LSTM == False:
                                  cnn_filter_end+1,
                                  cnn_filter_gap)]
     if enc_key == 'sp':
-        num_layers_enc = 2
+        num_layers_enc = 3
         num_layers_dec = 2
         CNN_IN_DIM = SPEECH_DIM
         num_b = 10
@@ -217,16 +216,9 @@ else:
         # "ksize": 1,
         # "stride": 1,
         # "pad": 1 // 2},
-        # {"ndim": 1,
-        # "in_channels": 384,
-        # "out_channels": 256,
-        # "ksize": 3,
-        # "stride": 1,
-        # "pad": 3 // 2},
     ]
-    cnn_max_pool = [2,3,4]
-    # cnn_max_pool = [3,3,3,3]
-    # cnn_max_pool = [5,5]
+    # cnn_max_pool = [2,4,5]
+    cnn_max_pool = [2,3,3]
 
 print("cnn details:")
 for d in cnn_filters:

@@ -139,7 +139,7 @@ class SpeechEncoderDecoder(Chain):
                 self.cnns.append(lname)
                 self.add_link(lname, L.ConvolutionND(**l))
                 if USE_BN:
-                    self.add_link('{0:s}_bn'.format(lname), L.BatchNormalization(l["out_channels"]))
+                    self.add_link('{0:s}_bn'.format(lname), L.BatchNormalization((l["in_channels"],l["out_channels"])))
 
             self.cnn_out_dim = cnn_filters[-1]["out_channels"]
 
@@ -275,8 +275,8 @@ class SpeechEncoderDecoder(Chain):
             h = self.feed_rnn(h, rnn_layers)
         else:
             h = self.feed_rnn(data_in, rnn_layers)
-        # return F.relu(h)
-        return h
+        return F.relu(h)
+        # return h
 
     def decode(self, word):
         embed_id = self.embed_dec(word)
@@ -388,14 +388,9 @@ class SpeechEncoderDecoder(Chain):
 
     def forward_deep_cnn(self, X):
         # perform convolutions
-        h = F.relu(self[self.cnns[0]](X))
+        h = X
 
-        # max pooling
-        h = F.max_pooling_nd(h, ksize=cnn_max_pool[0],
-                             stride=cnn_max_pool[0],
-                             pad=max_pool_pad)
-
-        for i, cnn_layer in enumerate(self.cnns[1:], start=1):
+        for i, cnn_layer in enumerate(self.cnns):
             h = F.relu(self[cnn_layer](h))
             h = F.max_pooling_nd(h, ksize=cnn_max_pool[i],
                                  stride=cnn_max_pool[i],
