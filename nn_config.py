@@ -26,7 +26,7 @@ print("translating es to en")
 out_path = "./out/"
 
 # model_dir = "fsh_new_attn"
-model_dir = "fsh_new_set_state"
+model_dir = "fsh_input_feed"
 
 EXP_NAME_PREFIX = ""
 
@@ -39,7 +39,7 @@ dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 0
+gpuid = 2
 # ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = True
@@ -58,16 +58,16 @@ ADD_NOISE=False
 if enc_key != 'sp':
     ADD_NOISE=False
 
-NOISE_STDEV=0.2
+NOISE_STDEV=0.125
 
-WEIGHT_DECAY=False
+WEIGHT_DECAY=True
 
 if WEIGHT_DECAY:
-    WD_RATIO=0.0001
+    WD_RATIO=0.000001
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.1
+LEARNING_RATE = 0.001
 
 ONLY_LSTM = False
 
@@ -83,7 +83,7 @@ use_attn = SOFT_ATTN
 ATTN_W = True
 
 hidden_units = 256
-embedding_units = 512
+embedding_units = 256
 # FBANK speech dimensions
 SPEECH_DIM = 69
 
@@ -191,34 +191,47 @@ if SINGLE_LAYER_CNN == True:
                     "pad": k //2} for k in cnn_k_widths]
 else:
     # static CNN configuration
+    # googlish
     cnn_filters = [
         {"ndim": 1,
         "in_channels": CNN_IN_DIM,
-        "out_channels": 96,
-        "ksize": 9,
-        "stride": 1,
-        "pad": 9 // 2},
-        {"ndim": 1,
-        "in_channels": 96,
-        "out_channels": 256,
-        "ksize": 5,
-        "stride": 1,
-        "pad": 5 // 2},
-        {"ndim": 1,
-        "in_channels": 256,
-        "out_channels": 384,
+        "out_channels": 64,
         "ksize": 3,
         "stride": 1,
         "pad": 3 // 2},
-        # {"ndim": 1,
-        # "in_channels": 384,
-        # "out_channels": 384,
-        # "ksize": 1,
-        # "stride": 1,
-        # "pad": 1 // 2},
+        {"ndim": 1,
+        "in_channels": 64,
+        "out_channels": 64,
+        "ksize": 3,
+        "stride": 1,
+        "pad": 3 // 2},
     ]
-    # cnn_max_pool = [2,4,5]
-    cnn_max_pool = [2,3,3]
+    cnn_max_pool = [2,5]
+
+    # traditional
+    # static CNN configuration
+    # cnn_filters = [
+    #     {"ndim": 1,
+    #     "in_channels": CNN_IN_DIM,
+    #     "out_channels": 96,
+    #     "ksize": 9,
+    #     "stride": 1,
+    #     "pad": 9 // 2},
+    #     {"ndim": 1,
+    #     "in_channels": 96,
+    #     "out_channels": 256,
+    #     "ksize": 5,
+    #     "stride": 1,
+    #     "pad": 5 // 2},
+    #     {"ndim": 1,
+    #     "in_channels": 256,
+    #     "out_channels": 384,
+    #     "ksize": 3,
+    #     "stride": 1,
+    #     "pad": 3 // 2},
+    # ]
+    # # cnn_max_pool = [2,4,5]
+    # cnn_max_pool = [2,3,3]
 
 print("cnn details:")
 for d in cnn_filters:
@@ -244,7 +257,7 @@ else:
     EXP_NAME_PREFIX += "_noise-0"
 
 if WEIGHT_DECAY:
-    EXP_NAME_PREFIX += "_l2-{0:.4f}".format(WD_RATIO)
+    EXP_NAME_PREFIX += "_l2-{0:.6f}".format(WD_RATIO)
 else:
     EXP_NAME_PREFIX += "_l2-0"
 

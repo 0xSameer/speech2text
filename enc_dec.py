@@ -92,13 +92,15 @@ class SpeechEncoderDecoder(Chain):
         #                     scale=scale)
 
         # add LSTM layers
+        # first layer appends previous ht, and therefore, 
+        # in_units = embed units + hidden units
         self.rnn_dec = ["L{0:d}_dec".format(i) for i in range(num_layers_dec)]
         # self.add_rnn_layers(self.rnn_dec,
         #                     self.embed_units,
         #                     2*self.n_units,
         #                     scale=scale)
         self.add_rnn_layers(self.rnn_dec,
-                            self.embed_units,
+                            self.embed_units+(2*self.n_units),
                             self.n_units,
                             scale=scale)
 
@@ -139,7 +141,7 @@ class SpeechEncoderDecoder(Chain):
                 self.cnns.append(lname)
                 self.add_link(lname, L.ConvolutionND(**l))
                 if USE_BN:
-                    self.add_link('{0:s}_bn'.format(lname), L.BatchNormalization((l["in_channels"],l["out_channels"])))
+                    self.add_link('{0:s}_bn'.format(lname), L.BatchNormalization((l["out_channels"])))
 
             self.cnn_out_dim = cnn_filters[-1]["out_channels"]
 
@@ -270,28 +272,34 @@ class SpeechEncoderDecoder(Chain):
         # return F.relu(h)
         return h
 
-    def decode(self, word):
-        embed_id = self.embed_dec(word)
-        h = self.feed_rnn(embed_id, self.rnn_dec)
-        if self.attn:
-            cv, _ = self.compute_context_vector(h)
-            cv_hdec = F.concat((cv, h), axis=1)
-            ht = F.tanh(self.context(cv_hdec))
-            # ht = F.relu(self.context(cv_hdec))
-            # ht = self.context(cv_hdec)
-            if USE_BN:
-                ht = self.context_bn(ht)
-            predicted_out = self.out(ht)
+    def decode(self, word, ht):
+        if USE_DROPOUT:
+            embed_id = F.dropout(self.embed_dec(word),DROPOUT_RATIO)
         else:
-            predicted_out = self.out(self[self.rnn_dec[-1]].h)
-        return predicted_out
+            embed_id = self.embed_dec(word)
+        rnn_in = F.concat((embed_id, ht), axis=1)
+        h = self.feed_rnn(rnn_in, self.rnn_dec)
+
+        cv, _ = self.compute_context_vector(h)
+        cv_hdec = F.concat((cv, h), axis=1)
+        ht = self.context(cv_hdec)
+        # batch normalization before non-linearity
+        if USE_BN:
+            ht = self.context_bn(ht)
+        ht = F.tanh(ht)
+
+        predicted_out = self.out(ht)
+
+        return predicted_out, ht
 
     def decode_batch(self, decoder_batch):
+        batch_size = decoder_batch.shape[1]
         loss = 0
+        ht = Variable(xp.zeros((batch_size, 2*self.n_units), dtype=xp.float32))
         # for all sequences in the batch, feed the characters one by one
         for curr_word, next_word in zip(decoder_batch, decoder_batch[1:]):
             # encode tokens
-            predicted_out = self.decode(curr_word)
+            predicted_out, ht = self.decode(curr_word, ht)
 
             loss_arr = F.softmax_cross_entropy(predicted_out, next_word,
                                                class_weight=self.mask_pad_id)
@@ -321,9 +329,11 @@ class SpeechEncoderDecoder(Chain):
         # flag to track if all sentences in batch have predicted EOS
         check_if_all_eos = xp.full((batch_size,), False, dtype=xp.bool_)
 
+        ht = Variable(xp.zeros((batch_size, 2*self.n_units), dtype=xp.float32))
+
         while npred < (stop_limit):
             # encode tokens
-            pred_out = self.decode(curr_word)
+            pred_out, ht = self.decode(curr_word, ht)
             pred_word = F.argmax(pred_out, axis=1)
 
             # save prediction at this time step
@@ -381,16 +391,16 @@ class SpeechEncoderDecoder(Chain):
     def forward_deep_cnn(self, X):
         # perform convolutions
         h = X
-
         for i, cnn_layer in enumerate(self.cnns):
-            h = F.relu(self[cnn_layer](h))
+            h = self[cnn_layer](h)
             h = F.max_pooling_nd(h, ksize=cnn_max_pool[i],
                                  stride=cnn_max_pool[i],
                                  pad=max_pool_pad)
+            # batch normalization before non-linearity
             if USE_BN:
                 bn_lname = '{0:s}_bn'.format(cnn_layer)
                 h = self[bn_lname](h)
-
+            h = F.relu(h)
         # out dimension:
         # batch size * cnn out dim * num time frames after pooling
         return h
