@@ -52,6 +52,7 @@ class SpeechEncoderDecoder(Chain):
 
 
     def add_rnn_layers(self, layer_names, in_units, out_units, scale):
+        w = chainer.initializers.HeNormal()
         # add first layer
         self.add_link(layer_names[0], self.RNN(in_units, out_units))
         if USE_LN:
@@ -61,17 +62,6 @@ class SpeechEncoderDecoder(Chain):
             self.add_link(rnn_name, self.RNN(out_units*scale, out_units))
             if USE_LN:
                 self.add_link("{0:s}_ln".format(rnn_name), L.LayerNormalization(out_units))
-
-
-    def add_cnn_layers(self, layer_name, in_channels, out_channels,
-                       num_filters, ksize, stride, pad):
-        self.add_link(layer_name,
-                      L.ConvolutionND(ndim=1,
-                                      in_channels=in_channels,
-                                      out_channels=out_channels,
-                                      ksize=2,
-                                      stride=1,
-                                      pad=1))
 
 
     def init_rnn_model(self, scale, in_dim):
@@ -105,6 +95,7 @@ class SpeechEncoderDecoder(Chain):
                             scale=scale)
 
     def init_cnn_model(self):
+        w = chainer.initializers.HeNormal()
         self.cnns = []
         # add CNN layers
         cnn_out_dim = 0
@@ -113,7 +104,7 @@ class SpeechEncoderDecoder(Chain):
                 lname = "CNN_{0:d}".format(l['ksize'])
                 cnn_out_dim += l["out_channels"]
                 self.cnns.append(lname)
-                self.add_link(lname, L.ConvolutionND(**l))
+                self.add_link(lname, L.ConvolutionND(**l, initialW=w))
 
             self.cnn_out_dim = cnn_out_dim
 
@@ -131,6 +122,7 @@ class SpeechEncoderDecoder(Chain):
     # end init_cnn_model()
 
     def init_deep_cnn_model(self):
+        w = chainer.initializers.HeNormal()
         self.cnns = []
         # add CNN layers
         cnn_out_dim = 0
@@ -139,7 +131,7 @@ class SpeechEncoderDecoder(Chain):
                 lname = "CNN_{0:d}".format(i)
                 cnn_out_dim += l["out_channels"]
                 self.cnns.append(lname)
-                self.add_link(lname, L.ConvolutionND(**l))
+                self.add_link(lname, L.ConvolutionND(**l, initialW=w))
                 if USE_BN:
                     self.add_link('{0:s}_bn'.format(lname), L.BatchNormalization((l["out_channels"])))
 
@@ -186,9 +178,9 @@ class SpeechEncoderDecoder(Chain):
             if ATTN_W:
                 self.add_link("attn_Wa", L.Linear(self.n_units, self.n_units))
             self.add_link("context", L.Linear(2*self.n_units, 2*self.n_units))
-            if USE_BN:
-                self.add_link("context_bn", 
-                               L.BatchNormalization(2*self.n_units))
+            # if USE_BN:
+            #     self.add_link("context_bn", 
+            #                    L.BatchNormalization(2*self.n_units))
 
         # add output layer
         self.add_link("out", L.Linear(2*self.n_units, vocab_size_en))
@@ -284,8 +276,8 @@ class SpeechEncoderDecoder(Chain):
         cv_hdec = F.concat((cv, h), axis=1)
         ht = self.context(cv_hdec)
         # batch normalization before non-linearity
-        if USE_BN:
-            ht = self.context_bn(ht)
+        # if USE_BN:
+        #     ht = self.context_bn(ht)
         ht = F.tanh(ht)
 
         predicted_out = self.out(ht)

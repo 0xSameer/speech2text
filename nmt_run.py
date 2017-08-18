@@ -133,7 +133,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
         bucket = b_dict['buckets'][b]
         if mini:
             # select 25% of the dataset for training
-            bucket = random.sample(bucket, len(bucket) // 4)
+            bucket = random.sample(bucket, len(bucket) // 10)
 
         b_len = len(bucket)
         total_utts += b_len
@@ -273,7 +273,8 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
                 serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch+i+1)), model)
                 print("Finished saving model")
             # end if save model
-            print("MODEL NAME: {0:s}".format(os.path.basename(model_fil)))
+            print("MODEL NAME: {0:s}".format(model_fil))
+            print("learning rate: {0:.6f}".format(LEARNING_RATE))
         # end for epochs
     # end open log files
 # end train loop
@@ -286,6 +287,7 @@ def my_main(out_path, epochs, key, use_y, mini):
     last_epoch = check_model()
 
     # check output file directory
+    print(out_path)
     if not os.path.exists(out_path):
         print("{0:s} does not exist. Exiting".format(out_path))
         return 0

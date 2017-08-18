@@ -23,10 +23,10 @@ SOFT_ATTN = 1
 
 print("translating es to en")
 
-out_path = "./out/"
+out_path = "./mfcc_out/"
 
 # model_dir = "fsh_new_attn"
-model_dir = "fsh_input_feed"
+model_dir = "fsh_t2t"
 
 EXP_NAME_PREFIX = ""
 
@@ -48,8 +48,8 @@ lstm1_or_gru0 = False
 
 SINGLE_LAYER_CNN = False
 
-USE_LN = False
-USE_BN = False
+USE_LN = True
+USE_BN = True
 
 FINE_TUNE = False
 
@@ -67,7 +67,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.1
 
 ONLY_LSTM = False
 
@@ -82,64 +82,37 @@ DROPOUT_RATIO=0.3
 use_attn = SOFT_ATTN
 ATTN_W = True
 
+# FBANK speech dimensions
+SPEECH_DIM = 39
+
 hidden_units = 256
 embedding_units = 256
-# FBANK speech dimensions
-SPEECH_DIM = 69
-
-# cnn filter specs - tuple: (kernel size, pad, num filters)
-# for now keeping kernel widths as odd
-# this keeps the output size the same as the input
-if enc_key == 'sp':
-    cnn_num_channels = 100
-    cnn_filter_gap = 10
-    cnn_filter_start = 11
-    cnn_filter_end = 51
-    max_pool_stride = 8
-    max_pool_pad = 0
-    BATCH_SIZE = 12
-elif enc_key == 'es_c':
-    cnn_num_channels = 100
-    cnn_filter_gap = 2
-    cnn_filter_start = 1
-    cnn_filter_end = 11
-    num_highway_layers = 2
-    max_pool_stride = 5
-    max_pool_pad = 0
-    BATCH_SIZE = 64
-elif enc_key == 'es_w':
-    cnn_num_channels = 100
-    cnn_filter_gap = 2
-    cnn_filter_start = 1
-    cnn_filter_end = 19
-    num_highway_layers = 2
-    max_pool_stride = 1
-    max_pool_pad = 0
-    BATCH_SIZE = 64
 
 # if using CNNs, we can have more parameters as sequences are shorter
 # due to max pooling
 if ONLY_LSTM == False:
-    cnn_k_widths = [i for i in range(cnn_filter_start,
-                                 cnn_filter_end+1,
-                                 cnn_filter_gap)]
+    # cnn_k_widths = [i for i in range(cnn_filter_start,
+    #                              cnn_filter_end+1,
+    #                              cnn_filter_gap)]
     if enc_key == 'sp':
         num_layers_enc = 2
         num_layers_dec = 2
-        num_highway_layers = 1
+        num_highway_layers = 2
         CNN_IN_DIM = SPEECH_DIM
-        num_b = 10
-        width_b = 128
+        num_b = 20
+        width_b = 64
 
     elif enc_key == 'es_c':
-        num_layers_enc = 1
+        num_layers_enc = 2
         num_layers_dec = 2
+        num_highway_layers = 2
         CNN_IN_DIM = embedding_units
         num_b = 10
         width_b = 30
     else:
-        num_layers_enc = 1
+        num_layers_enc = 2
         num_layers_dec = 2
+        num_highway_layers = 2
         CNN_IN_DIM = embedding_units
         num_b = 20
         width_b = 3
@@ -173,15 +146,12 @@ else:
         MAX_EN_LEN = 150
 
 
-# map_dict['fisher_mini_train'] = {}
-# num_mini_trn = 10000
-# print("creating mini train set of ")
-# mini_trn_list = random.sample(list(map_dict['fisher_train'].keys()), num_mini_trn)
-# for u in mini_trn_list:
-#     map_dict['fisher_mini_train'][u] = map_dict['fisher_train'][u]
-
+# prepare buckets
 prep_buckets.buckets_main(out_path, num_b, width_b, enc_key)
 
+max_pool_stride = 5
+max_pool_pad = 0
+BATCH_SIZE = 32
 if SINGLE_LAYER_CNN == True:
     cnn_filters = [{"ndim": 1,
                     "in_channels": CNN_IN_DIM,
@@ -195,43 +165,19 @@ else:
     cnn_filters = [
         {"ndim": 1,
         "in_channels": CNN_IN_DIM,
-        "out_channels": 64,
-        "ksize": 3,
-        "stride": 1,
-        "pad": 3 // 2},
+        "out_channels": 32,
+        "ksize": 11,
+        "stride": 2,
+        "pad": 11 // 2},
         {"ndim": 1,
-        "in_channels": 64,
-        "out_channels": 64,
-        "ksize": 3,
-        "stride": 1,
-        "pad": 3 // 2},
+        "in_channels": 32,
+        "out_channels": 32,
+        "ksize": 7,
+        "stride": 5,
+        "pad": 7 // 2},
     ]
-    cnn_max_pool = [2,5]
+    cnn_max_pool = [1,1]
 
-    # traditional
-    # static CNN configuration
-    # cnn_filters = [
-    #     {"ndim": 1,
-    #     "in_channels": CNN_IN_DIM,
-    #     "out_channels": 96,
-    #     "ksize": 9,
-    #     "stride": 1,
-    #     "pad": 9 // 2},
-    #     {"ndim": 1,
-    #     "in_channels": 96,
-    #     "out_channels": 256,
-    #     "ksize": 5,
-    #     "stride": 1,
-    #     "pad": 5 // 2},
-    #     {"ndim": 1,
-    #     "in_channels": 256,
-    #     "out_channels": 384,
-    #     "ksize": 3,
-    #     "stride": 1,
-    #     "pad": 3 // 2},
-    # ]
-    # # cnn_max_pool = [2,4,5]
-    # cnn_max_pool = [2,3,3]
 
 print("cnn details:")
 for d in cnn_filters:
@@ -346,3 +292,27 @@ if not os.path.exists(model_dir):
 
 print('model file name: {0:s}'.format(model_fil))
 print('log file name: {0:s}'.format(log_train_fil_name))
+
+'''
+python kaldi_io.py test_mfcc.ark fisher_mfcc/fisher_test
+python kaldi_io.py dev_mfcc.ark fisher_mfcc/fisher_dev
+python kaldi_io.py dev2_mfcc.ark fisher_mfcc/fisher_dev2
+python kaldi_io.py train_mfcc.ark fisher_mfcc/fisher_train
+
+export SPEECH_FEATS=/afs/inf.ed.ac.uk/group/project/lowres/work/corpora/fisher_kaldi/mfcc
+
+export JOSHUA=/afs/inf.ed.ac.uk/group/project/lowres/work/installs/fisher-callhome-corpus
+
+export OUT=$PWD/mfcc_out 
+
+python prep_map_kaldi_segments.py -m $JOSHUA -o $OUT
+
+python prep_map_sp_es_en.py -m $JOSHUA -o $OUT
+
+python prep_speech_segments.py -m $SPEECH_FEATS -o $OUT
+
+python prep_vocab.py -o $OUT
+
+python prep_get_speech_info.py -o $OUT
+
+'''
