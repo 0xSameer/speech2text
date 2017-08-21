@@ -34,12 +34,12 @@ print("callhome es-en configuration")
 
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'sp'
+enc_key = 'es_w'
 dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 2
+gpuid = 0
 # ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = True
@@ -67,7 +67,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.1
+LEARNING_RATE = 0.0001
 
 ONLY_LSTM = False
 
@@ -166,15 +166,15 @@ else:
         {"ndim": 1,
         "in_channels": CNN_IN_DIM,
         "out_channels": 32,
-        "ksize": 11,
-        "stride": 2,
-        "pad": 11 // 2},
+        "ksize": 5,
+        "stride": 1,
+        "pad": 5 // 2},
         {"ndim": 1,
         "in_channels": 32,
         "out_channels": 32,
-        "ksize": 7,
-        "stride": 5,
-        "pad": 7 // 2},
+        "ksize": 3,
+        "stride": 1,
+        "pad": 3 // 2},
     ]
     cnn_max_pool = [1,1]
 
@@ -218,8 +218,12 @@ if SINGLE_LAYER_CNN:
 
 else:
     str_cnn_sizes = "_".join([str(d['out_channels']) for d in cnn_filters])
+    # if sum(cnn_max_pool) // len(cnn_max_pool) > 1:
     CNN_PREFIX = "_{0:s}_{1:s}_DCNN".format(str_cnn_sizes,
                                             "_".join(map(str,cnn_max_pool)))
+    # else:
+    #     CNN_PREFIX = "_{0:s}_{1:s}_DCNN".format(str_cnn_sizes,
+    #                                         "_".join([str(i["stride"]) for i in cnn_filters ]))
 
 EXP_NAME_PREFIX += "_LSTM" if ONLY_LSTM else CNN_PREFIX
 
@@ -303,7 +307,7 @@ export SPEECH_FEATS=/afs/inf.ed.ac.uk/group/project/lowres/work/corpora/fisher_k
 
 export JOSHUA=/afs/inf.ed.ac.uk/group/project/lowres/work/installs/fisher-callhome-corpus
 
-export OUT=$PWD/mfcc_out 
+export OUT=$PWD/mfcc_out
 
 python prep_map_kaldi_segments.py -m $JOSHUA -o $OUT
 
@@ -314,5 +318,8 @@ python prep_speech_segments.py -m $SPEECH_FEATS -o $OUT
 python prep_vocab.py -o $OUT
 
 python prep_get_speech_info.py -o $OUT
+
+python nmt_run.py -o $PWD/mfcc_out -e 10 -k fisher_train -y 1 -m 1
+
 
 '''

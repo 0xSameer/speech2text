@@ -273,8 +273,9 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
                 serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch+i+1)), model)
                 print("Finished saving model")
             # end if save model
-            print("MODEL NAME: {0:s}".format(model_fil))
-            print("learning rate: {0:.6f}".format(LEARNING_RATE))
+            print("learning rate: {0:.6f}, optimizer: {1:s}".format(LEARNING_RATE, "ADAM" if OPTIMIZER_ADAM1_SGD_0 else "SGD"))
+            print('model file name: {0:s}'.format(model_fil))
+            print('dev log file name: {0:s}'.format(log_dev_fil_name))
         # end for epochs
     # end open log files
 # end train loop
