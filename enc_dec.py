@@ -126,16 +126,25 @@ class SpeechEncoderDecoder(Chain):
         self.cnns = []
         # add CNN layers
         cnn_out_dim = 0
+        reduce_dim = CNN_IN_DIM
+        if CNN_TYPE == DEEP_2D_CNN:
+            reduce_dim = reduce_dim // 3
         if len(cnn_filters) > 0:
             for i, l in enumerate(cnn_filters):
                 lname = "CNN_{0:d}".format(i)
                 cnn_out_dim += l["out_channels"]
                 self.cnns.append(lname)
-                self.add_link(lname, L.ConvolutionND(**l, initialW=w))
+                if CNN_TYPE == DEEP_1D_CNN:
+                    self.add_link(lname, L.ConvolutionND(**l, initialW=w))
+                else:
+                    self.add_link(lname, L.Convolution2D(**l, initialW=w))
+                    reduce_dim = math.ceil(reduce_dim / l["stride"][1])
                 if USE_BN:
                     self.add_link('{0:s}_bn'.format(lname), L.BatchNormalization((l["out_channels"])))
 
             self.cnn_out_dim = cnn_filters[-1]["out_channels"]
+            if CNN_TYPE == DEEP_2D_CNN:
+                self.cnn_out_dim *= reduce_dim
 
             # add highway layers
             self.highway = ["highway_{0:d}".format(i)
@@ -146,6 +155,7 @@ class SpeechEncoderDecoder(Chain):
             self.cnn_out_dim = CNN_IN_DIM
     # end init_deep_cnn_model()
 
+
     def init_model(self):
 
         if enc_key != 'sp':
@@ -155,7 +165,7 @@ class SpeechEncoderDecoder(Chain):
 
         self.scale = 1
 
-        if SINGLE_LAYER_CNN == True:
+        if CNN_TYPE == SINGLE_1D_CNN:
             self.init_cnn_model()
         else:
             self.init_deep_cnn_model()
@@ -361,7 +371,8 @@ class SpeechEncoderDecoder(Chain):
 
     def forward_cnn(self, X):
         # perform convolutions
-        h = F.relu(self[self.cnns[0]](X))
+        h = F.swapaxes(X,1,2)
+        h = F.relu(self[self.cnns[0]](h))
 
         for i in range(len(self.cnns[1:])):
             h = F.concat((h, F.relu(self[self.cnns[i]](X))), axis=1)
@@ -376,25 +387,36 @@ class SpeechEncoderDecoder(Chain):
             h = self.cnn_bn(h, finetune=FINE_TUNE)
 
         # out dimension:
-        # batch size * cnn out dim * num time frames after pooling
+        # batch size * num time frames after pooling * cnn out dim
+        h = F.rollaxis(h, 2)
         return h
     # end forward_cnn()
 
-    def forward_deep_cnn(self, X):
-        # perform convolutions
-        h = X
+    def forward_deep_cnn(self, h):
+        # check and prepare for 2d convolutions
+        if CNN_TYPE == DEEP_2D_CNN:
+            h = F.reshape(h, (h.shape[:2] + tuple([-1,SPEECH_DIM // 3])))
+        h = F.swapaxes(h,1,2)
+
         for i, cnn_layer in enumerate(self.cnns):
             h = self[cnn_layer](h)
-            h = F.max_pooling_nd(h, ksize=cnn_max_pool[i],
-                                 stride=cnn_max_pool[i],
-                                 pad=max_pool_pad)
+            # h = F.max_pooling_nd(h, ksize=cnn_max_pool[i],
+            #                      stride=cnn_max_pool[i],
+            #                      pad=max_pool_pad)
             # batch normalization before non-linearity
             if USE_BN:
                 bn_lname = '{0:s}_bn'.format(cnn_layer)
                 h = self[bn_lname](h)
             h = F.relu(h)
+
         # out dimension:
-        # batch size * cnn out dim * num time frames after pooling
+        # batch size * num time frames after pooling * cnn out dim
+        if CNN_TYPE == DEEP_2D_CNN:
+            h = F.swapaxes(h,1,2)
+            h = F.reshape(h, h.shape[:2] + tuple([-1]))
+            h = F.rollaxis(h,1)
+        else:
+            h = F.rollaxis(h, 2)
         return h
 
     def forward_highway(self, X):
@@ -435,16 +457,14 @@ class SpeechEncoderDecoder(Chain):
 
     def forward_enc(self, X):
         if enc_key != 'sp':
-            h = F.swapaxes(self.embed_enc(X),1,2)
+            h = self.embed_enc(X)
         else:
-            h = F.swapaxes(X,1,2)
+            h = X
         if len(self.cnns) > 0:
-            if SINGLE_LAYER_CNN:
+            if CNN_TYPE == SINGLE_1D_CNN:
                 h = self.forward_cnn(h)
             else:
                 h = self.forward_deep_cnn(h)
-        # end check for cnns
-        h = F.rollaxis(h, 2)
         self.forward_rnn(h)
 
 

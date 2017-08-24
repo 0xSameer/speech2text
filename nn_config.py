@@ -34,19 +34,23 @@ print("callhome es-en configuration")
 
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'es_w'
+enc_key = 'sp'
 dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 0
+gpuid = 2
 # ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = True
 
 lstm1_or_gru0 = False
 
-SINGLE_LAYER_CNN = False
+SINGLE_1D_CNN    = 0
+DEEP_1D_CNN      = 1
+DEEP_2D_CNN      = 2
+
+CNN_TYPE = DEEP_2D_CNN
 
 USE_LN = True
 USE_BN = True
@@ -67,7 +71,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.01
 
 ONLY_LSTM = False
 
@@ -152,32 +156,49 @@ prep_buckets.buckets_main(out_path, num_b, width_b, enc_key)
 max_pool_stride = 5
 max_pool_pad = 0
 BATCH_SIZE = 32
-if SINGLE_LAYER_CNN == True:
+if CNN_TYPE == SINGLE_1D_CNN:
+    cnn_num_channels = 100
     cnn_filters = [{"ndim": 1,
                     "in_channels": CNN_IN_DIM,
                     "out_channels": cnn_num_channels,
                     "ksize": k,
                     "stride": 1,
                     "pad": k //2} for k in cnn_k_widths]
-else:
+elif CNN_TYPE == DEEP_1D_CNN:
     # static CNN configuration
     # googlish
     cnn_filters = [
         {"ndim": 1,
         "in_channels": CNN_IN_DIM,
-        "out_channels": 32,
-        "ksize": 5,
-        "stride": 1,
-        "pad": 5 // 2},
+        "out_channels": 64,
+        "ksize": 11,
+        "stride": 2,
+        "pad": 11 // 2},
         {"ndim": 1,
-        "in_channels": 32,
-        "out_channels": 32,
-        "ksize": 3,
-        "stride": 1,
-        "pad": 3 // 2},
+        "in_channels": 64,
+        "out_channels": 64,
+        "ksize": 7,
+        "stride": 4,
+        "pad": 7 // 2},
     ]
     cnn_max_pool = [1,1]
 
+else:
+    # static CNN configuration
+    # googlish
+    cnn_filters = [
+        {"in_channels": None,
+        "out_channels": 32,
+        "ksize": (3,3),
+        "stride": (3,2),
+        "pad": 3 // 2},
+        {"in_channels": None,
+        "out_channels": 32,
+        "ksize": (3,3),
+        "stride": (3,2),
+        "pad": 3 // 2},
+    ]
+    cnn_max_pool = [1,1]
 
 print("cnn details:")
 for d in cnn_filters:
@@ -208,7 +229,7 @@ else:
     EXP_NAME_PREFIX += "_l2-0"
 
 
-if SINGLE_LAYER_CNN:
+if CNN_TYPE == SINGLE_1D_CNN:
     CNN_PREFIX = "_cnn-num{0:d}-range{1:d}-{2:d}-{3:d}-pool{4:d}".format(
                                                     cnn_num_channels,
                                                     cnn_filter_start,
@@ -216,7 +237,7 @@ if SINGLE_LAYER_CNN:
                                                     cnn_filter_gap,
                                                     max_pool_stride*10)
 
-else:
+elif CNN_TYPE == DEEP_1D_CNN:
     str_cnn_sizes = "_".join([str(d['out_channels']) for d in cnn_filters])
     # if sum(cnn_max_pool) // len(cnn_max_pool) > 1:
     CNN_PREFIX = "_{0:s}_{1:s}_DCNN".format(str_cnn_sizes,
@@ -224,6 +245,11 @@ else:
     # else:
     #     CNN_PREFIX = "_{0:s}_{1:s}_DCNN".format(str_cnn_sizes,
     #                                         "_".join([str(i["stride"]) for i in cnn_filters ]))
+
+else:
+    str_cnn_sizes = "_".join([str(d['out_channels']) for d in cnn_filters])
+    CNN_PREFIX = "_{0:s}_{1:s}_2DCNN".format(str_cnn_sizes,
+                                         "_".join([str(i["stride"]) for i in cnn_filters ]))
 
 EXP_NAME_PREFIX += "_LSTM" if ONLY_LSTM else CNN_PREFIX
 
