@@ -249,7 +249,7 @@ elif CNN_TYPE == DEEP_1D_CNN:
 else:
     str_cnn_sizes = "_".join([str(d['out_channels']) for d in cnn_filters])
     CNN_PREFIX = "_{0:s}_{1:s}_2DCNN".format(str_cnn_sizes,
-                                         "_".join([str(i["stride"]) for i in cnn_filters ]))
+                                         "_".join([str(i["stride"][0]) for i in cnn_filters ]))
 
 EXP_NAME_PREFIX += "_LSTM" if ONLY_LSTM else CNN_PREFIX
 
