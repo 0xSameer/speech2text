@@ -6,13 +6,16 @@ from nn_config import *
 
 class SpeechEncoderDecoder(Chain):
 
-    def __init__(self):
+    def __init__(self, gpunum):
         '''
         n_speech_dim: dimensions for the speech features
         vsize:   vocabulary size
         nlayers: # layers
         attn:    if True, use attention
         '''
+        # Store GPU id
+        self.gpuid = gpunum
+
         self.init_params()
 
         if self.gpuid >= 0:
@@ -24,8 +27,6 @@ class SpeechEncoderDecoder(Chain):
 
 
     def init_params(self):
-        # Store GPU id
-        self.gpuid = gpuid
 
         #--------------------------------------------------------------------
         # initialize model
@@ -82,7 +83,7 @@ class SpeechEncoderDecoder(Chain):
         #                     scale=scale)
 
         # add LSTM layers
-        # first layer appends previous ht, and therefore, 
+        # first layer appends previous ht, and therefore,
         # in_units = embed units + hidden units
         self.rnn_dec = ["L{0:d}_dec".format(i) for i in range(num_layers_dec)]
         # self.add_rnn_layers(self.rnn_dec,
@@ -183,20 +184,21 @@ class SpeechEncoderDecoder(Chain):
             # add context layer for attention
             # self.add_link("context", L.Linear(4*self.n_units, 2*self.n_units))
             # if USE_BN:
-            #     self.add_link("context_bn", 
+            #     self.add_link("context_bn",
             #                    L.BatchNormalization(2*self.n_units))
             if ATTN_W:
                 self.add_link("attn_Wa", L.Linear(self.n_units, self.n_units))
             self.add_link("context", L.Linear(2*self.n_units, 2*self.n_units))
             # if USE_BN:
-            #     self.add_link("context_bn", 
+            #     self.add_link("context_bn",
             #                    L.BatchNormalization(2*self.n_units))
 
         # add output layer
         self.add_link("out", L.Linear(2*self.n_units, vocab_size_en))
 
         # create masking array for pad id
-        self.mask_pad_id = xp.ones(self.vocab_size_en, dtype=xp.float32)
+        with cupy.cuda.Device(self.gpuid):
+            self.mask_pad_id = xp.ones(self.vocab_size_en, dtype=xp.float32)
         # make the class weight for pad id equal to 0
         # this way loss will not be computed for this predicted loss
         self.mask_pad_id[0] = 0
@@ -329,7 +331,8 @@ class SpeechEncoderDecoder(Chain):
             curr_word = Variable(xp.full((batch_size,), GO_ID, dtype=xp.int32))
 
         # flag to track if all sentences in batch have predicted EOS
-        check_if_all_eos = xp.full((batch_size,), False, dtype=xp.bool_)
+        with cupy.cuda.Device(self.gpuid):
+            check_if_all_eos = xp.full((batch_size,), False, dtype=xp.bool_)
 
         ht = Variable(xp.zeros((batch_size, 2*self.n_units), dtype=xp.float32))
 
@@ -352,7 +355,7 @@ class SpeechEncoderDecoder(Chain):
                 # distribution
                 loss += F.softmax_cross_entropy(pred_out, y[npred+1],
                                                    class_weight=self.mask_pad_id)
-                # uncomment following line if labeled data to be 
+                # uncomment following line if labeled data to be
                 # used at next time step
                 # curr_word = y[npred+1]
             # else:
@@ -378,9 +381,9 @@ class SpeechEncoderDecoder(Chain):
             h = F.concat((h, F.relu(self[self.cnns[i]](X))), axis=1)
 
         # max pooling
-        h = F.max_pooling_nd(h, ksize=max_pool_stride,
-                             stride=max_pool_stride,
-                             pad=max_pool_pad)
+        # h = F.max_pooling_nd(h, ksize=max_pool_stride,
+        #                      stride=max_pool_stride,
+        #                      pad=max_pool_pad)
 
         # batch normalization
         if USE_BN:
@@ -475,11 +478,11 @@ class SpeechEncoderDecoder(Chain):
         if ADD_NOISE and not chainer.config.train:
             # due to CUDA issues with random number generator
             # creating a numpy array and moving to GPU
-            noise = Variable(np.random.normal(1.0, 
-                            NOISE_STDEV, 
+            noise = Variable(np.random.normal(1.0,
+                            NOISE_STDEV,
                             size=X.shape).astype(np.float32))
             if gpuid >= 0:
-                noise.to_gpu()
+                noise.to_gpu(gpuid)
             X = X * noise
         # encode input
         self.forward_enc(X)

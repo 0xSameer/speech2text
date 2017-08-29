@@ -8,6 +8,7 @@ import argparse
 import textwrap
 import nltk
 from nltk.translate.bleu_score import sentence_bleu, corpus_bleu
+import copy
 
 program_descrp = """
 run nmt experiments
@@ -20,11 +21,11 @@ python nmt_run.py -o $PWD/out -e 2 -k fisher_train
 '''
 xp = cuda.cupy if gpuid >= 0 else np
 
-model = SpeechEncoderDecoder()
+model = SpeechEncoderDecoder(gpuid)
+model_1 = SpeechEncoderDecoder(gpuid_2)
 
-if gpuid >= 0:
-    cuda.get_device(gpuid).use()
-    model.to_gpu()
+model.to_gpu(gpuid)
+model_1.to_gpu(gpuid_2)
 
 if OPTIMIZER_ADAM1_SGD_0:
     print("using ADAM optimizer")
@@ -45,7 +46,7 @@ if WEIGHT_DECAY:
 
 # gradient clipping
 optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
-
+# optimizer.add_hook(chainer.optimizer.GradientNoise(eta=0.3))
 
 def get_batch(m_dict, x_key, y_key,
               utt_list, vocab_dict,
@@ -124,16 +125,16 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     utt_list_batches = []
     for b in b_shuffled:
         if b < num_b // 2:
-            batch_size = 32
+            batch_size = 128
         elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
-            batch_size = 32
+            batch_size = 128
         else:
-            batch_size = 32
+            batch_size = 128
 
         bucket = b_dict['buckets'][b]
         if mini:
             # select 25% of the dataset for training
-            bucket = random.sample(bucket, len(bucket) // 10)
+            bucket = random.sample(bucket, len(bucket) // 4)
 
         b_len = len(bucket)
         total_utts += b_len
@@ -147,29 +148,56 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
 
     with tqdm(total=total_utts) as pbar:
         for i, (utt_list, b) in enumerate(utt_list_batches):
+            utt_list_0 = utt_list[:len(utt_list)//2]
+            utt_list_1 = utt_list[len(utt_list)//2:]
+
             # get batch_data
-            batch_data = get_batch(m_dict,
+            batch_data_0 = get_batch(m_dict,
                                    x_key, y_key,
-                                   utt_list,
+                                   utt_list_0,
                                    vocab_dict,
                                    ((b+1) * width_b),
                                    (num_b * width_b),
                                    cat_speech_path=cat_speech_path)
-            if len(batch_data['X']) > 0 and len(batch_data['y']) > 0:
+            batch_data_1 = get_batch(m_dict,
+                                   x_key, y_key,
+                                   utt_list_1,
+                                   vocab_dict,
+                                   ((b+1) * width_b),
+                                   (num_b * width_b),
+                                   cat_speech_path=cat_speech_path)
+
+            if (len(batch_data_0['X']) > 0 and len(batch_data_0['y']) > 0 and
+                           len(batch_data_1['X']) > 0 and len(batch_data_1['y']) > 0):
+                batch_data_0['X'].to_gpu(gpuid)
+                batch_data_0['y'].to_gpu(gpuid)
+                batch_data_1['X'].to_gpu(gpuid_2)
+                batch_data_1['y'].to_gpu(gpuid_2)
+
                 if use_y:
                     with chainer.using_config('train', train):
-                        p, loss = model.forward(batch_data['X'], batch_data['y'])
-                    # store loss values for printing
-                    loss_val = float(loss.data) / batch_data['y'].shape[1]
+                        # p, loss = model.forward(batch_data['X'], batch_data['y'])
+                        cuda.get_device(gpuid).use()
+                        p0, loss_0 = model.forward(batch_data_0['X'], batch_data_0['y'])
+                        cuda.get_device(gpuid_2).use()
+                        p1, loss_1 = model_1.forward(batch_data_1['X'], batch_data_1['y'])
+                        # store loss values for printing
+                        loss_val = (float(loss_0.data) + float(loss_1.data)) / (batch_data_0['y'].shape[1] + batch_data_1['y'].shape[1])
                 else:
                     with chainer.using_config('train', False):
-                        p, loss = model.forward(batch_data['X'])
-                    loss_val = 0.0
+                        cuda.get_device(gpuid).use()
+                        p0, _ = model.forward(batch_data_0['X'])
+                        cuda.get_device(gpuid_2).use()
+                        p1, _ = model_1.forward(batch_data_1['X'])
+                        loss_val = 0.0
 
                 utts.extend(utt_list)
 
-                if len(p) > 0:
-                    pred_sents.extend(p.tolist())
+                if len(p0) > 0:
+                    pred_sents.extend(p0.tolist())
+
+                if len(p1) > 0:
+                    pred_sents.extend(p1.tolist())
 
                 total_loss += loss_val
                 total_loss_updates += 1
@@ -178,10 +206,22 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
 
                 if train:
                     # set up for backprop
+                    # model.cleargrads()
+                    # loss.backward()
+                    # # update parameters
+                    # optimizer.update()
+
                     model.cleargrads()
-                    loss.backward()
-                    # update parameters
+                    model_1.cleargrads()
+
+                    loss_0.backward()
+                    loss_1.backward()
+
+                    model.addgrads(model_1)
                     optimizer.update()
+
+                    model_1.copyparams(model)
+
 
                 out_str = "b={0:d},l={1:.2f},avg={2:.2f}".format((b+1),loss_val,loss_per_epoch)
 
@@ -208,6 +248,7 @@ def check_model():
         print('model found = \n{0:s}'.format(max_model_fil))
         print('loading ...')
         serializers.load_npz(max_model_fil, model)
+        serializers.load_npz(max_model_fil, model_1)
         print("finished loading ..")
         max_epoch = int(max_model_fil.split('_')[-1].split('.')[0])
     else:

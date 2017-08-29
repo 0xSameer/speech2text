@@ -19,14 +19,25 @@ UNK_ID = 3
 
 NO_ATTN = 0
 SOFT_ATTN = 1
+
+SINGLE_1D_CNN    = 0
+DEEP_1D_CNN      = 1
+DEEP_2D_CNN      = 2
+
 #------------------------------------------------------------------------------
 
 print("translating es to en")
 
-out_path = "./mfcc_out/"
+# FBANK
+# out_path = "./out/"
+# model_dir = "fsh_t2t_fbank"
+# speech dimensions
+# SPEECH_DIM = 69
 
-# model_dir = "fsh_new_attn"
+# MFCC
+out_path = "./mfcc_out/"
 model_dir = "fsh_t2t"
+SPEECH_DIM = 39
 
 EXP_NAME_PREFIX = ""
 
@@ -39,16 +50,13 @@ dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 2
+gpuid = 1
+gpuid_2 = 2
 # ------------------------------------------
 
 OPTIMIZER_ADAM1_SGD_0 = True
 
 lstm1_or_gru0 = False
-
-SINGLE_1D_CNN    = 0
-DEEP_1D_CNN      = 1
-DEEP_2D_CNN      = 2
 
 CNN_TYPE = DEEP_2D_CNN
 
@@ -85,9 +93,6 @@ DROPOUT_RATIO=0.3
 
 use_attn = SOFT_ATTN
 ATTN_W = True
-
-# FBANK speech dimensions
-SPEECH_DIM = 39
 
 hidden_units = 256
 embedding_units = 256
@@ -166,22 +171,21 @@ if CNN_TYPE == SINGLE_1D_CNN:
                     "pad": k //2} for k in cnn_k_widths]
 elif CNN_TYPE == DEEP_1D_CNN:
     # static CNN configuration
-    # googlish
     cnn_filters = [
         {"ndim": 1,
         "in_channels": CNN_IN_DIM,
-        "out_channels": 64,
-        "ksize": 11,
+        "out_channels": 32,
+        "ksize": 9,
         "stride": 2,
-        "pad": 11 // 2},
+        "pad": 9 // 2},
         {"ndim": 1,
-        "in_channels": 64,
-        "out_channels": 64,
-        "ksize": 7,
+        "in_channels": 32,
+        "out_channels": 32,
+        "ksize": 5,
         "stride": 4,
-        "pad": 7 // 2},
+        "pad": 5 // 2},
     ]
-    cnn_max_pool = [1,1]
+    cnn_max_pool = [2,4]
 
 else:
     # static CNN configuration
@@ -190,15 +194,14 @@ else:
         {"in_channels": None,
         "out_channels": 32,
         "ksize": (3,3),
-        "stride": (3,2),
+        "stride": (2,2),
         "pad": 3 // 2},
         {"in_channels": None,
         "out_channels": 32,
-        "ksize": (3,3),
-        "stride": (3,2),
-        "pad": 3 // 2},
+        "ksize": (5,3),
+        "stride": (4,2),
+        "pad": (5 // 2, 3 // 2)},
     ]
-    cnn_max_pool = [1,1]
 
 print("cnn details:")
 for d in cnn_filters:
