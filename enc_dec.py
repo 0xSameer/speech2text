@@ -300,10 +300,24 @@ class SpeechEncoderDecoder(Chain):
         batch_size = decoder_batch.shape[1]
         loss = 0
         ht = Variable(xp.zeros((batch_size, 2*self.n_units), dtype=xp.float32))
+        
+        decoder_input = decoder_batch[0]
+
         # for all sequences in the batch, feed the characters one by one
         for curr_word, next_word in zip(decoder_batch, decoder_batch[1:]):
+
+            use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
+            
+            if use_teacher_forcing:
+                decoder_input = curr_word
+            # else:
+            #     decoder_input = F.argmax(predicted_out, axis=1)
+
             # encode tokens
-            predicted_out, ht = self.decode(curr_word, ht)
+
+            predicted_out, ht = self.decode(decoder_input, ht)
+
+            decoder_input = F.argmax(predicted_out, axis=1)
 
             loss_arr = F.softmax_cross_entropy(predicted_out, next_word,
                                                class_weight=self.mask_pad_id)

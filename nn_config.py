@@ -50,9 +50,11 @@ dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 1
-gpuid_2 = 2
+gpuid = 2
+gpuid_2 = 0
 # ------------------------------------------
+
+teacher_forcing_ratio = 0.5
 
 OPTIMIZER_ADAM1_SGD_0 = True
 
@@ -79,7 +81,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.01
+LEARNING_RATE = 0.05
 
 ONLY_LSTM = False
 
@@ -109,7 +111,7 @@ if ONLY_LSTM == False:
         num_highway_layers = 2
         CNN_IN_DIM = SPEECH_DIM
         num_b = 20
-        width_b = 64
+        width_b = 96
 
     elif enc_key == 'es_c':
         num_layers_enc = 2
@@ -182,10 +184,10 @@ elif CNN_TYPE == DEEP_1D_CNN:
         "in_channels": 32,
         "out_channels": 32,
         "ksize": 5,
-        "stride": 4,
+        "stride": 2,
         "pad": 5 // 2},
     ]
-    cnn_max_pool = [2,4]
+    cnn_max_pool = [1,1]
 
 else:
     # static CNN configuration
