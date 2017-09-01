@@ -23,7 +23,6 @@ SOFT_ATTN = 1
 SINGLE_1D_CNN    = 0
 DEEP_1D_CNN      = 1
 DEEP_2D_CNN      = 2
-
 #------------------------------------------------------------------------------
 
 print("translating es to en")
@@ -36,7 +35,7 @@ print("translating es to en")
 
 # MFCC
 out_path = "./mfcc_out/"
-model_dir = "fsh_t2t"
+model_dir = "fsh_again"
 SPEECH_DIM = 39
 
 EXP_NAME_PREFIX = ""
@@ -46,33 +45,26 @@ print("callhome es-en configuration")
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
 enc_key = 'sp'
-dec_key = 'en_w'
+dec_key = 'en_c'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
 gpuid = 2
-gpuid_2 = 0
+# gpuid_2 = 0
 # ------------------------------------------
 
-teacher_forcing_ratio = 0.5
+teacher_forcing_ratio = 1
 
 OPTIMIZER_ADAM1_SGD_0 = True
 
 lstm1_or_gru0 = False
 
-CNN_TYPE = DEEP_2D_CNN
+CNN_TYPE = DEEP_1D_CNN
 
 USE_LN = True
 USE_BN = True
 
-FINE_TUNE = False
-
-ADD_NOISE=False
-
-if enc_key != 'sp':
-    ADD_NOISE=False
-
-NOISE_STDEV=0.125
+SHUFFLE_BATCHES = False
 
 WEIGHT_DECAY=True
 
@@ -81,20 +73,27 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.05
+LEARNING_RATE = 0.2
 
 ONLY_LSTM = False
 
 ITERS_TO_SAVE = 10
 
-SHUFFLE_BATCHES = True
-
 USE_DROPOUT=True
 
-DROPOUT_RATIO=0.3
+DROPOUT_RATIO=0.2
 
 use_attn = SOFT_ATTN
 ATTN_W = True
+
+ADD_NOISE=False
+
+if enc_key != 'sp':
+    ADD_NOISE=False
+
+NOISE_STDEV=0.125
+
+FINE_TUNE = False
 
 hidden_units = 256
 embedding_units = 256
@@ -111,7 +110,7 @@ if ONLY_LSTM == False:
         num_highway_layers = 2
         CNN_IN_DIM = SPEECH_DIM
         num_b = 20
-        width_b = 96
+        width_b = 64
 
     elif enc_key == 'es_c':
         num_layers_enc = 2
@@ -186,8 +185,13 @@ elif CNN_TYPE == DEEP_1D_CNN:
         "ksize": 5,
         "stride": 2,
         "pad": 5 // 2},
+        {"ndim": 1,
+        "in_channels": 32,
+        "out_channels": 32,
+        "ksize": 3,
+        "stride": 2,
+        "pad": 3 // 2},
     ]
-    cnn_max_pool = [1,1]
 
 else:
     # static CNN configuration
@@ -200,9 +204,9 @@ else:
         "pad": 3 // 2},
         {"in_channels": None,
         "out_channels": 32,
-        "ksize": (5,3),
-        "stride": (4,2),
-        "pad": (5 // 2, 3 // 2)},
+        "ksize": (3,3),
+        "stride": (2,2),
+        "pad": 3 // 2},
     ]
 
 print("cnn details:")
@@ -243,13 +247,14 @@ if CNN_TYPE == SINGLE_1D_CNN:
                                                     max_pool_stride*10)
 
 elif CNN_TYPE == DEEP_1D_CNN:
+    # str_cnn_sizes = "_".join([str(d['out_channels']) for d in cnn_filters])
+    # # if sum(cnn_max_pool) // len(cnn_max_pool) > 1:
+    # CNN_PREFIX = "_{0:s}_{1:s}_DCNN".format(str_cnn_sizes,
+    #                                         "_".join(map(str,cnn_max_pool)))
     str_cnn_sizes = "_".join([str(d['out_channels']) for d in cnn_filters])
-    # if sum(cnn_max_pool) // len(cnn_max_pool) > 1:
-    CNN_PREFIX = "_{0:s}_{1:s}_DCNN".format(str_cnn_sizes,
-                                            "_".join(map(str,cnn_max_pool)))
-    # else:
-    #     CNN_PREFIX = "_{0:s}_{1:s}_DCNN".format(str_cnn_sizes,
-    #                                         "_".join([str(i["stride"]) for i in cnn_filters ]))
+    CNN_PREFIX = "_{0:s}_{1:s}_1DCNN".format(str_cnn_sizes,
+                                         "_".join([str(i["stride"]) for i in cnn_filters ]))
+
 
 else:
     str_cnn_sizes = "_".join([str(d['out_channels']) for d in cnn_filters])

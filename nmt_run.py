@@ -101,16 +101,13 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     width_b = b_dict['width_b']
     if mini:
         # leave out the last bucket as it includes pruned utterances
-        # b_shuffled = random.sample(list(range(num_b-1)), 1)
-        # b_shuffled = list(range(0,10,2)) + list(range(10,50,10))
-        # b_shuffled = random.sample([0,1,2],1) + random.sample([3,4,5],1) + random.sample([6,7],1)
-        # b_shuffled = list(range(num_b-2))
-        # b_shuffled = random.sample(list(range(num_b-1)),3)
-        # b_shuffled = [2]
-        b_shuffled = list(range(num_b-1))
+        b_shuffled = list(range(num_b))
     else:
-        b_shuffled = list(range(num_b-1))
+        b_shuffled = list(range(num_b))
     # shuffle buckets
+    if not SHUFFLE_BATCHES:
+        random.seed("haha")
+
     random.shuffle(b_shuffled)
 
     pred_sents = []
@@ -125,16 +122,16 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     utt_list_batches = []
     for b in b_shuffled:
         if b < num_b // 2:
-            batch_size = 128
+            batch_size = 256
         elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
-            batch_size = 128
+            batch_size = 256
         else:
-            batch_size = 128
+            batch_size = 256
 
         bucket = b_dict['buckets'][b]
         if mini:
             # select 25% of the dataset for training
-            bucket = random.sample(bucket, len(bucket) // 2)
+            bucket = random.sample(bucket, len(bucket) // 5)
 
         b_len = len(bucket)
         total_utts += b_len
@@ -148,8 +145,8 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
 
     with tqdm(total=total_utts) as pbar:
         for i, (utt_list, b) in enumerate(utt_list_batches):
-            # utt_list_0 = utt_list[:len(utt_list)//2]
-            # utt_list_1 = utt_list[len(utt_list)//2:]
+            utt_list_0 = utt_list[:len(utt_list)//2]
+            utt_list_1 = utt_list[len(utt_list)//2:]
 
             # get batch_data
             batch_data_0 = get_batch(m_dict,
@@ -177,7 +174,6 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
 
                 if use_y:
                     with chainer.using_config('train', train):
-                        # p, loss = model.forward(batch_data['X'], batch_data['y'])
                         cuda.get_device(gpuid).use()
                         p0, loss_0 = model.forward(batch_data_0['X'], batch_data_0['y'])
                         loss_val = float(loss_0.data) / batch_data_0['y'].shape[1]
@@ -209,11 +205,6 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
 
                 if train:
                     # set up for backprop
-                    # model.cleargrads()
-                    # loss.backward()
-                    # # update parameters
-                    # optimizer.update()
-
                     model.cleargrads()
                     # model_1.cleargrads()
 
@@ -231,6 +222,11 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
                 pbar.set_description('{0:s}'.format(out_str))
             else:
                 print("no data in batch")
+                print(len(batch_data_0['X']),
+                      len(batch_data_0['y']),
+                      len(batch_data_1['X']),
+                      len(batch_data_1['y']))
+                print(utt_list)
 
             pbar.update(len(utt_list))
         # end for batches
