@@ -49,15 +49,15 @@ dec_key = 'en_c'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 2
+gpuid = 0
 # gpuid_2 = 0
 # ------------------------------------------
 
-teacher_forcing_ratio = 1
+teacher_forcing_ratio = 0.8
 
 OPTIMIZER_ADAM1_SGD_0 = True
 
-lstm1_or_gru0 = False
+lstm1_or_gru0 = True
 
 CNN_TYPE = DEEP_1D_CNN
 
@@ -66,14 +66,14 @@ USE_BN = True
 
 SHUFFLE_BATCHES = False
 
-WEIGHT_DECAY=True
+WEIGHT_DECAY=False
 
 if WEIGHT_DECAY:
     WD_RATIO=0.000001
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.2
+LEARNING_RATE = 0.001
 
 ONLY_LSTM = False
 
@@ -96,7 +96,7 @@ NOISE_STDEV=0.125
 FINE_TUNE = False
 
 hidden_units = 256
-embedding_units = 256
+embedding_units = 64
 
 # if using CNNs, we can have more parameters as sequences are shorter
 # due to max pooling
@@ -118,7 +118,7 @@ if ONLY_LSTM == False:
         num_highway_layers = 2
         CNN_IN_DIM = embedding_units
         num_b = 10
-        width_b = 30
+        width_b = 15
     else:
         num_layers_enc = 2
         num_layers_dec = 2
@@ -128,7 +128,7 @@ if ONLY_LSTM == False:
         width_b = 3
 
     if dec_key.endswith('_w'):
-        MAX_EN_LEN = 50
+        MAX_EN_LEN = 80
     else:
         MAX_EN_LEN = 150
 
@@ -175,22 +175,22 @@ elif CNN_TYPE == DEEP_1D_CNN:
     cnn_filters = [
         {"ndim": 1,
         "in_channels": CNN_IN_DIM,
-        "out_channels": 32,
+        "out_channels": 60,
         "ksize": 9,
         "stride": 2,
         "pad": 9 // 2},
         {"ndim": 1,
-        "in_channels": 32,
-        "out_channels": 32,
+        "in_channels": 60,
+        "out_channels": 60,
         "ksize": 5,
         "stride": 2,
         "pad": 5 // 2},
         {"ndim": 1,
-        "in_channels": 32,
-        "out_channels": 32,
-        "ksize": 3,
-        "stride": 2,
-        "pad": 3 // 2},
+        "in_channels": 60,
+        "out_channels": 60,
+        "ksize": 5,
+        "stride": 4,
+        "pad": 5 // 2},
     ]
 
 else:

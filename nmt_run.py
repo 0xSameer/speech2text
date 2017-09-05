@@ -45,8 +45,8 @@ if WEIGHT_DECAY:
     optimizer.add_hook(chainer.optimizer.WeightDecay(WD_RATIO))
 
 # gradient clipping
-optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
-optimizer.add_hook(chainer.optimizer.GradientNoise(eta=0.01))
+optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=10))
+# optimizer.add_hook(chainer.optimizer.GradientNoise(eta=0.01))
 
 def get_batch(m_dict, x_key, y_key,
               utt_list, vocab_dict,
@@ -122,11 +122,11 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     utt_list_batches = []
     for b in b_shuffled:
         if b < num_b // 2:
-            batch_size = 256
+            batch_size = 220
         elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
-            batch_size = 256
+            batch_size = 200
         else:
-            batch_size = 256
+            batch_size = 180
 
         bucket = b_dict['buckets'][b]
         if mini:
