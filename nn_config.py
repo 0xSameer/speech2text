@@ -28,15 +28,14 @@ DEEP_2D_CNN      = 2
 print("translating es to en")
 
 # FBANK
-# out_path = "./out/"
-# model_dir = "fsh_t2t_fbank"
-# speech dimensions
-# SPEECH_DIM = 69
+out_path = "./out/"
+model_dir = "fsh_again"
+SPEECH_DIM = 69
 
 # MFCC
-out_path = "./mfcc_out/"
-model_dir = "fsh_again"
-SPEECH_DIM = 39
+# out_path = "./mfcc_out/"
+# model_dir = "fsh_again"
+# SPEECH_DIM = 39
 
 EXP_NAME_PREFIX = ""
 
@@ -49,7 +48,7 @@ dec_key = 'en_c'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 0
+gpuid = 1
 # gpuid_2 = 0
 # ------------------------------------------
 
@@ -57,9 +56,9 @@ teacher_forcing_ratio = 0.8
 
 OPTIMIZER_ADAM1_SGD_0 = True
 
-lstm1_or_gru0 = True
+lstm1_or_gru0 = False
 
-CNN_TYPE = DEEP_1D_CNN
+CNN_TYPE = DEEP_2D_CNN
 
 USE_LN = True
 USE_BN = True
@@ -73,7 +72,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.01
 
 ONLY_LSTM = False
 
@@ -110,15 +109,15 @@ if ONLY_LSTM == False:
         num_highway_layers = 2
         CNN_IN_DIM = SPEECH_DIM
         num_b = 20
-        width_b = 64
+        width_b = 50
 
     elif enc_key == 'es_c':
-        num_layers_enc = 2
-        num_layers_dec = 2
+        num_layers_enc = 3
+        num_layers_dec = 3
         num_highway_layers = 2
         CNN_IN_DIM = embedding_units
         num_b = 10
-        width_b = 15
+        width_b = 12
     else:
         num_layers_enc = 2
         num_layers_dec = 2
@@ -130,7 +129,7 @@ if ONLY_LSTM == False:
     if dec_key.endswith('_w'):
         MAX_EN_LEN = 80
     else:
-        MAX_EN_LEN = 150
+        MAX_EN_LEN = 120
 
 else:
     cnn_k_widths = []
@@ -172,31 +171,61 @@ if CNN_TYPE == SINGLE_1D_CNN:
                     "pad": k //2} for k in cnn_k_widths]
 elif CNN_TYPE == DEEP_1D_CNN:
     # static CNN configuration
+    # cnn_filters = [
+    #     {"ndim": 1,
+    #     "in_channels": CNN_IN_DIM,
+    #     "out_channels": 128,
+    #     "ksize": 9,
+    #     "stride": 2,
+    #     "pad": 9 // 2},
+    #     {"ndim": 1,
+    #     "in_channels": 128,
+    #     "out_channels": 128,
+    #     "ksize": 5,
+    #     "stride": 3,
+    #     "pad": 5 // 2},
+    #     {"ndim": 1,
+    #     "in_channels": 128,
+    #     "out_channels": 128,
+    #     "ksize": 5,
+    #     "stride": 3,
+    #     "pad": 5 // 2},
+    # ]
     cnn_filters = [
         {"ndim": 1,
         "in_channels": CNN_IN_DIM,
-        "out_channels": 60,
-        "ksize": 9,
+        "out_channels": 50,
+        "ksize": 4,
         "stride": 2,
-        "pad": 9 // 2},
+        "pad": 4 // 2},
         {"ndim": 1,
-        "in_channels": 60,
-        "out_channels": 60,
-        "ksize": 5,
-        "stride": 2,
-        "pad": 5 // 2},
+        "in_channels": 50,
+        "out_channels": 50,
+        "ksize": 4,
+        "stride": 3,
+        "pad": 4 // 2},
         {"ndim": 1,
-        "in_channels": 60,
-        "out_channels": 60,
-        "ksize": 5,
-        "stride": 4,
-        "pad": 5 // 2},
+        "in_channels": 50,
+        "out_channels": 50,
+        "ksize": 4,
+        "stride": 3,
+        "pad": 4 // 2},
     ]
 
 else:
     # static CNN configuration
     # googlish
     cnn_filters = [
+        {"in_channels": None,
+        "out_channels": 32,
+        "ksize": (3,3),
+        "stride": (2,2),
+        "pad": 3 // 2},
+        {"in_channels": None,
+        "out_channels": 32,
+        "ksize": (3,3),
+        "stride": (2,2),
+        "pad": 3 // 2},
         {"in_channels": None,
         "out_channels": 32,
         "ksize": (3,3),
@@ -227,10 +256,10 @@ if USE_DROPOUT:
 else:
     EXP_NAME_PREFIX += "_drpt-0"
 
-if ADD_NOISE:
-    EXP_NAME_PREFIX += "_noise-{0:.2f}".format(NOISE_STDEV)
-else:
-    EXP_NAME_PREFIX += "_noise-0"
+# if ADD_NOISE:
+#     EXP_NAME_PREFIX += "_noise-{0:.2f}".format(NOISE_STDEV)
+# else:
+EXP_NAME_PREFIX += "_noise-0"
 
 if WEIGHT_DECAY:
     EXP_NAME_PREFIX += "_l2-{0:.6f}".format(WD_RATIO)
