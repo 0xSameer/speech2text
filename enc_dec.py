@@ -129,7 +129,7 @@ class SpeechEncoderDecoder(Chain):
         cnn_out_dim = 0
         reduce_dim = CNN_IN_DIM
         if CNN_TYPE == DEEP_2D_CNN:
-            reduce_dim = reduce_dim // 3
+            reduce_dim = reduce_dim // 1
         if len(cnn_filters) > 0:
             for i, l in enumerate(cnn_filters):
                 lname = "CNN_{0:d}".format(i)
@@ -268,7 +268,7 @@ class SpeechEncoderDecoder(Chain):
 
     def encode(self, data_in, rnn_layers):
         # if cnn + highways used
-        if len(cnn_filters) > 0:
+        if num_highway_layers > 0:
             h = self.forward_highway(data_in)
             h = self.feed_rnn(h, rnn_layers)
         else:
@@ -300,14 +300,14 @@ class SpeechEncoderDecoder(Chain):
         batch_size = decoder_batch.shape[1]
         loss = 0
         ht = Variable(xp.zeros((batch_size, 2*self.n_units), dtype=xp.float32))
-        
+
         decoder_input = decoder_batch[0]
 
         # for all sequences in the batch, feed the characters one by one
         for curr_word, next_word in zip(decoder_batch, decoder_batch[1:]):
 
             use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
-            
+
             if use_teacher_forcing:
                 decoder_input = curr_word
             # else:
@@ -412,7 +412,8 @@ class SpeechEncoderDecoder(Chain):
     def forward_deep_cnn(self, h):
         # check and prepare for 2d convolutions
         if CNN_TYPE == DEEP_2D_CNN:
-            h = F.reshape(h, (h.shape[:2] + tuple([-1,SPEECH_DIM // 3])))
+            h = F.expand_dims(h, 2)
+            # h = F.reshape(h, (h.shape[:2] + tuple([-1,SPEECH_DIM // 3])))
         h = F.swapaxes(h,1,2)
 
         for i, cnn_layer in enumerate(self.cnns):
@@ -489,7 +490,7 @@ class SpeechEncoderDecoder(Chain):
         # get shape
         batch_size = X.shape[0]
         # check whether to add noi, start=1se
-        if ADD_NOISE and not chainer.config.train:
+        if ADD_NOISE and chainer.config.train:
             # due to CUDA issues with random number generator
             # creating a numpy array and moving to GPU
             noise = Variable(np.random.normal(1.0,

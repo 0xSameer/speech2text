@@ -46,7 +46,7 @@ if WEIGHT_DECAY:
 
 # gradient clipping
 optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=10))
-# optimizer.add_hook(chainer.optimizer.GradientNoise(eta=0.01))
+# optimizer.add_hook(chainer.optimizer.GradientNoise(eta=0.3))
 
 def get_batch(m_dict, x_key, y_key,
               utt_list, vocab_dict,
@@ -121,17 +121,25 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     total_utts = 0
     utt_list_batches = []
     for b in b_shuffled:
-        if b < num_b // 2:
-            batch_size = 220
-        elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
-            batch_size = 200
+        if enc_key == 'sp':
+            if b < num_b // 2:
+                batch_size = 128
+            elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
+                batch_size = 128
+            else:
+                batch_size = 100
         else:
-            batch_size = 180
+            if b < num_b // 2:
+                batch_size = 256
+            elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
+                batch_size = 256
+            else:
+                batch_size = 256
 
         bucket = b_dict['buckets'][b]
         if mini:
             # select 25% of the dataset for training
-            bucket = random.sample(bucket, len(bucket) // 5)
+            bucket = random.sample(bucket, len(bucket) // 4)
 
         b_len = len(bucket)
         total_utts += b_len
@@ -262,7 +270,7 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
     with open(log_train_fil_name, mode='a') as train_log, open(log_dev_fil_name, mode='a') as dev_log:
         for i in range(epochs):
             print("-"*80)
-            print("EPOCH = {0:d}".format(last_epoch+i+1))
+            print("EPOCH = {0:d} / {1:d}".format(last_epoch+i+1, last_epoch+epochs))
             # call train
             cat_speech_path = os.path.join(out_path, 'fisher_train')
             pred_sents, utts, train_loss = feed_model(map_dict['fisher_train'],
@@ -314,6 +322,7 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
                 print("Finished saving model")
             # end if save model
             print("learning rate: {0:.6f}, optimizer: {1:s}".format(LEARNING_RATE, "ADAM" if OPTIMIZER_ADAM1_SGD_0 else "SGD"))
+            print("using GPU={0:d}".format(gpuid))
             print('model file name: {0:s}'.format(model_fil))
             print('dev log file name: {0:s}'.format(log_dev_fil_name))
         # end for epochs

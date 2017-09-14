@@ -28,9 +28,9 @@ DEEP_2D_CNN      = 2
 print("translating es to en")
 
 # FBANK
-out_path = "./out/"
-model_dir = "fsh_again"
-SPEECH_DIM = 69
+out_path = "./fbank_out/"
+model_dir = "fsh_fbank"
+SPEECH_DIM = 40
 
 # MFCC
 # out_path = "./mfcc_out/"
@@ -48,7 +48,7 @@ dec_key = 'en_c'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 1
+gpuid = 3
 # gpuid_2 = 0
 # ------------------------------------------
 
@@ -72,7 +72,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.01
+LEARNING_RATE = 0.1
 
 ONLY_LSTM = False
 
@@ -104,12 +104,12 @@ if ONLY_LSTM == False:
     #                              cnn_filter_end+1,
     #                              cnn_filter_gap)]
     if enc_key == 'sp':
-        num_layers_enc = 2
-        num_layers_dec = 2
-        num_highway_layers = 2
+        num_layers_enc = 3
+        num_layers_dec = 3
+        num_highway_layers = 0
         CNN_IN_DIM = SPEECH_DIM
         num_b = 20
-        width_b = 50
+        width_b = 64
 
     elif enc_key == 'es_c':
         num_layers_enc = 3
@@ -117,7 +117,7 @@ if ONLY_LSTM == False:
         num_highway_layers = 2
         CNN_IN_DIM = embedding_units
         num_b = 10
-        width_b = 12
+        width_b = 15
     else:
         num_layers_enc = 2
         num_layers_dec = 2
@@ -129,7 +129,7 @@ if ONLY_LSTM == False:
     if dec_key.endswith('_w'):
         MAX_EN_LEN = 80
     else:
-        MAX_EN_LEN = 120
+        MAX_EN_LEN = 150
 
 else:
     cnn_k_widths = []
@@ -174,39 +174,63 @@ elif CNN_TYPE == DEEP_1D_CNN:
     # cnn_filters = [
     #     {"ndim": 1,
     #     "in_channels": CNN_IN_DIM,
-    #     "out_channels": 128,
-    #     "ksize": 9,
+    #     "out_channels": 64,
+    #     "ksize": 4,
+    #     "stride": 1,
+    #     "pad": 4 // 2},
+    #     {"ndim": 1,
+    #     "in_channels": 64,
+    #     "out_channels": 64,
+    #     "ksize": 4,
     #     "stride": 2,
-    #     "pad": 9 // 2},
+    #     "pad": 4 // 2},
     #     {"ndim": 1,
-    #     "in_channels": 128,
-    #     "out_channels": 128,
-    #     "ksize": 5,
-    #     "stride": 3,
-    #     "pad": 5 // 2},
+    #     "in_channels": 64,
+    #     "out_channels": 64,
+    #     "ksize": 4,
+    #     "stride": 1,
+    #     "pad": 4 // 2},
     #     {"ndim": 1,
-    #     "in_channels": 128,
-    #     "out_channels": 128,
-    #     "ksize": 5,
-    #     "stride": 3,
-    #     "pad": 5 // 2},
+    #     "in_channels": 64,
+    #     "out_channels": 64,
+    #     "ksize": 4,
+    #     "stride": 2,
+    #     "pad": 4 // 2},
+    #     {"ndim": 1,
+    #     "in_channels": 64,
+    #     "out_channels": 64,
+    #     "ksize": 4,
+    #     "stride": 1,
+    #     "pad": 4 // 2},
+    #     {"ndim": 1,
+    #     "in_channels": 64,
+    #     "out_channels": 64,
+    #     "ksize": 4,
+    #     "stride": 2,
+    #     "pad": 4 // 2},
+    #     {"ndim": 1,
+    #     "in_channels": 64,
+    #     "out_channels": 64,
+    #     "ksize": 4,
+    #     "stride": 1,
+    #     "pad": 4 // 2},
+    #     {"ndim": 1,
+    #     "in_channels": 64,
+    #     "out_channels": 64,
+    #     "ksize": 4,
+    #     "stride": 2,
+    #     "pad": 4 // 2},
     # ]
     cnn_filters = [
         {"ndim": 1,
         "in_channels": CNN_IN_DIM,
-        "out_channels": 50,
+        "out_channels": 64,
         "ksize": 4,
         "stride": 2,
         "pad": 4 // 2},
         {"ndim": 1,
-        "in_channels": 50,
-        "out_channels": 50,
-        "ksize": 4,
-        "stride": 3,
-        "pad": 4 // 2},
-        {"ndim": 1,
-        "in_channels": 50,
-        "out_channels": 50,
+        "in_channels": 64,
+        "out_channels": 64,
         "ksize": 4,
         "stride": 3,
         "pad": 4 // 2},
@@ -220,22 +244,27 @@ else:
         "out_channels": 32,
         "ksize": (3,3),
         "stride": (2,2),
-        "pad": 3 // 2},
+        "pad": (3 // 2, 3 // 2)},
         {"in_channels": None,
         "out_channels": 32,
         "ksize": (3,3),
         "stride": (2,2),
-        "pad": 3 // 2},
+        "pad": (3 // 2, 3 // 2)},
         {"in_channels": None,
-        "out_channels": 32,
+        "out_channels": 64,
         "ksize": (3,3),
         "stride": (2,2),
-        "pad": 3 // 2},
+        "pad": (3 // 2, 3 // 2)},
         {"in_channels": None,
-        "out_channels": 32,
+        "out_channels": 64,
         "ksize": (3,3),
         "stride": (2,2),
-        "pad": 3 // 2},
+        "pad": (3 // 2, 3 // 2)},
+        {"in_channels": None,
+        "out_channels": 128,
+        "ksize": (3,3),
+        "stride": (2,2),
+        "pad": (3 // 2, 3 // 2)},
     ]
 
 print("cnn details:")
@@ -256,10 +285,10 @@ if USE_DROPOUT:
 else:
     EXP_NAME_PREFIX += "_drpt-0"
 
-# if ADD_NOISE:
-#     EXP_NAME_PREFIX += "_noise-{0:.2f}".format(NOISE_STDEV)
-# else:
-EXP_NAME_PREFIX += "_noise-0"
+if ADD_NOISE:
+    EXP_NAME_PREFIX += "_noise-{0:.2f}".format(NOISE_STDEV)
+else:
+    EXP_NAME_PREFIX += "_noise-0"
 
 if WEIGHT_DECAY:
     EXP_NAME_PREFIX += "_l2-{0:.6f}".format(WD_RATIO)
@@ -363,6 +392,33 @@ print('model file name: {0:s}'.format(model_fil))
 print('log file name: {0:s}'.format(log_train_fil_name))
 
 '''
+FBANK:
+
+python kaldi_io.py test_fbank.ark fisher_fbank/fisher_test
+python kaldi_io.py dev_fbank.ark fisher_fbank/fisher_dev
+python kaldi_io.py dev2_fbank.ark fisher_fbank/fisher_dev2
+python kaldi_io.py train_fbank.ark fisher_fbank/fisher_train
+
+export SPEECH_FEATS=/afs/inf.ed.ac.uk/group/project/lowres/work/corpora/fisher_kaldi/fisher_fbank
+
+export JOSHUA=/afs/inf.ed.ac.uk/group/project/lowres/work/installs/fisher-callhome-corpus
+
+export OUT=$PWD/fbank_out
+
+python prep_map_kaldi_segments.py -m $JOSHUA -o $OUT
+
+python prep_map_sp_es_en.py -m $JOSHUA -o $OUT
+
+python prep_speech_segments.py -m $SPEECH_FEATS -o $OUT
+
+python prep_vocab.py -o $OUT
+
+python prep_get_speech_info.py -o $OUT
+
+python nmt_run.py -o $PWD/fbank_out -e 10 -k fisher_train -y 1 -m 1
+
+
+MFCC:
 python kaldi_io.py test_mfcc.ark fisher_mfcc/fisher_test
 python kaldi_io.py dev_mfcc.ark fisher_mfcc/fisher_dev
 python kaldi_io.py dev2_mfcc.ark fisher_mfcc/fisher_dev2
