@@ -44,7 +44,7 @@ print("callhome es-en configuration")
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
 enc_key = 'sp'
-dec_key = 'en_c'
+dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
@@ -72,7 +72,7 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 
-LEARNING_RATE = 0.1
+LEARNING_RATE = 1.0
 
 ONLY_LSTM = False
 
@@ -109,7 +109,7 @@ if ONLY_LSTM == False:
         num_highway_layers = 0
         CNN_IN_DIM = SPEECH_DIM
         num_b = 20
-        width_b = 64
+        width_b = 96
 
     elif enc_key == 'es_c':
         num_layers_enc = 3
@@ -127,7 +127,7 @@ if ONLY_LSTM == False:
         width_b = 3
 
     if dec_key.endswith('_w'):
-        MAX_EN_LEN = 80
+        MAX_EN_LEN = 100
     else:
         MAX_EN_LEN = 150
 
@@ -243,7 +243,7 @@ else:
         {"in_channels": None,
         "out_channels": 32,
         "ksize": (3,3),
-        "stride": (2,2),
+        "stride": (1,1),
         "pad": (3 // 2, 3 // 2)},
         {"in_channels": None,
         "out_channels": 32,
@@ -251,17 +251,12 @@ else:
         "stride": (2,2),
         "pad": (3 // 2, 3 // 2)},
         {"in_channels": None,
-        "out_channels": 64,
+        "out_channels": 32,
         "ksize": (3,3),
-        "stride": (2,2),
+        "stride": (1,1),
         "pad": (3 // 2, 3 // 2)},
         {"in_channels": None,
-        "out_channels": 64,
-        "ksize": (3,3),
-        "stride": (2,2),
-        "pad": (3 // 2, 3 // 2)},
-        {"in_channels": None,
-        "out_channels": 128,
+        "out_channels": 32,
         "ksize": (3,3),
         "stride": (2,2),
         "pad": (3 // 2, 3 // 2)},
