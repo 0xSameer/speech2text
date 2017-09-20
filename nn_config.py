@@ -48,7 +48,7 @@ dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 3
+gpuid = 1
 # gpuid_2 = 0
 # ------------------------------------------
 
@@ -76,7 +76,7 @@ LEARNING_RATE = 1.0
 
 ONLY_LSTM = False
 
-ITERS_TO_SAVE = 10
+ITERS_TO_SAVE = 5
 
 USE_DROPOUT=True
 
@@ -127,7 +127,7 @@ if ONLY_LSTM == False:
         width_b = 3
 
     if dec_key.endswith('_w'):
-        MAX_EN_LEN = 100
+        MAX_EN_LEN = 120
     else:
         MAX_EN_LEN = 150
 
@@ -243,17 +243,7 @@ else:
         {"in_channels": None,
         "out_channels": 32,
         "ksize": (3,3),
-        "stride": (1,1),
-        "pad": (3 // 2, 3 // 2)},
-        {"in_channels": None,
-        "out_channels": 32,
-        "ksize": (3,3),
         "stride": (2,2),
-        "pad": (3 // 2, 3 // 2)},
-        {"in_channels": None,
-        "out_channels": 32,
-        "ksize": (3,3),
-        "stride": (1,1),
         "pad": (3 // 2, 3 // 2)},
         {"in_channels": None,
         "out_channels": 32,

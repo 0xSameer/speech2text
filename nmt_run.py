@@ -10,6 +10,20 @@ import nltk
 from nltk.translate.bleu_score import sentence_bleu, corpus_bleu
 import copy
 
+
+import fractions
+import warnings
+from collections import Counter
+
+from nltk.util import ngrams
+
+try:
+    fractions.Fraction(0, 1000, _normalize=False)
+    from fractions import Fraction
+except TypeError:
+    from nltk.compat import Fraction
+
+
 program_descrp = """
 run nmt experiments
 """
@@ -151,7 +165,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
 
     random.shuffle(utt_list_batches)
 
-    with tqdm(total=total_utts) as pbar:
+    with tqdm(total=total_utts, dynamic_ncols=True) as pbar:
         for i, (utt_list, b) in enumerate(utt_list_batches):
             utt_list_0 = utt_list[:len(utt_list)//2]
             utt_list_1 = utt_list[len(utt_list)//2:]
@@ -321,10 +335,13 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
                 serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch+i+1)), model)
                 print("Finished saving model")
             # end if save model
-            print("learning rate: {0:.6f}, optimizer: {1:s}".format(LEARNING_RATE, "ADAM" if OPTIMIZER_ADAM1_SGD_0 else "SGD"))
+            print("learning rate: {0:.6f}, optimizer: {1:s}, teacher_forcing_ratio: {2:.2f}".format(LEARNING_RATE, 
+                                "ADAM" if OPTIMIZER_ADAM1_SGD_0 else "SGD",
+                                teacher_forcing_ratio))
             print("using GPU={0:d}".format(gpuid))
             print('model file name: {0:s}'.format(model_fil))
             print('dev log file name: {0:s}'.format(log_dev_fil_name))
+
         # end for epochs
     # end open log files
 # end train loop
@@ -403,7 +420,76 @@ def display_words(m_dict, v_dict, preds, utts, dec_key):
 
         print(display_pp)
 
-def calc_bleu(m_dict, v_dict, preds, utts, dec_key):
+def count_match(list1, list2):
+    # each list can have repeated elements. The count should account for this.
+    count1 = Counter(list1)
+    count2 = Counter(list2)
+    count2_keys = count2.keys()-set([UNK_ID, EOS_ID])
+    common_w = set(count1.keys()) & set(count2_keys)
+    matches = sum([min(count1[w], count2[w]) for w in common_w])
+    return matches
+
+def modified_precision_recall(references, hypothesis, n):
+    # Extracts all ngrams in hypothesis
+    # Set an empty Counter if hypothesis is empty.
+    counts = Counter(ngrams(hypothesis, n)) if len(hypothesis) >= n else Counter()
+    # Extract a union of references' counts.
+    ## max_counts = reduce(or_, [Counter(ngrams(ref, n)) for ref in references])
+    max_counts = {}
+    max_reference_count = 0
+    for reference in references:
+        reference_counts = Counter(ngrams(reference, n)) if len(reference) >= n else Counter()
+        for ngram in counts:
+            max_counts[ngram] = max(max_counts.get(ngram, 0),
+                                    reference_counts[ngram])
+        ref_length = sum(reference_counts.values())
+        if ref_length > max_reference_count:
+            max_reference_count = ref_length
+
+    # Assigns the intersection between hypothesis and references' counts.
+    clipped_counts = {ngram: min(count, max_counts[ngram])
+                      for ngram, count in counts.items()}
+
+    numerator = sum(clipped_counts.values())
+    # Ensures that denominator is minimum 1 to avoid ZeroDivisionError.
+    # Usually this happens when the ngram order is > len(reference).
+    denominator = max(1, sum(counts.values()))
+    rec_denominator = max(1, ref_length)
+    
+    prec = Fraction(numerator, denominator, _normalize=False)
+    rec = Fraction(numerator, rec_denominator, _normalize=False)
+
+    return prec, rec
+
+def corpus_precision_recall(r, h):
+    p_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
+    p_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
+    r_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
+    r_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
+    
+    for references, hypothesis in zip(r, h):
+        # For each order of ngram, calculate the numerator and
+        # denominator for the corpus-level modified precision.
+        for i, _ in enumerate((0.25,.25,.25,.25), start=1):
+            p_i, r_i = modified_precision_recall(references, hypothesis, i)
+            p_numerators[i] += p_i.numerator
+            p_denominators[i] += p_i.denominator
+            
+            r_numerators[i] += r_i.numerator
+            r_denominators[i] += r_i.denominator
+
+            
+    p = [(n / d) * 100 for n,d in zip(p_numerators.values(), p_denominators.values())]
+    r = [(n / d) *100 for n,d in zip(r_numerators.values(), r_denominators.values())]
+    
+    print("{0:10s} | {1:>8s} | {2:>8s}| {3:>8s} | {4:>8s}".format("metric", "1-gram","2-gram","3-gram","4-gram"))
+    print("-"*54)
+    print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("precision", *p))
+    print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("recall", *r))
+    return p, r
+
+
+def calc_bleu(m_dict, v_dict, preds, utts, dec_key, weights=(0.25, 0.25, 0.25, 0.25)):
     en_hyp = []
     en_ref = []
     ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
@@ -423,7 +509,7 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key):
         t_str = t_str[:t_str.find('_EOS')]
         en_hyp.append(t_str.split())
 
-    b_score = corpus_bleu(en_ref, en_hyp)
+    b_score = corpus_bleu(en_ref, en_hyp, weights=weights)
 
     return b_score, en_hyp, en_ref
 
