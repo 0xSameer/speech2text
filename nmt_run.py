@@ -9,7 +9,7 @@ import textwrap
 import nltk
 from nltk.translate.bleu_score import sentence_bleu, corpus_bleu
 import copy
-
+import nltk.translate.bleu_score
 
 import fractions
 import warnings
@@ -320,7 +320,7 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
                               use_y=use_y,
                               mini=False)
 
-            dev_b_score, _, _ = calc_bleu(map_dict['dev_key'],
+            dev_b_score, _, _ = calc_bleu(map_dict[dev_key],
                                           vocab_dict[dec_key],
                                           pred_sents, utts,
                                           dec_key)
@@ -514,7 +514,12 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key, weights=(0.25, 0.25, 0.25, 0
         t_str = t_str[:t_str.find('_EOS')]
         en_hyp.append(t_str.split())
 
-    b_score = corpus_bleu(en_ref, en_hyp, weights=weights)
+    smooth_fun = nltk.translate.bleu_score.SmoothingFunction()
+
+    b_score = corpus_bleu(en_ref, 
+                          en_hyp, 
+                          weights=weights, 
+                          smoothing_function=smooth_fun.method2)
 
     return b_score, en_hyp, en_ref
 
