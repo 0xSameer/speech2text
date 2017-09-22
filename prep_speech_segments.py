@@ -105,7 +105,7 @@ def main():
 
     for cat in map_dict:
         if not os.path.isdir(os.path.join(speech_dir, cat)):
-            print("{0:s} does not exist. Exiting!".format(cat))
+            print("{0:s} does not exist. Exiting!".format(os.path.join(speech_dir, cat)))
             return 0
         cat_speech_path = os.path.join(speech_dir, cat)
         cat_out_path = os.path.join(out_path, cat)

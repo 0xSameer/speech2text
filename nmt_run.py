@@ -281,14 +281,19 @@ def check_model():
 # end check_model
 
 def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
+    if "fisher" in key:
+        dev_key = "fisher_dev"
+    else:
+        dev_key = "callhome_devtest"
+
     with open(log_train_fil_name, mode='a') as train_log, open(log_dev_fil_name, mode='a') as dev_log:
         for i in range(epochs):
             print("-"*80)
             print("EPOCH = {0:d} / {1:d}".format(last_epoch+i+1, last_epoch+epochs))
             # call train
-            cat_speech_path = os.path.join(out_path, 'fisher_train')
-            pred_sents, utts, train_loss = feed_model(map_dict['fisher_train'],
-                              b_dict=bucket_dict['fisher_train'],
+            cat_speech_path = os.path.join(out_path, key)
+            pred_sents, utts, train_loss = feed_model(map_dict[key],
+                              b_dict=bucket_dict[key],
                               vocab_dict=vocab_dict,
                               batch_size=BATCH_SIZE,
                               x_key=enc_key,
@@ -303,9 +308,9 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
             os.fsync(train_log.fileno())
 
             # compute dev loss
-            cat_speech_path = os.path.join(out_path, 'fisher_dev')
-            pred_sents, utts, dev_loss = feed_model(map_dict['fisher_dev'],
-                              b_dict=bucket_dict['fisher_dev'],
+            cat_speech_path = os.path.join(out_path, dev_key)
+            pred_sents, utts, dev_loss = feed_model(map_dict[dev_key],
+                              b_dict=bucket_dict[dev_key],
                               vocab_dict=vocab_dict,
                               batch_size=BATCH_SIZE,
                               x_key=enc_key,
@@ -315,7 +320,7 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
                               use_y=use_y,
                               mini=False)
 
-            dev_b_score, _, _ = calc_bleu(map_dict['fisher_dev'],
+            dev_b_score, _, _ = calc_bleu(map_dict['dev_key'],
                                           vocab_dict[dec_key],
                                           pred_sents, utts,
                                           dec_key)

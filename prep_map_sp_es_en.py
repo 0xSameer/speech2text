@@ -91,7 +91,7 @@ def read_map_file(cat, segment_map, map_loc):
     print("reading es lines from: {0:s}".format(es_file))
     es_words, es_chars = get_words_and_chars(es_file)
 
-    if "train" in cat:
+    if "train" in cat or "callhome" in cat:
         en_file = os.path.join(es_en_fil_dir, cat+".en")
         print("reading en lines from: {0:s}".format(en_file))
         en_words, en_chars = get_words_and_chars(en_file)

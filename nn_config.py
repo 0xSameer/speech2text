@@ -28,8 +28,13 @@ DEEP_2D_CNN      = 2
 print("translating es to en")
 
 # FBANK
-out_path = "./fbank_out/"
-model_dir = "fsh_fbank"
+# out_path = "./fbank_out/"
+
+out_path = "./callhome_fbank_out"
+# model_dir = "fsh_fbank"
+
+model_dir = "callhome_fbank"
+
 SPEECH_DIM = 40
 
 # MFCC
@@ -48,11 +53,11 @@ dec_key = 'en_w'
 
 # ------------------------------------------
 NUM_EPOCHS = 110
-gpuid = 1
+gpuid = 3
 # gpuid_2 = 0
 # ------------------------------------------
 
-teacher_forcing_ratio = 0.8
+teacher_forcing_ratio = 1.0
 
 OPTIMIZER_ADAM1_SGD_0 = True
 
@@ -68,7 +73,7 @@ SHUFFLE_BATCHES = False
 WEIGHT_DECAY=False
 
 if WEIGHT_DECAY:
-    WD_RATIO=0.000001
+    WD_RATIO=1e-6
 else:
     WD_RATIO=0
 
@@ -171,56 +176,6 @@ if CNN_TYPE == SINGLE_1D_CNN:
                     "pad": k //2} for k in cnn_k_widths]
 elif CNN_TYPE == DEEP_1D_CNN:
     # static CNN configuration
-    # cnn_filters = [
-    #     {"ndim": 1,
-    #     "in_channels": CNN_IN_DIM,
-    #     "out_channels": 64,
-    #     "ksize": 4,
-    #     "stride": 1,
-    #     "pad": 4 // 2},
-    #     {"ndim": 1,
-    #     "in_channels": 64,
-    #     "out_channels": 64,
-    #     "ksize": 4,
-    #     "stride": 2,
-    #     "pad": 4 // 2},
-    #     {"ndim": 1,
-    #     "in_channels": 64,
-    #     "out_channels": 64,
-    #     "ksize": 4,
-    #     "stride": 1,
-    #     "pad": 4 // 2},
-    #     {"ndim": 1,
-    #     "in_channels": 64,
-    #     "out_channels": 64,
-    #     "ksize": 4,
-    #     "stride": 2,
-    #     "pad": 4 // 2},
-    #     {"ndim": 1,
-    #     "in_channels": 64,
-    #     "out_channels": 64,
-    #     "ksize": 4,
-    #     "stride": 1,
-    #     "pad": 4 // 2},
-    #     {"ndim": 1,
-    #     "in_channels": 64,
-    #     "out_channels": 64,
-    #     "ksize": 4,
-    #     "stride": 2,
-    #     "pad": 4 // 2},
-    #     {"ndim": 1,
-    #     "in_channels": 64,
-    #     "out_channels": 64,
-    #     "ksize": 4,
-    #     "stride": 1,
-    #     "pad": 4 // 2},
-    #     {"ndim": 1,
-    #     "in_channels": 64,
-    #     "out_channels": 64,
-    #     "ksize": 4,
-    #     "stride": 2,
-    #     "pad": 4 // 2},
-    # ]
     cnn_filters = [
         {"ndim": 1,
         "in_channels": CNN_IN_DIM,
@@ -426,6 +381,33 @@ python prep_vocab.py -o $OUT
 python prep_get_speech_info.py -o $OUT
 
 python nmt_run.py -o $PWD/mfcc_out -e 10 -k fisher_train -y 1 -m 1
+
+
+CALLHOME:
+
+FBANK:
+
+python kaldi_io.py callhome_test_fbank.ark callhome_fbank/callhome_test
+python kaldi_io.py callhome_dev_fbank.ark callhome_fbank/callhome_dev
+python kaldi_io.py callhome_train_fbank.ark callhome_fbank/callhome_train
+
+export SPEECH_FEATS=/afs/inf.ed.ac.uk/group/project/lowres/work/corpora/fisher_kaldi/fisher_fbank
+
+export JOSHUA=/afs/inf.ed.ac.uk/group/project/lowres/work/installs/fisher-callhome-corpus
+
+export OUT=$PWD/callhome_fbank_out
+
+python prep_map_kaldi_segments.py -m $JOSHUA -o $OUT
+
+python prep_map_sp_es_en.py -m $JOSHUA -o $OUT
+
+python prep_speech_segments.py -m $SPEECH_FEATS -o $OUT
+
+python prep_vocab.py -o $OUT
+
+python prep_get_speech_info.py -o $OUT
+
+python nmt_run.py -o $PWD/fbank_out -e 10 -k fisher_train -y 1 -m 1
 
 
 '''
