@@ -518,5 +518,33 @@ class SpeechEncoderDecoder(Chain):
             return(self.predict_batch(batch_size=batch_size, pred_limit=MAX_EN_LEN, y=y))
             # consistent return statement
 
+    def add_gru_weight_noise(self, rnn_layer, mu, sigma):
+        # W_shape = self[rnn_layer].W.W.shape
+        # b_shape = self[rnn_layer].W.b.shape
+        rnn_params = ["W", "W_r", "W_z", "U", "U_r", "U_z"]
+        for p in rnn_params:
+            # add noise to W
+            s_w = xp.random.normal(mu, 
+                                   sigma, 
+                                   self[rnn_layer][p].W.shape, 
+                                   dtype=xp.float32)
+            s_b = xp.random.normal(mu, 
+                                   sigma, 
+                                   self[rnn_layer][p].b.shape, 
+                                   dtype=xp.float32)
+            self[rnn_layer][p].W.data = self[rnn_layer][p].W.data + s_w
+            self[rnn_layer][p].b.data = self[rnn_layer][p].b.data + s_b
+
+    def add_weight_noise(self, mu, sigma):
+        # add noise to rnn weights
+        for rnn_layer in self.rnn_enc + self.rnn_dec:
+            self.add_gru_weight_noise(rnn_layer, mu, sigma)
+        # add noise to decoder embeddings
+        self.embed_dec.W.data = (self.embed_dec.W.data + 
+                                   xp.random.normal(mu, 
+                                                    sigma, 
+                                                    self.embed_dec.W.shape, 
+                                                    dtype=xp.float32))
+
 # In[ ]:
 

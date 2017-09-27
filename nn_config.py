@@ -1,8 +1,8 @@
 from basics import *
 import prep_buckets
-#---------------------------------------------------------------------
+#------------------------------------------------------------------------------
 # Data Parameters
-#---------------------------------------------------------------------
+#------------------------------------------------------------------------------
 max_vocab_size = {"en" : 200000, "fr" : 200000}
 
 # Special vocabulary symbols - we always put them at the start.
@@ -24,83 +24,107 @@ SINGLE_1D_CNN    = 0
 DEEP_1D_CNN      = 1
 DEEP_2D_CNN      = 2
 #------------------------------------------------------------------------------
-
-print("translating es to en")
-
 # FBANK
 # out_path = "./fbank_out/"
-
+# ------------------------------------
 out_path = "./callhome_fbank_out"
-# model_dir = "fsh_fbank"
-
-model_dir = "callhome_fbank"
-
+# ------------------------------------
+model_dir = "fsh_fbank"
+# model_dir = "callhome_fbank_noise"
+# ------------------------------------
 SPEECH_DIM = 40
-
+# ------------------------------------
 # MFCC
 # out_path = "./mfcc_out/"
 # model_dir = "fsh_again"
 # SPEECH_DIM = 39
-
+# ------------------------------------
 EXP_NAME_PREFIX = ""
-
-print("callhome es-en configuration")
-
+# ------------------------------------
+print("fisher + callhome sp/es - en configuration")
+# ------------------------------------
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
 enc_key = 'sp'
 dec_key = 'en_w'
 
-# ------------------------------------------
-NUM_EPOCHS = 110
-gpuid = 3
-# gpuid_2 = 0
-# ------------------------------------------
+# ------------------------------------
+gpuid = 0
+# ------------------------------------
+# scaling factor for reducing batch
+# size
+BATCH_SIZE_SCALE = 1
+# ------------------------------------
 
+# ------------------------------------
+LEARNING_RATE = 1.0
+# ------------------------------------
 teacher_forcing_ratio = 1.0
-
+# ------------------------------------
 OPTIMIZER_ADAM1_SGD_0 = True
+# ------------------------------------
 
-lstm1_or_gru0 = False
-
-CNN_TYPE = DEEP_2D_CNN
-
-USE_LN = True
-USE_BN = True
-
-SHUFFLE_BATCHES = False
-
-WEIGHT_DECAY=False
-
+# ------------------------------------
+WEIGHT_DECAY=True
 if WEIGHT_DECAY:
-    WD_RATIO=1e-6
+    WD_RATIO=1e-4
 else:
     WD_RATIO=0
+# ------------------------------------
 
-LEARNING_RATE = 1.0
+# ------------------------------------
+ITERS_GRAD_NOISE = 10
+GRAD_NOISE_ETA = 0.3
+# ------------------------------------
 
-ONLY_LSTM = False
-
-ITERS_TO_SAVE = 5
-
+# ------------------------------------
 USE_DROPOUT=True
+DROPOUT_RATIO=0.3
+# ------------------------------------
 
-DROPOUT_RATIO=0.2
+# ------------------------------------
+ITERS_TO_SAVE = 5
+# ------------------------------------
 
+# ------------------------------------
+lstm1_or_gru0 = False
+ONLY_LSTM = False
+# ------------------------------------
+CNN_TYPE = DEEP_2D_CNN
+# ------------------------------------
+USE_LN = True
+USE_BN = True
+FINE_TUNE = False
+# ------------------------------------
+
+# ------------------------------------
+# only applicable for mini mode
+SHUFFLE_BATCHES = False
+# ------------------------------------
+
+# ------------------------------------
 use_attn = SOFT_ATTN
 ATTN_W = True
+# ------------------------------------
 
+# ------------------------------------
 ADD_NOISE=False
-
 if enc_key != 'sp':
     ADD_NOISE=False
 
 NOISE_STDEV=0.125
+# ------------------------------------
 
-FINE_TUNE = False
+# ------------------------------------
+ITERS_TO_WEIGHT_NOISE = 0
+WEIGHT_NOISE_MU = 0.0
+WEIGHT_NOISE_SIGMA = 0.1
+# ------------------------------------
 
+# ------------------------------------
 hidden_units = 256
-embedding_units = 64
+embedding_units = 256
+# ------------------------------------
 
 # if using CNNs, we can have more parameters as sequences are shorter
 # due to max pooling
@@ -109,8 +133,10 @@ if ONLY_LSTM == False:
     #                              cnn_filter_end+1,
     #                              cnn_filter_gap)]
     if enc_key == 'sp':
+        # ------------------------------------
         num_layers_enc = 3
         num_layers_dec = 3
+        # ------------------------------------
         num_highway_layers = 0
         CNN_IN_DIM = SPEECH_DIM
         num_b = 20
@@ -176,36 +202,39 @@ if CNN_TYPE == SINGLE_1D_CNN:
                     "pad": k //2} for k in cnn_k_widths]
 elif CNN_TYPE == DEEP_1D_CNN:
     # static CNN configuration
-    cnn_filters = [
-        {"ndim": 1,
-        "in_channels": CNN_IN_DIM,
-        "out_channels": 64,
-        "ksize": 4,
-        "stride": 2,
-        "pad": 4 // 2},
-        {"ndim": 1,
-        "in_channels": 64,
-        "out_channels": 64,
-        "ksize": 4,
-        "stride": 3,
-        "pad": 4 // 2},
-    ]
+    # cnn_filters = [
+    #     {"ndim": 1,
+    #     "in_channels": CNN_IN_DIM,
+    #     "out_channels": 64,
+    #     "ksize": 4,
+    #     "stride": 2,
+    #     "pad": 4 // 2},
+    #     {"ndim": 1,
+    #     "in_channels": 64,
+    #     "out_channels": 64,
+    #     "ksize": 4,
+    #     "stride": 3,
+    #     "pad": 4 // 2},
+    # ]
+    pass
 
 else:
     # static CNN configuration
     # googlish
+    # ------------------------------------
     cnn_filters = [
         {"in_channels": None,
         "out_channels": 32,
-        "ksize": (3,3),
-        "stride": (2,2),
-        "pad": (3 // 2, 3 // 2)},
+        "ksize": (5,3),
+        "stride": (4,2),
+        "pad": (5 // 2, 3 // 2)},
         {"in_channels": None,
         "out_channels": 32,
-        "ksize": (3,3),
-        "stride": (2,2),
-        "pad": (3 // 2, 3 // 2)},
+        "ksize": (5,3),
+        "stride": (4,2),
+        "pad": (5 // 2, 3 // 2)},
     ]
+    # ------------------------------------
 
 print("cnn details:")
 for d in cnn_filters:

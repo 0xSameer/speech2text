@@ -113,14 +113,15 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     # number of buckets
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
+
     if mini:
+        # shuffle buckets
+        if not SHUFFLE_BATCHES:
+            random.seed("haha")
         # leave out the last bucket as it includes pruned utterances
         b_shuffled = list(range(num_b))
     else:
         b_shuffled = list(range(num_b))
-    # shuffle buckets
-    if not SHUFFLE_BATCHES:
-        random.seed("haha")
 
     random.shuffle(b_shuffled)
 
@@ -137,11 +138,11 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     for b in b_shuffled:
         if enc_key == 'sp':
             if b < num_b // 2:
-                batch_size = 128
+                batch_size = 128 // BATCH_SIZE_SCALE
             elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
-                batch_size = 128
+                batch_size = 128 // BATCH_SIZE_SCALE
             else:
-                batch_size = 100
+                batch_size = 100 // BATCH_SIZE_SCALE
         else:
             if b < num_b // 2:
                 batch_size = 256
@@ -340,7 +341,16 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
                 serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch+i+1)), model)
                 print("Finished saving model")
             # end if save model
-            print("learning rate: {0:.6f}, optimizer: {1:s}, teacher_forcing_ratio: {2:.2f}".format(LEARNING_RATE, 
+
+            # check to add gaussian weight noise
+            # if ((i+1) % ITERS_TO_WEIGHT_NOISE == 0):
+            if ((i+1) >= ITERS_TO_WEIGHT_NOISE) and (ITERS_TO_WEIGHT_NOISE > 0):
+                print("Adding Gaussian weight noise")
+                model.add_weight_noise(WEIGHT_NOISE_MU, WEIGHT_NOISE_SIGMA)
+                print("Finished adding Gaussian weight noise")
+            # end adding gaussian weight noise
+
+            print("learning rate: {0:.6f}, optimizer: {1:s}, teacher_forcing_ratio: {2:.2f}".format(LEARNING_RATE,
                                 "ADAM" if OPTIMIZER_ADAM1_SGD_0 else "SGD",
                                 teacher_forcing_ratio))
             print("using GPU={0:d}".format(gpuid))
@@ -366,6 +376,11 @@ def my_main(out_path, epochs, key, use_y, mini):
     # end if
 
     cat_speech_path = os.path.join(out_path, key)
+
+    if ((last_epoch) >= ITERS_GRAD_NOISE):
+        print("------ Adding gradient noise")
+        optimizer.add_hook(chainer.optimizer.GradientNoise(eta=GRAD_NOISE_ETA))
+        print("Finished adding gradient noise")
 
     if train:
         train_loop(out_path, epochs, key, last_epoch, use_y=use_y, mini=mini)
@@ -460,7 +475,7 @@ def modified_precision_recall(references, hypothesis, n):
     # Usually this happens when the ngram order is > len(reference).
     denominator = max(1, sum(counts.values()))
     rec_denominator = max(1, ref_length)
-    
+
     prec = Fraction(numerator, denominator, _normalize=False)
     rec = Fraction(numerator, rec_denominator, _normalize=False)
 
@@ -471,7 +486,7 @@ def corpus_precision_recall(r, h):
     p_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
     r_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
     r_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
-    
+
     for references, hypothesis in zip(r, h):
         # For each order of ngram, calculate the numerator and
         # denominator for the corpus-level modified precision.
@@ -479,14 +494,14 @@ def corpus_precision_recall(r, h):
             p_i, r_i = modified_precision_recall(references, hypothesis, i)
             p_numerators[i] += p_i.numerator
             p_denominators[i] += p_i.denominator
-            
+
             r_numerators[i] += r_i.numerator
             r_denominators[i] += r_i.denominator
 
-            
+
     p = [(n / d) * 100 for n,d in zip(p_numerators.values(), p_denominators.values())]
     r = [(n / d) *100 for n,d in zip(r_numerators.values(), r_denominators.values())]
-    
+
     print("{0:10s} | {1:>8s} | {2:>8s}| {3:>8s} | {4:>8s}".format("metric", "1-gram","2-gram","3-gram","4-gram"))
     print("-"*54)
     print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("precision", *p))
@@ -516,9 +531,9 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key, weights=(0.25, 0.25, 0.25, 0
 
     smooth_fun = nltk.translate.bleu_score.SmoothingFunction()
 
-    b_score = corpus_bleu(en_ref, 
-                          en_hyp, 
-                          weights=weights, 
+    b_score = corpus_bleu(en_ref,
+                          en_hyp,
+                          weights=weights,
                           smoothing_function=smooth_fun.method2)
 
     return b_score, en_hyp, en_ref
