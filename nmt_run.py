@@ -291,6 +291,13 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
         for i in range(epochs):
             print("-"*80)
             print("EPOCH = {0:d} / {1:d}".format(last_epoch+i+1, last_epoch+epochs))
+
+            if (last_epoch+i+1 >= ITERS_TO_WEIGHT_NOISE) and (ITERS_TO_WEIGHT_NOISE > 0):
+                print("Adding Gaussian weight noise, mean={0:.2f}, stdev={1:0.6f}".format(WEIGHT_NOISE_MU, WEIGHT_NOISE_SIGMA))
+                model.add_weight_noise(WEIGHT_NOISE_MU, WEIGHT_NOISE_SIGMA)
+                print("Finished adding Gaussian weight noise")
+                # end adding gaussian weight noise
+
             # call train
             cat_speech_path = os.path.join(out_path, key)
             pred_sents, utts, train_loss = feed_model(map_dict[key],
@@ -342,14 +349,6 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
                 print("Finished saving model")
             # end if save model
 
-            # check to add gaussian weight noise
-            # if ((i+1) % ITERS_TO_WEIGHT_NOISE == 0):
-            if ((i+1) >= ITERS_TO_WEIGHT_NOISE) and (ITERS_TO_WEIGHT_NOISE > 0):
-                print("Adding Gaussian weight noise")
-                model.add_weight_noise(WEIGHT_NOISE_MU, WEIGHT_NOISE_SIGMA)
-                print("Finished adding Gaussian weight noise")
-            # end adding gaussian weight noise
-
             print("learning rate: {0:.6f}, optimizer: {1:s}, teacher_forcing_ratio: {2:.2f}".format(LEARNING_RATE,
                                 "ADAM" if OPTIMIZER_ADAM1_SGD_0 else "SGD",
                                 teacher_forcing_ratio))
@@ -377,7 +376,7 @@ def my_main(out_path, epochs, key, use_y, mini):
 
     cat_speech_path = os.path.join(out_path, key)
 
-    if ((last_epoch) >= ITERS_GRAD_NOISE):
+    if (last_epoch >= ITERS_GRAD_NOISE) and ITERS_GRAD_NOISE > 0:
         print("------ Adding gradient noise")
         optimizer.add_hook(chainer.optimizer.GradientNoise(eta=GRAD_NOISE_ETA))
         print("Finished adding gradient noise")
@@ -410,7 +409,8 @@ def my_main(out_path, epochs, key, use_y, mini):
     print("all done ...")
 # end my_main
 
-def display_words(m_dict, v_dict, preds, utts, dec_key):
+def display_words(m_dict, v_dict, preds, utts, dec_key, min_len=0, max_len=2*MAX_EN_LEN):
+    print("min length={0:d}, max length={1:d}".format(min_len, max_len))
     es_ref = []
     en_ref = []
     for u in utts:
@@ -428,17 +428,96 @@ def display_words(m_dict, v_dict, preds, utts, dec_key):
         t_str = t_str[:t_str.find('_EOS')]
         en_pred.append(t_str)
 
-    for u, es, en, p in zip(utts, es_ref, en_ref, en_pred):
-        # for reference, 1st word is GO_ID, no need to display
-        print("Utterance: {0:s}".format(u))
-        display_pp = PrettyTable(["cat","sent"], hrules=True)
-        display_pp.align = "l"
-        display_pp.header = False
-        display_pp.add_row(["es ref", textwrap.fill(es,50)])
-        display_pp.add_row(["en ref", textwrap.fill(en,50)])
-        display_pp.add_row(["en pred", textwrap.fill(p,50)])
+    total_matching_len = 0
 
-        print(display_pp)
+    for u, es, en, p in zip(utts, es_ref, en_ref, en_pred):
+        if len(es.split(" ")) >= min_len and len(es.split(" ")) <= max_len:
+            total_matching_len += 1
+            # for reference, 1st word is GO_ID, no need to display
+            print("Utterance: {0:s}".format(u))
+            display_pp = PrettyTable(["cat","sent"], hrules=True)
+            display_pp.align = "l"
+            display_pp.header = False
+            display_pp.add_row(["es ref", textwrap.fill(es,50)])
+            display_pp.add_row(["en ref", textwrap.fill(en,50)])
+            display_pp.add_row(["en pred", textwrap.fill(p,50)])
+
+            print(display_pp)
+
+    print("total utts matching length filters={0:d}".format(total_matching_len))
+
+
+
+def calc_bleu(m_dict, v_dict, preds, utts, dec_key, weights=(0.25, 0.25, 0.25, 0.25), min_len=0, max_len=2*MAX_EN_LEN):
+    print("min length={0:d}, max length={1:d}".format(min_len, max_len))
+    en_hyp = []
+    en_ref = []
+    ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
+    src_key = 'es_w'
+    for u in tqdm(utts):
+        if len(m_dict[u][src_key]) >= min_len and len(m_dict[u][src_key]) <= max_len:
+            if type(m_dict[u][ref_key]) == list:
+                en_ref.append([w.decode() for w in m_dict[u][ref_key]])
+            else:
+                en_r_list = []
+                for r in m_dict[u][ref_key]:
+                    en_r_list.append([w.decode() for w in r])
+                en_ref.append(en_r_list)
+
+    join_str = ' ' if dec_key.endswith('_w') else ''
+
+    total_matching_len = 0
+
+    for u, p in zip(utts, preds):
+        if len(m_dict[u][src_key]) >= min_len and len(m_dict[u][src_key]) <= max_len:
+            total_matching_len += 1
+            t_str = join_str.join([v_dict['i2w'][i].decode() for i in p])
+            t_str = t_str[:t_str.find('_EOS')]
+            en_hyp.append(t_str.split())
+            
+    
+    print("total utts matching length filters={0:d}".format(total_matching_len))
+
+    smooth_fun = nltk.translate.bleu_score.SmoothingFunction()
+    
+    b_score = corpus_bleu(en_ref,
+                          en_hyp,
+                          weights=weights,
+                          smoothing_function=smooth_fun.method2)
+
+    return b_score, en_hyp, en_ref
+
+def corpus_precision_recall(r, h, min_len=0,max_len=2*MAX_EN_LEN):
+    print("min length={0:d}, max length={1:d}".format(min_len, max_len))
+    p_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
+    p_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
+    r_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
+    r_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
+
+    print("total utts={0:d}".format(len(r)))
+
+    for references, hypothesis in zip(r, h):
+        # For each order of ngram, calculate the numerator and
+        # denominator for the corpus-level modified precision.
+        for i, _ in enumerate((0.25,.25,.25,.25), start=1):
+            p_i, r_i = modified_precision_recall(references, hypothesis, i)
+            p_numerators[i] += p_i.numerator
+            p_denominators[i] += p_i.denominator
+
+            r_numerators[i] += r_i.numerator
+            r_denominators[i] += r_i.denominator
+
+
+    p = [(n / d) * 100 for n,d in zip(p_numerators.values(), p_denominators.values())]
+    r = [(n / d) *100 for n,d in zip(r_numerators.values(), r_denominators.values())]
+
+    print("{0:10s} | {1:>8s} | {2:>8s}| {3:>8s} | {4:>8s}".format("metric", "1-gram","2-gram","3-gram","4-gram"))
+    print("-"*54)
+    print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("precision", *p))
+    print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("recall", *r))
+
+   
+    return p, r
 
 def count_match(list1, list2):
     # each list can have repeated elements. The count should account for this.
@@ -481,62 +560,6 @@ def modified_precision_recall(references, hypothesis, n):
 
     return prec, rec
 
-def corpus_precision_recall(r, h):
-    p_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
-    p_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
-    r_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
-    r_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
-
-    for references, hypothesis in zip(r, h):
-        # For each order of ngram, calculate the numerator and
-        # denominator for the corpus-level modified precision.
-        for i, _ in enumerate((0.25,.25,.25,.25), start=1):
-            p_i, r_i = modified_precision_recall(references, hypothesis, i)
-            p_numerators[i] += p_i.numerator
-            p_denominators[i] += p_i.denominator
-
-            r_numerators[i] += r_i.numerator
-            r_denominators[i] += r_i.denominator
-
-
-    p = [(n / d) * 100 for n,d in zip(p_numerators.values(), p_denominators.values())]
-    r = [(n / d) *100 for n,d in zip(r_numerators.values(), r_denominators.values())]
-
-    print("{0:10s} | {1:>8s} | {2:>8s}| {3:>8s} | {4:>8s}".format("metric", "1-gram","2-gram","3-gram","4-gram"))
-    print("-"*54)
-    print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("precision", *p))
-    print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("recall", *r))
-    return p, r
-
-
-def calc_bleu(m_dict, v_dict, preds, utts, dec_key, weights=(0.25, 0.25, 0.25, 0.25)):
-    en_hyp = []
-    en_ref = []
-    ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
-    for u in utts:
-        if type(m_dict[u][ref_key]) == list:
-            en_ref.append([w.decode() for w in m_dict[u][ref_key]])
-        else:
-            en_r_list = []
-            for r in m_dict[u][ref_key]:
-                en_r_list.append([w.decode() for w in r])
-            en_ref.append(en_r_list)
-
-    join_str = ' ' if dec_key.endswith('_w') else ''
-
-    for p in preds:
-        t_str = join_str.join([v_dict['i2w'][i].decode() for i in p])
-        t_str = t_str[:t_str.find('_EOS')]
-        en_hyp.append(t_str.split())
-
-    smooth_fun = nltk.translate.bleu_score.SmoothingFunction()
-
-    b_score = corpus_bleu(en_ref,
-                          en_hyp,
-                          weights=weights,
-                          smoothing_function=smooth_fun.method2)
-
-    return b_score, en_hyp, en_ref
 
 def test_func(out_path, batch_size, bucket_id, num_sent):
     m_dict = map_dict["fisher_train"]

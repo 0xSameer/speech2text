@@ -49,7 +49,7 @@ enc_key = 'sp'
 dec_key = 'en_w'
 
 # ------------------------------------
-gpuid = 0
+gpuid = 2
 # ------------------------------------
 # scaling factor for reducing batch
 # size
@@ -57,9 +57,9 @@ BATCH_SIZE_SCALE = 1
 # ------------------------------------
 
 # ------------------------------------
-LEARNING_RATE = 1.0
+LEARNING_RATE = 0.001
 # ------------------------------------
-teacher_forcing_ratio = 1.0
+teacher_forcing_ratio = 0.5
 # ------------------------------------
 OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
@@ -73,7 +73,10 @@ else:
 # ------------------------------------
 
 # ------------------------------------
-ITERS_GRAD_NOISE = 10
+ITERS_GRAD_NOISE = 0
+# default noise function is
+# recommended to be either:
+# 0.01, 0.3 or 1.0
 GRAD_NOISE_ETA = 0.3
 # ------------------------------------
 
@@ -116,9 +119,9 @@ NOISE_STDEV=0.125
 # ------------------------------------
 
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 0
+ITERS_TO_WEIGHT_NOISE = 1
 WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.1
+WEIGHT_NOISE_SIGMA = 0.01
 # ------------------------------------
 
 # ------------------------------------
@@ -134,8 +137,8 @@ if ONLY_LSTM == False:
     #                              cnn_filter_gap)]
     if enc_key == 'sp':
         # ------------------------------------
-        num_layers_enc = 3
-        num_layers_dec = 3
+        num_layers_enc = 4
+        num_layers_dec = 4
         # ------------------------------------
         num_highway_layers = 0
         CNN_IN_DIM = SPEECH_DIM
@@ -225,14 +228,14 @@ else:
     cnn_filters = [
         {"in_channels": None,
         "out_channels": 32,
-        "ksize": (5,3),
-        "stride": (4,2),
-        "pad": (5 // 2, 3 // 2)},
+        "ksize": (3,3),
+        "stride": (2,2),
+        "pad": (3 // 2, 3 // 2)},
         {"in_channels": None,
         "out_channels": 32,
-        "ksize": (5,3),
-        "stride": (4,2),
-        "pad": (5 // 2, 3 // 2)},
+        "ksize": (3,3),
+        "stride": (2,2),
+        "pad": (3 // 2, 3 // 2)},
     ]
     # ------------------------------------
 
