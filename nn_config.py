@@ -49,7 +49,7 @@ enc_key = 'sp'
 dec_key = 'en_w'
 
 # ------------------------------------
-gpuid = 2
+gpuid = 0
 # ------------------------------------
 # scaling factor for reducing batch
 # size
@@ -57,7 +57,7 @@ BATCH_SIZE_SCALE = 1
 # ------------------------------------
 
 # ------------------------------------
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.1
 # ------------------------------------
 teacher_forcing_ratio = 0.5
 # ------------------------------------
@@ -111,7 +111,7 @@ ATTN_W = True
 # ------------------------------------
 
 # ------------------------------------
-ADD_NOISE=False
+ADD_NOISE=True
 if enc_key != 'sp':
     ADD_NOISE=False
 
@@ -257,10 +257,10 @@ if USE_DROPOUT:
 else:
     EXP_NAME_PREFIX += "_drpt-0"
 
-if ADD_NOISE:
-    EXP_NAME_PREFIX += "_noise-{0:.2f}".format(NOISE_STDEV)
-else:
-    EXP_NAME_PREFIX += "_noise-0"
+# if ADD_NOISE:
+#     EXP_NAME_PREFIX += "_noise-{0:.2f}".format(NOISE_STDEV)
+# else:
+EXP_NAME_PREFIX += "_noise-0"
 
 if WEIGHT_DECAY:
     EXP_NAME_PREFIX += "_l2-{0:.6f}".format(WD_RATIO)
