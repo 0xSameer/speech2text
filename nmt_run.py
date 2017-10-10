@@ -166,7 +166,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
 
     random.shuffle(utt_list_batches)
 
-    with tqdm(total=total_utts, dynamic_ncols=True) as pbar:
+    with tqdm(total=total_utts, ncols=80) as pbar:
         for i, (utt_list, b) in enumerate(utt_list_batches):
             utt_list_0 = utt_list[:len(utt_list)//2]
             utt_list_1 = utt_list[len(utt_list)//2:]
@@ -355,6 +355,8 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
             print("using GPU={0:d}".format(gpuid))
             print('model file name: {0:s}'.format(model_fil))
             print('dev log file name: {0:s}'.format(log_dev_fil_name))
+            if ADD_NOISE:
+                print('Adding gaussian noise to speech with stddev={0:.6f}'.format(NOISE_STDEV))
 
         # end for epochs
     # end open log files
@@ -409,6 +411,14 @@ def my_main(out_path, epochs, key, use_y, mini):
     print("all done ...")
 # end my_main
 
+def play_utt(utt, m_dict):
+    sr, y = scipy.io.wavfile.read(os.path.join(wavs_path, utt.rsplit("-",1)[0]+'.wav'))
+    start_t = min(seg['start'] for seg in m_dict[utt]['seg'])
+    end_t = max(seg['end'] for seg in m_dict[utt]['seg'])
+    print(start_t, end_t)
+    start_t_samples, end_t_samples = int(start_t*sr), int(end_t*sr)
+    display(Audio(y[start_t_samples:end_t_samples], rate=sr))
+
 def display_words(m_dict, v_dict, preds, utts, dec_key, min_len=0, max_len=2*MAX_EN_LEN):
     print("min length={0:d}, max length={1:d}".format(min_len, max_len))
     es_ref = []
@@ -443,6 +453,7 @@ def display_words(m_dict, v_dict, preds, utts, dec_key, min_len=0, max_len=2*MAX
             display_pp.add_row(["en pred", textwrap.fill(p,50)])
 
             print(display_pp)
+            play_utt(u, m_dict)
 
     print("total utts matching length filters={0:d}".format(total_matching_len))
 
@@ -454,7 +465,7 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key, weights=(0.25, 0.25, 0.25, 0
     en_ref = []
     ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
     src_key = 'es_w'
-    for u in tqdm(utts):
+    for u in tqdm(utts, ncols=80):
         if len(m_dict[u][src_key]) >= min_len and len(m_dict[u][src_key]) <= max_len:
             if type(m_dict[u][ref_key]) == list:
                 en_ref.append([w.decode() for w in m_dict[u][ref_key]])
@@ -474,12 +485,12 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key, weights=(0.25, 0.25, 0.25, 0
             t_str = join_str.join([v_dict['i2w'][i].decode() for i in p])
             t_str = t_str[:t_str.find('_EOS')]
             en_hyp.append(t_str.split())
-            
-    
+
+
     print("total utts matching length filters={0:d}".format(total_matching_len))
 
     smooth_fun = nltk.translate.bleu_score.SmoothingFunction()
-    
+
     b_score = corpus_bleu(en_ref,
                           en_hyp,
                           weights=weights,
@@ -516,7 +527,7 @@ def corpus_precision_recall(r, h, min_len=0,max_len=2*MAX_EN_LEN):
     print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("precision", *p))
     print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("recall", *r))
 
-   
+
     return p, r
 
 def count_match(list1, list2):

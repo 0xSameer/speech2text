@@ -28,6 +28,7 @@ DEEP_2D_CNN      = 2
 # out_path = "./fbank_out/"
 # ------------------------------------
 out_path = "./callhome_fbank_out"
+wavs_path = os.path.join(out_path, "wavs")
 # ------------------------------------
 model_dir = "fsh_fbank"
 # model_dir = "callhome_fbank_noise"
@@ -49,7 +50,7 @@ enc_key = 'sp'
 dec_key = 'en_w'
 
 # ------------------------------------
-gpuid = 0
+gpuid = 2
 # ------------------------------------
 # scaling factor for reducing batch
 # size
@@ -59,7 +60,7 @@ BATCH_SIZE_SCALE = 1
 # ------------------------------------
 LEARNING_RATE = 0.1
 # ------------------------------------
-teacher_forcing_ratio = 0.5
+teacher_forcing_ratio = 0.8
 # ------------------------------------
 OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
@@ -77,7 +78,7 @@ ITERS_GRAD_NOISE = 0
 # default noise function is
 # recommended to be either:
 # 0.01, 0.3 or 1.0
-GRAD_NOISE_ETA = 0.3
+GRAD_NOISE_ETA = 0.01
 # ------------------------------------
 
 # ------------------------------------
@@ -119,9 +120,9 @@ NOISE_STDEV=0.125
 # ------------------------------------
 
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 1
+ITERS_TO_WEIGHT_NOISE = 0
 WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.01
+WEIGHT_NOISE_SIGMA = 0.0001
 # ------------------------------------
 
 # ------------------------------------
@@ -142,8 +143,8 @@ if ONLY_LSTM == False:
         # ------------------------------------
         num_highway_layers = 0
         CNN_IN_DIM = SPEECH_DIM
-        num_b = 20
-        width_b = 96
+        num_b = 8
+        width_b = 256
 
     elif enc_key == 'es_c':
         num_layers_enc = 3
@@ -441,5 +442,5 @@ python prep_get_speech_info.py -o $OUT
 
 python nmt_run.py -o $PWD/fbank_out -e 10 -k fisher_train -y 1 -m 1
 
-
+with tqdm(total=total_utts, dynamic_ncols=True) as pbar
 '''
