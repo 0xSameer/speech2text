@@ -68,7 +68,7 @@ OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
 WEIGHT_DECAY=True
 if WEIGHT_DECAY:
-    WD_RATIO=1e-4
+    WD_RATIO=1e-6
 else:
     WD_RATIO=0
 # ------------------------------------
@@ -116,7 +116,7 @@ ADD_NOISE=True
 if enc_key != 'sp':
     ADD_NOISE=False
 
-NOISE_STDEV=0.125
+NOISE_STDEV=0.2
 # ------------------------------------
 
 # ------------------------------------
@@ -138,8 +138,8 @@ if ONLY_LSTM == False:
     #                              cnn_filter_gap)]
     if enc_key == 'sp':
         # ------------------------------------
-        num_layers_enc = 4
-        num_layers_dec = 4
+        num_layers_enc = 3
+        num_layers_dec = 3
         # ------------------------------------
         num_highway_layers = 0
         CNN_IN_DIM = SPEECH_DIM

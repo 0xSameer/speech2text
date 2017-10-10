@@ -411,13 +411,13 @@ def my_main(out_path, epochs, key, use_y, mini):
     print("all done ...")
 # end my_main
 
-def play_utt(utt, m_dict):
-    sr, y = scipy.io.wavfile.read(os.path.join(wavs_path, utt.rsplit("-",1)[0]+'.wav'))
-    start_t = min(seg['start'] for seg in m_dict[utt]['seg'])
-    end_t = max(seg['end'] for seg in m_dict[utt]['seg'])
-    print(start_t, end_t)
-    start_t_samples, end_t_samples = int(start_t*sr), int(end_t*sr)
-    display(Audio(y[start_t_samples:end_t_samples], rate=sr))
+# def play_utt(utt, m_dict):
+#     sr, y = scipy.io.wavfile.read(os.path.join(wavs_path, utt.rsplit("-",1)[0]+'.wav'))
+#     start_t = min(seg['start'] for seg in m_dict[utt]['seg'])
+#     end_t = max(seg['end'] for seg in m_dict[utt]['seg'])
+#     print(start_t, end_t)
+#     start_t_samples, end_t_samples = int(start_t*sr), int(end_t*sr)
+#     display(Audio(y[start_t_samples:end_t_samples], rate=sr))
 
 def display_words(m_dict, v_dict, preds, utts, dec_key, min_len=0, max_len=2*MAX_EN_LEN):
     print("min length={0:d}, max length={1:d}".format(min_len, max_len))
@@ -453,7 +453,7 @@ def display_words(m_dict, v_dict, preds, utts, dec_key, min_len=0, max_len=2*MAX
             display_pp.add_row(["en pred", textwrap.fill(p,50)])
 
             print(display_pp)
-            play_utt(u, m_dict)
+            # play_utt(u, m_dict)
 
     print("total utts matching length filters={0:d}".format(total_matching_len))
 
