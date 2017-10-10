@@ -50,7 +50,7 @@ enc_key = 'sp'
 dec_key = 'en_w'
 
 # ------------------------------------
-gpuid = 2
+gpuid = 0
 # ------------------------------------
 # scaling factor for reducing batch
 # size
@@ -58,7 +58,7 @@ BATCH_SIZE_SCALE = 1
 # ------------------------------------
 
 # ------------------------------------
-LEARNING_RATE = 0.1
+LEARNING_RATE = 1.0
 # ------------------------------------
 teacher_forcing_ratio = 0.8
 # ------------------------------------
@@ -116,7 +116,7 @@ ADD_NOISE=True
 if enc_key != 'sp':
     ADD_NOISE=False
 
-NOISE_STDEV=0.2
+NOISE_STDEV=0.25
 # ------------------------------------
 
 # ------------------------------------
@@ -138,8 +138,8 @@ if ONLY_LSTM == False:
     #                              cnn_filter_gap)]
     if enc_key == 'sp':
         # ------------------------------------
-        num_layers_enc = 3
-        num_layers_dec = 3
+        num_layers_enc = 4
+        num_layers_dec = 4
         # ------------------------------------
         num_highway_layers = 0
         CNN_IN_DIM = SPEECH_DIM
@@ -443,4 +443,10 @@ python prep_get_speech_info.py -o $OUT
 python nmt_run.py -o $PWD/fbank_out -e 10 -k fisher_train -y 1 -m 1
 
 with tqdm(total=total_utts, dynamic_ncols=True) as pbar
+
+---------------------------------------------
+export BLEU_SCRIPT=/afs/inf.ed.ac.uk/group/project/lowres/work/installs/mosesdecoder/scripts/generic/multi-bleu.perl
+
+perl $BLEU_SCRIPT fisher_dev_en.ref0 fisher_dev_en.ref1 fisher_dev_en.ref2 fisher_dev_en.ref3 < fisher_dev_mt-output
+
 '''
