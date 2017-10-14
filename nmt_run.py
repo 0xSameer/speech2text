@@ -8,6 +8,7 @@ import argparse
 import textwrap
 import nltk
 from nltk.translate.bleu_score import sentence_bleu, corpus_bleu
+from nltk.translate.chrf_score import sentence_chrf, corpus_chrf
 import copy
 import nltk.translate.bleu_score
 
@@ -328,13 +329,13 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
                               use_y=use_y,
                               mini=False)
 
-            dev_b_score, _, _ = calc_bleu(map_dict[dev_key],
-                                          vocab_dict[dec_key],
-                                          pred_sents, utts,
-                                          dec_key)
+            dev_b_score, chr_f_score, _, _ = calc_bleu(map_dict[dev_key],
+                                                        vocab_dict[dec_key],
+                                                        pred_sents, utts,
+                                                        dec_key)
 
             # log dev loss
-            dev_log.write("{0:d}, {1:.4f}, {2:.4f}\n".format(last_epoch+i+1, dev_loss, dev_b_score))
+            dev_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1, dev_loss, dev_b_score, chr_f_score))
             dev_log.flush()
             os.fsync(dev_log.fileno())
 
@@ -459,7 +460,15 @@ def display_words(m_dict, v_dict, preds, utts, dec_key, min_len=0, max_len=2*MAX
 
 
 
-def calc_bleu(m_dict, v_dict, preds, utts, dec_key, weights=(0.25, 0.25, 0.25, 0.25), min_len=0, max_len=2*MAX_EN_LEN):
+def calc_bleu(m_dict, 
+              v_dict, 
+              preds, 
+              utts, 
+              dec_key, 
+              weights=(0.25, 0.25, 0.25, 0.25), 
+              min_len=0, 
+              max_len=2*MAX_EN_LEN, 
+              ref_index=0):
     print("min length={0:d}, max length={1:d}".format(min_len, max_len))
     en_hyp = []
     en_ref = []
@@ -491,12 +500,18 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key, weights=(0.25, 0.25, 0.25, 0
 
     smooth_fun = nltk.translate.bleu_score.SmoothingFunction()
 
-    b_score = corpus_bleu(en_ref,
+    b_score_value = corpus_bleu(en_ref,
                           en_hyp,
                           weights=weights,
                           smoothing_function=smooth_fun.method2)
 
-    return b_score, en_hyp, en_ref
+    try:
+        chrf_score_value = corpus_chrf([r[ref_index] for r in en_ref], en_hyp)
+    except:
+        chrf_score_value = 0
+
+    return b_score_value, chrf_score_value, en_hyp, en_ref
+
 
 def corpus_precision_recall(r, h, min_len=0,max_len=2*MAX_EN_LEN):
     print("min length={0:d}, max length={1:d}".format(min_len, max_len))

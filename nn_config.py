@@ -31,7 +31,7 @@ out_path = "./callhome_fbank_out"
 wavs_path = os.path.join(out_path, "wavs")
 # ------------------------------------
 model_dir = "fsh_fbank"
-# model_dir = "callhome_fbank_noise"
+# model_dir = "callhome_fbank"
 # ------------------------------------
 SPEECH_DIM = 40
 # ------------------------------------
@@ -68,7 +68,7 @@ OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
 WEIGHT_DECAY=True
 if WEIGHT_DECAY:
-    WD_RATIO=1e-6
+    WD_RATIO=1e-3
 else:
     WD_RATIO=0
 # ------------------------------------
@@ -116,18 +116,18 @@ ADD_NOISE=True
 if enc_key != 'sp':
     ADD_NOISE=False
 
-NOISE_STDEV=0.25
+NOISE_STDEV=0.2
 # ------------------------------------
 
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 0
+ITERS_TO_WEIGHT_NOISE = 1
 WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.0001
+WEIGHT_NOISE_SIGMA = 0.02
 # ------------------------------------
 
 # ------------------------------------
-hidden_units = 256
-embedding_units = 256
+hidden_units = 128
+embedding_units = 128
 # ------------------------------------
 
 # if using CNNs, we can have more parameters as sequences are shorter
@@ -138,8 +138,8 @@ if ONLY_LSTM == False:
     #                              cnn_filter_gap)]
     if enc_key == 'sp':
         # ------------------------------------
-        num_layers_enc = 4
-        num_layers_dec = 4
+        num_layers_enc = 3
+        num_layers_dec = 3
         # ------------------------------------
         num_highway_layers = 0
         CNN_IN_DIM = SPEECH_DIM
