@@ -460,15 +460,15 @@ def display_words(m_dict, v_dict, preds, utts, dec_key, min_len=0, max_len=2*MAX
 
 
 
-def calc_bleu(m_dict, 
-              v_dict, 
-              preds, 
-              utts, 
-              dec_key, 
-              weights=(0.25, 0.25, 0.25, 0.25), 
-              min_len=0, 
-              max_len=2*MAX_EN_LEN, 
-              ref_index=0):
+def calc_bleu(m_dict,
+              v_dict,
+              preds,
+              utts,
+              dec_key,
+              weights=(0.25, 0.25, 0.25, 0.25),
+              min_len=0,
+              max_len=2*MAX_EN_LEN,
+              ref_index=-1):
     print("min length={0:d}, max length={1:d}".format(min_len, max_len))
     en_hyp = []
     en_ref = []
@@ -477,12 +477,16 @@ def calc_bleu(m_dict,
     for u in tqdm(utts, ncols=80):
         if len(m_dict[u][src_key]) >= min_len and len(m_dict[u][src_key]) <= max_len:
             if type(m_dict[u][ref_key]) == list:
-                en_ref.append([w.decode() for w in m_dict[u][ref_key]])
+                en_ref.append([[w.decode() for w in m_dict[u][ref_key]]])
             else:
-                en_r_list = []
-                for r in m_dict[u][ref_key]:
-                    en_r_list.append([w.decode() for w in r])
-                en_ref.append(en_r_list)
+                if ref_index == -1:
+                    en_r_list = []
+                    for r in m_dict[u][ref_key]:
+                        en_r_list.append([w.decode() for w in r])
+                    print([[w.decode() for w in m_dict[u][ref_key][1]]])
+                    en_ref.append(en_r_list)
+                else:
+                    en_ref.append([[w.decode() for w in m_dict[u][ref_key][ref_index]]])
 
     join_str = ' ' if dec_key.endswith('_w') else ''
 
@@ -506,7 +510,8 @@ def calc_bleu(m_dict,
                           smoothing_function=smooth_fun.method2)
 
     try:
-        chrf_score_value = corpus_chrf([r[ref_index] for r in en_ref], en_hyp)
+        chrf_index = max(0, ref_index)
+        chrf_score_value = corpus_chrf([r[chrf_index] for r in en_ref], en_hyp)
     except:
         chrf_score_value = 0
 

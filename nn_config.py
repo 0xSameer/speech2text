@@ -50,7 +50,7 @@ enc_key = 'sp'
 dec_key = 'en_w'
 
 # ------------------------------------
-gpuid = 0
+gpuid = 2
 # ------------------------------------
 # scaling factor for reducing batch
 # size
@@ -58,7 +58,7 @@ BATCH_SIZE_SCALE = 1
 # ------------------------------------
 
 # ------------------------------------
-LEARNING_RATE = 1.0
+LEARNING_RATE = 0.1
 # ------------------------------------
 teacher_forcing_ratio = 0.8
 # ------------------------------------
@@ -116,18 +116,18 @@ ADD_NOISE=True
 if enc_key != 'sp':
     ADD_NOISE=False
 
-NOISE_STDEV=0.2
+NOISE_STDEV=0.125
 # ------------------------------------
 
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 1
+ITERS_TO_WEIGHT_NOISE = 0
 WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.02
+WEIGHT_NOISE_SIGMA = 0.03
 # ------------------------------------
 
 # ------------------------------------
-hidden_units = 128
-embedding_units = 128
+hidden_units = 256
+embedding_units = 256
 # ------------------------------------
 
 # if using CNNs, we can have more parameters as sequences are shorter
