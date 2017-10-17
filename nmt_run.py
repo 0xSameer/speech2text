@@ -339,9 +339,9 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
             dev_log.flush()
             os.fsync(dev_log.fileno())
 
+            print("^"*80)
             print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}, dev bleu={3:.4f}".format("*" * 10, train_loss, dev_loss, dev_b_score))
-            print("-")
-            print("-"*80)
+            print("^"*80)
 
             # save model
             if ((i+1) % ITERS_TO_SAVE == 0) or (i == (epochs-1)):
@@ -358,6 +358,9 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
             print('dev log file name: {0:s}'.format(log_dev_fil_name))
             if ADD_NOISE:
                 print('Adding gaussian noise to speech with stddev={0:.6f}'.format(NOISE_STDEV))
+
+            print("-")
+            print("-"*80)
 
         # end for epochs
     # end open log files
@@ -483,7 +486,6 @@ def calc_bleu(m_dict,
                     en_r_list = []
                     for r in m_dict[u][ref_key]:
                         en_r_list.append([w.decode() for w in r])
-                    print([[w.decode() for w in m_dict[u][ref_key][1]]])
                     en_ref.append(en_r_list)
                 else:
                     en_ref.append([[w.decode() for w in m_dict[u][ref_key][ref_index]]])
