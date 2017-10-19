@@ -40,7 +40,8 @@ SPEECH_DIM = 40
 # model_dir = "fsh_again"
 # SPEECH_DIM = 39
 # ------------------------------------
-EXP_NAME_PREFIX = ""
+RANDOM_SEED_VALUE="haha"
+EXP_NAME_PREFIX = "" if RANDOM_SEED_VALUE == "haha" else "_{0:s}_".format(RANDOM_SEED_VALUE)
 # ------------------------------------
 print("fisher + callhome sp/es - en configuration")
 # ------------------------------------
@@ -50,7 +51,7 @@ enc_key = 'sp'
 dec_key = 'en_w'
 
 # ------------------------------------
-gpuid = 0
+gpuid = 2
 # ------------------------------------
 # scaling factor for reducing batch
 # size
@@ -60,7 +61,7 @@ BATCH_SIZE_SCALE = 1
 # ------------------------------------
 LEARNING_RATE = 1.0
 # ------------------------------------
-teacher_forcing_ratio = 0.8
+teacher_forcing_ratio = 0.5
 # ------------------------------------
 OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
@@ -68,7 +69,7 @@ OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
 WEIGHT_DECAY=True
 if WEIGHT_DECAY:
-    WD_RATIO=1e-3
+    WD_RATIO=1e-4
 else:
     WD_RATIO=0
 # ------------------------------------
@@ -112,7 +113,7 @@ ATTN_W = True
 # ------------------------------------
 
 # ------------------------------------
-ADD_NOISE=True
+ADD_NOISE=False
 if enc_key != 'sp':
     ADD_NOISE=False
 
@@ -120,9 +121,9 @@ NOISE_STDEV=0.125
 # ------------------------------------
 
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 1
+ITERS_TO_WEIGHT_NOISE = 10
 WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.04
+WEIGHT_NOISE_SIGMA = 0.01
 # ------------------------------------
 
 # ------------------------------------
@@ -138,8 +139,8 @@ if ONLY_LSTM == False:
     #                              cnn_filter_gap)]
     if enc_key == 'sp':
         # ------------------------------------
-        num_layers_enc = 3
-        num_layers_dec = 3
+        num_layers_enc = 4
+        num_layers_dec = 4
         # ------------------------------------
         num_highway_layers = 0
         CNN_IN_DIM = SPEECH_DIM

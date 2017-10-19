@@ -118,7 +118,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     if mini:
         # shuffle buckets
         if not SHUFFLE_BATCHES:
-            random.seed("haha")
+            random.seed(RANDOM_SEED_VALUE)
         # leave out the last bucket as it includes pruned utterances
         b_shuffled = list(range(num_b))
     else:
