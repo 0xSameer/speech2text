@@ -118,6 +118,9 @@ def read_map_file(cat, segment_map, map_loc):
     # preparing output
     speech_fil_cnt = {}
     out_dict = {}
+    reverse_map_dict = {}
+
+
     print("reading map file: {0:s}".format(es_en_map_file))
     with open(es_en_map_file, "r") as map_f:
         for i, line in enumerate(map_f):
@@ -146,15 +149,14 @@ def read_map_file(cat, segment_map, map_loc):
                                          "en_w": en_words[i],
                                          "en_c": en_chars[i],
                                          "seg": speech_ids}
+            # create mapping dictionary for google-s2t
+            for uid in uids:
+                map_key = "{0:s}.{1:s}".format(fid, uid)
+                reverse_map_dict[map_key] = entry_key
 
-            # out_dict[speech_fil].append({"es_w": es_words[i],
-            #                              "es_c": es_chars[i],
-            #                              "en_w": en_words[i],
-            #                              "en_c": en_chars[i],
-            #                              "seg": speech_ids})
         # end for
     # end with open map
-    return out_dict
+    return out_dict, reverse_map_dict
 
 def main():
     parser = argparse.ArgumentParser(description=program_descrp)
@@ -189,12 +191,20 @@ def main():
     map_dict = {}
     map_dict_path = os.path.join(out_path,'map.dict')
 
+    rev_map_dict = {}
+    rev_map_dict_path = os.path.join(out_path,'rev_map.dict')
+
     for cat in kaldi_segment_map:
-        map_dict[cat] = read_map_file(cat, kaldi_segment_map[cat], map_loc)
+        map_dict[cat], rev_map_dict[cat] = read_map_file(cat, kaldi_segment_map[cat], map_loc)
 
     print("-"*50)
     print("saving map dict in: {0:s}".format(map_dict_path))
     pickle.dump(map_dict, open(map_dict_path, "wb"))
+    print("all done ...")
+
+    print("-"*50)
+    print("saving reverse map dict in: {0:s}".format(rev_map_dict_path))
+    pickle.dump(rev_map_dict, open(rev_map_dict_path, "wb"))
     print("all done ...")
 
 if __name__ == "__main__":

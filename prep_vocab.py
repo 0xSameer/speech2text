@@ -6,6 +6,8 @@ import argparse
 import json
 import pickle
 import re
+from stemming.porter2 import stem
+from tqdm import tqdm
 
 program_descrp = """
 create vocabulary dict
@@ -19,7 +21,7 @@ UNK = b"_UNK"
 example:
 python prep_vocab.py -o $PWD/out/
 '''
-def get_vocab_units(train_map_dict, key):
+def get_vocab_units(train_map_dict, key, stemmify=False):
     out = {"w2i":{}, "i2w":{}, "freq":{}}
     START_VOCAB = [PAD, GO, EOS, UNK]
     for w in START_VOCAB:
@@ -27,25 +29,37 @@ def get_vocab_units(train_map_dict, key):
         out["freq"][w] = 1
 
     # loop over each speaker data
-    for spk_id in train_map_dict:
+    for spk_id in tqdm(train_map_dict, ncols=100):
         # loop over each utterance with transcriptions+translations
-        for unit in train_map_dict[spk_id][key]:
-            if unit not in out["w2i"]:
-                out["w2i"][unit] = len(out["w2i"])
-                out["freq"][unit] = 1
-            else:
-                out["freq"][unit] += 1
-        # end for over words/chars in segment
+        if stemmify == False:
+            for unit in train_map_dict[spk_id][key]:
+                if unit not in out["w2i"]:
+                    out["w2i"][unit] = len(out["w2i"])
+                    out["freq"][unit] = 1
+                else:
+                    out["freq"][unit] += 1
+            # end for over words/chars in segment
+        else:
+            for unit in train_map_dict[spk_id][key]:
+                stemmed_unit = (stem(unit.decode())).encode()
+                if stemmed_unit not in out["w2i"]:
+                    out["w2i"][stemmed_unit] = len(out["w2i"])
+                    out["freq"][stemmed_unit] = 1
+                else:
+                    out["freq"][stemmed_unit] += 1
+            # end for over stemming
     # end for line in speech segment
     out["i2w"] = {val:key for key, val in out["w2i"].items()}
 
     return out
 
-def create_vocab(train_map_dict):
+def create_vocab(train_map_dict, stemmify=False):
     train_vocab_dict = {"es_w":{}, "es_c":{}, "en_w":{}, "en_c":{}}
     for key in train_vocab_dict:
         print("generating vocab for: {0:s}".format(key))
-        train_vocab_dict[key] = get_vocab_units(train_map_dict, key)
+        train_vocab_dict[key] = get_vocab_units(train_map_dict, 
+                                                key, 
+                                                stemmify=stemmify if key.endswith("_w") else False)
 
     return train_vocab_dict
 
@@ -78,13 +92,20 @@ def main():
     print("-"*50)
 
     train_vocab_dict = create_vocab(map_dict["fisher_train"])
-
     train_vocab_dict_path = os.path.join(out_path,'train_vocab.dict')
-
     print("-"*50)
     print("saving vocab dict in: {0:s}".format(train_vocab_dict_path))
     pickle.dump(train_vocab_dict, open(train_vocab_dict_path, "wb"))
+
+    train_stemmed_vocab_dict = create_vocab(map_dict["fisher_train"], 
+                                            stemmify=True)
+    train_stemmed_vocab_dict_path = os.path.join(out_path,'train_stemmed_vocab.dict')
+    print("-"*50)
+    print("saving stemmed vocab dict in: {0:s}".format(train_stemmed_vocab_dict_path))
+    pickle.dump(train_stemmed_vocab_dict, open(train_stemmed_vocab_dict_path, "wb"))
+    print("len stemmed dict for en words = {0:d}".format(len(train_stemmed_vocab_dict['en_w']['w2i'])))
     print("all done ...")
+    
 
 if __name__ == "__main__":
     main()

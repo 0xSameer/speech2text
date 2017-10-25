@@ -16,6 +16,8 @@ import fractions
 import warnings
 from collections import Counter
 
+from stemming.porter2 import stem
+
 from nltk.util import ngrams
 
 try:
@@ -139,29 +141,29 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     for b in b_shuffled:
         if enc_key == 'sp':
             if b < num_b // 2:
-                batch_size = 128 // BATCH_SIZE_SCALE
+                b_size = batch_size // BATCH_SIZE_SCALE
             elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
-                batch_size = 128 // BATCH_SIZE_SCALE
+                b_size = batch_size // BATCH_SIZE_SCALE
             else:
-                batch_size = 100 // BATCH_SIZE_SCALE
+                b_size = (max(batch_size, 100)) // BATCH_SIZE_SCALE
         else:
             if b < num_b // 2:
-                batch_size = 256
+                b_size = batch_size
             elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
-                batch_size = 256
+                b_size = batch_size
             else:
-                batch_size = 256
+                b_size = batch_size
 
         bucket = b_dict['buckets'][b]
         if mini:
-            # select 25% of the dataset for training
-            bucket = random.sample(bucket, len(bucket) // 4)
+            # select % of the dataset for training
+            bucket = random.sample(bucket, len(bucket) // TRAIN_SIZE_SCALE)
 
         b_len = len(bucket)
         total_utts += b_len
         random.shuffle(bucket)
-        for i in range(0,b_len, batch_size):
-            utt_list_batches.append((bucket[i:i+batch_size],b))
+        for i in range(0,b_len, b_size):
+            utt_list_batches.append((bucket[i:i+b_size],b))
         # end bucket loop
     # end all buckets loop
 
@@ -430,9 +432,9 @@ def display_words(m_dict, v_dict, preds, utts, dec_key, min_len=0, max_len=2*MAX
     for u in utts:
         es_ref.append(" ".join([w.decode() for w in m_dict[u]['es_w']]))
         if type(m_dict[u][dec_key]) == list:
-            en_ref.append(" ".join([w.decode() for w in m_dict[u]['en_w']]))
+            en_ref.append(" ".join(get_en_words_from_list(m_dict[u]['en_w'])))
         else:
-            en_ref.append(" ".join([w.decode() for w in m_dict[u]['en_w'][0]]))
+            en_ref.append(" ".join(get_en_words_from_list(m_dict[u]['en_w'][0])))
 
     en_pred = []
     join_str = ' ' if dec_key.endswith('_w') else ''
@@ -461,7 +463,11 @@ def display_words(m_dict, v_dict, preds, utts, dec_key, min_len=0, max_len=2*MAX
 
     print("total utts matching length filters={0:d}".format(total_matching_len))
 
-
+def get_en_words_from_list(l):
+    if STEMMIFY == False:
+        return [w.decode() for w in l]
+    else:
+        return [stem(w.decode()) for w in l]
 
 def calc_bleu(m_dict,
               v_dict,
@@ -480,15 +486,15 @@ def calc_bleu(m_dict,
     for u in tqdm(utts, ncols=80):
         if len(m_dict[u][src_key]) >= min_len and len(m_dict[u][src_key]) <= max_len:
             if type(m_dict[u][ref_key]) == list:
-                en_ref.append([[w.decode() for w in m_dict[u][ref_key]]])
+                en_ref.append([get_en_words_from_list(m_dict[u][ref_key])])
             else:
                 if ref_index == -1:
                     en_r_list = []
                     for r in m_dict[u][ref_key]:
-                        en_r_list.append([w.decode() for w in r])
+                        en_r_list.append(get_en_words_from_list(r))
                     en_ref.append(en_r_list)
                 else:
-                    en_ref.append([[w.decode() for w in m_dict[u][ref_key][ref_index]]])
+                    en_ref.append([get_en_words_from_list(m_dict[u][ref_key][ref_index])])
 
     join_str = ' ' if dec_key.endswith('_w') else ''
 

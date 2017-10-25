@@ -30,6 +30,7 @@ DEEP_2D_CNN      = 2
 out_path = "./callhome_fbank_out"
 wavs_path = os.path.join(out_path, "wavs")
 # ------------------------------------
+# model_dir = "fsh_fbank_10_tf0.5"
 model_dir = "fsh_fbank"
 # model_dir = "callhome_fbank"
 # ------------------------------------
@@ -40,7 +41,7 @@ SPEECH_DIM = 40
 # model_dir = "fsh_again"
 # SPEECH_DIM = 39
 # ------------------------------------
-RANDOM_SEED_VALUE="haha"
+RANDOM_SEED_VALUE="hehe"
 EXP_NAME_PREFIX = "" if RANDOM_SEED_VALUE == "haha" else "_{0:s}_".format(RANDOM_SEED_VALUE)
 # ------------------------------------
 print("fisher + callhome sp/es - en configuration")
@@ -48,20 +49,25 @@ print("fisher + callhome sp/es - en configuration")
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
 enc_key = 'sp'
-dec_key = 'en_w'
+dec_key = 'en_c'
 
 # ------------------------------------
-gpuid = 2
+gpuid = 0
 # ------------------------------------
 # scaling factor for reducing batch
 # size
+BATCH_SIZE = 100
 BATCH_SIZE_SCALE = 1
+TRAIN_SIZE_SCALE = 4
+
+STEMMIFY = True
+BI_RNN = False
 # ------------------------------------
 
 # ------------------------------------
 LEARNING_RATE = 1.0
 # ------------------------------------
-teacher_forcing_ratio = 0.5
+teacher_forcing_ratio = 0.8
 # ------------------------------------
 OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
@@ -69,7 +75,7 @@ OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
 WEIGHT_DECAY=True
 if WEIGHT_DECAY:
-    WD_RATIO=1e-4
+    WD_RATIO=1e-3
 else:
     WD_RATIO=0
 # ------------------------------------
@@ -121,13 +127,13 @@ NOISE_STDEV=0.125
 # ------------------------------------
 
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 10
+ITERS_TO_WEIGHT_NOISE = 60
 WEIGHT_NOISE_MU = 0.0
 WEIGHT_NOISE_SIGMA = 0.01
 # ------------------------------------
 
 # ------------------------------------
-hidden_units = 256
+hidden_units = 128
 embedding_units = 256
 # ------------------------------------
 
@@ -139,8 +145,8 @@ if ONLY_LSTM == False:
     #                              cnn_filter_gap)]
     if enc_key == 'sp':
         # ------------------------------------
-        num_layers_enc = 4
-        num_layers_dec = 4
+        num_layers_enc = 3
+        num_layers_dec = 3
         # ------------------------------------
         num_highway_layers = 0
         CNN_IN_DIM = SPEECH_DIM
@@ -196,7 +202,7 @@ prep_buckets.buckets_main(out_path, num_b, width_b, enc_key)
 
 max_pool_stride = 5
 max_pool_pad = 0
-BATCH_SIZE = 32
+
 if CNN_TYPE == SINGLE_1D_CNN:
     cnn_num_channels = 100
     cnn_filters = [{"ndim": 1,
@@ -299,6 +305,11 @@ EXP_NAME_PREFIX += "_BN" if USE_BN else ''
 
 EXP_NAME_PREFIX += "_LN" if USE_LN else ''
 
+EXP_NAME_PREFIX += "_STEMMIFY" if STEMMIFY else ''
+
+EXP_NAME_PREFIX += "_BI_RNN" if BI_RNN else ''
+
+
 EXP_NAME_PREFIX += "_enc-{0:d}".format(num_layers_enc) if num_layers_enc > 1 else ""
 
 if not os.path.exists(out_path):
@@ -310,7 +321,12 @@ map_dict_path = os.path.join(out_path,'map.dict')
 print("loading dict: {0:s}".format(map_dict_path))
 map_dict = pickle.load(open(map_dict_path, "rb"))
 
-vocab_dict_path = os.path.join(out_path, 'train_vocab.dict')
+
+if STEMMIFY == False:
+    vocab_dict_path = os.path.join(out_path, 'train_vocab.dict')
+else:
+    vocab_dict_path = os.path.join(out_path, 'train_stemmed_vocab.dict')
+
 print("loading dict: {0:s}".format(vocab_dict_path))
 vocab_dict = pickle.load(open(vocab_dict_path, "rb"))
 print("-"*50)
@@ -449,5 +465,7 @@ with tqdm(total=total_utts, dynamic_ncols=True) as pbar
 export BLEU_SCRIPT=/afs/inf.ed.ac.uk/group/project/lowres/work/installs/mosesdecoder/scripts/generic/multi-bleu.perl
 
 perl $BLEU_SCRIPT fisher_dev_en.ref0 fisher_dev_en.ref1 fisher_dev_en.ref2 fisher_dev_en.ref3 < fisher_dev_mt-output
+
+perl $BLEU_SCRIPT e2e_ast_decode/refs/fisher_dev/sorted-normalized-fisher_dev.en* < e2e_ast_decode/hyps/fisher_dev/fisher_spa_eng_ast_003_base_r0.txt
 
 '''

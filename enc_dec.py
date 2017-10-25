@@ -76,11 +76,12 @@ class SpeechEncoderDecoder(Chain):
                             scale=scale)
 
         # reverse LSTM layer
-        # self.rnn_rev_enc = ["L{0:d}_rev_enc".format(i) for i in range(num_layers_enc)]
-        # self.add_rnn_layers(self.rnn_rev_enc,
-        #                     in_dim,
-        #                     self.n_units,
-        #                     scale=scale)
+        if BI_RNN:
+            self.rnn_rev_enc = ["L{0:d}_rev_enc".format(i) for i in range(num_layers_enc)]
+            self.add_rnn_layers(self.rnn_rev_enc,
+                                in_dim,
+                                self.n_units,
+                                scale=scale)
 
         # add LSTM layers
         # first layer appends previous ht, and therefore,
@@ -90,7 +91,13 @@ class SpeechEncoderDecoder(Chain):
         #                     self.embed_units,
         #                     2*self.n_units,
         #                     scale=scale)
-        self.add_rnn_layers(self.rnn_dec,
+        if BI_RNN:
+            self.add_rnn_layers(self.rnn_dec,
+                            self.embed_units+(2*self.n_units),
+                            2*self.n_units,
+                            scale=scale)
+        else:
+            self.add_rnn_layers(self.rnn_dec,
                             self.embed_units+(2*self.n_units),
                             self.n_units,
                             scale=scale)
@@ -187,8 +194,12 @@ class SpeechEncoderDecoder(Chain):
             #     self.add_link("context_bn",
             #                    L.BatchNormalization(2*self.n_units))
             if ATTN_W:
-                self.add_link("attn_Wa", L.Linear(self.n_units, self.n_units))
-            self.add_link("context", L.Linear(2*self.n_units, 2*self.n_units))
+                if BI_RNN:
+                    self.add_link("attn_Wa", L.Linear(2*self.n_units, 2*self.n_units))
+                    self.add_link("context", L.Linear(4*self.n_units, 2*self.n_units))
+                else:
+                    self.add_link("attn_Wa", L.Linear(self.n_units, self.n_units))
+                    self.add_link("context", L.Linear(2*self.n_units, 2*self.n_units))
             # if USE_BN:
             #     self.add_link("context_bn",
             #                    L.BatchNormalization(2*self.n_units))
@@ -206,25 +217,32 @@ class SpeechEncoderDecoder(Chain):
 
     def reset_state(self):
         # reset the state of LSTM layers
-        # for rnn_name in self.rnn_enc + self.rnn_rev_enc + self.rnn_dec:
-        for rnn_name in self.rnn_enc + self.rnn_dec:
-            self[rnn_name].reset_state()
+        if BI_RNN:
+            for rnn_name in self.rnn_enc + self.rnn_rev_enc + self.rnn_dec:
+                self[rnn_name].reset_state()
+        else:
+            for rnn_name in self.rnn_enc + self.rnn_dec:
+                self[rnn_name].reset_state()
         self.loss = 0
 
     def set_decoder_state(self):
         # set the hidden and cell state (if LSTM) of the first RNN in the decoder
-
-        # concatenate cell state of both enc LSTMs
-        # c_state = F.concat((self[self.rnn_enc[-1]].c, self[self.rnn_rev_enc[-1]].c))
-        # concatenate hidden state of both enc LSTMs
-        # h_state = F.concat((self[self.rnn_enc[-1]].h, self[self.rnn_rev_enc[-1]].h))
-
-        for enc_name, dec_name in zip(self.rnn_enc, self.rnn_dec):
-            if self.lstm1_or_gru0:
-                self[dec_name].set_state(self[enc_name].c, self[enc_name].h)
-            else:
-                self[dec_name].set_state(self[enc_name].h)
-
+        if BI_RNN:
+            for enc, rev_enc, dec in zip(self.rnn_enc, 
+                                         self.rnn_rev_enc, 
+                                         self.rnn_dec):
+                h_state = F.concat((self[enc].h, self[rev_enc].h))
+                if self.lstm1_or_gru0:
+                    c_state = F.concat((self[enc].c, self[rev_enc].c))
+                    self[dec].set_state(c_state, h_state)
+                else:
+                    self[dec].set_state(h_state)
+        else:
+            for enc, dec in zip(self.rnn_enc, self.rnn_dec):
+                if self.lstm1_or_gru0:
+                    self[dec].set_state(self[enc].c, self[enc].h)
+                else:
+                    self[dec].set_state(self[enc].h)
 
     def compute_context_vector(self, dec_h):
         batch_size, n_units = dec_h.shape
@@ -459,17 +477,21 @@ class SpeechEncoderDecoder(Chain):
                                   F.expand_dims(self.encode(X[i],
                                     self.rnn_enc), 0)),
                                   axis=0)
-                # h_rev = F.concat((h_rev,
-                #                   F.expand_dims(self.encode(X[-i],
-                #                     self.rnn_rev_enc), 0)),
-                #                   axis=0)
+                if BI_RNN:
+                    h_rev = F.concat((h_rev,
+                                      F.expand_dims(self.encode(X[-i],
+                                        self.rnn_rev_enc), 0)),
+                                      axis=0)
             else:
                 h_fwd = F.expand_dims(self.encode(X[i], self.rnn_enc), 0)
-                # h_rev = F.expand_dims(self.encode(X[-i], self.rnn_rev_enc), 0)
+                if BI_RNN:
+                    h_rev = F.expand_dims(self.encode(X[-i], self.rnn_rev_enc), 0)
 
-        # h_rev = F.flipud(h_rev)
-        # self.enc_states = F.concat((h_fwd, h_rev), axis=2)
-        self.enc_states = h_fwd
+        if BI_RNN:
+            h_rev = F.flipud(h_rev)
+            self.enc_states = F.concat((h_fwd, h_rev), axis=2)
+        else:
+            self.enc_states = h_fwd
         self.enc_states = F.swapaxes(self.enc_states, 0, 1)
         # return h_fwd, h_rev
 
