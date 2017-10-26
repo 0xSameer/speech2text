@@ -145,7 +145,10 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
             elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
                 b_size = batch_size // BATCH_SIZE_SCALE
             else:
-                b_size = (max(batch_size, 100)) // BATCH_SIZE_SCALE
+                if batch_size > BATCH_SIZE_SMALL:
+                    b_size = BATCH_SIZE_SMALL // BATCH_SIZE_SCALE
+                else:
+                    b_size = batch_size // BATCH_SIZE_SCALE
         else:
             if b < num_b // 2:
                 b_size = batch_size
