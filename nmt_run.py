@@ -140,10 +140,13 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     utt_list_batches = []
     for b in b_shuffled:
         if enc_key == 'sp':
-            if b < num_b // 2:
+            if b < num_b // 3:
                 b_size = batch_size // BATCH_SIZE_SCALE
             elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
-                b_size = batch_size // BATCH_SIZE_SCALE
+                if batch_size > BATCH_SIZE_MEDIUM:
+                    b_size = BATCH_SIZE_MEDIUM // BATCH_SIZE_SCALE
+                else:
+                    b_size = batch_size // BATCH_SIZE_SCALE
             else:
                 if batch_size > BATCH_SIZE_SMALL:
                     b_size = BATCH_SIZE_SMALL // BATCH_SIZE_SCALE
@@ -420,51 +423,6 @@ def my_main(out_path, epochs, key, use_y, mini):
     print("all done ...")
 # end my_main
 
-# def play_utt(utt, m_dict):
-#     sr, y = scipy.io.wavfile.read(os.path.join(wavs_path, utt.rsplit("-",1)[0]+'.wav'))
-#     start_t = min(seg['start'] for seg in m_dict[utt]['seg'])
-#     end_t = max(seg['end'] for seg in m_dict[utt]['seg'])
-#     print(start_t, end_t)
-#     start_t_samples, end_t_samples = int(start_t*sr), int(end_t*sr)
-#     display(Audio(y[start_t_samples:end_t_samples], rate=sr))
-
-def display_words(m_dict, v_dict, preds, utts, dec_key, min_len=0, max_len=2*MAX_EN_LEN):
-    print("min length={0:d}, max length={1:d}".format(min_len, max_len))
-    es_ref = []
-    en_ref = []
-    for u in utts:
-        es_ref.append(" ".join([w.decode() for w in m_dict[u]['es_w']]))
-        if type(m_dict[u][dec_key]) == list:
-            en_ref.append(" ".join(get_en_words_from_list(m_dict[u]['en_w'])))
-        else:
-            en_ref.append(" ".join(get_en_words_from_list(m_dict[u]['en_w'][0])))
-
-    en_pred = []
-    join_str = ' ' if dec_key.endswith('_w') else ''
-
-    for p in preds:
-        t_str = join_str.join([v_dict['i2w'][i].decode() for i in p])
-        t_str = t_str[:t_str.find('_EOS')]
-        en_pred.append(t_str)
-
-    total_matching_len = 0
-
-    for u, es, en, p in zip(utts, es_ref, en_ref, en_pred):
-        if len(es.split(" ")) >= min_len and len(es.split(" ")) <= max_len:
-            total_matching_len += 1
-            # for reference, 1st word is GO_ID, no need to display
-            print("Utterance: {0:s}".format(u))
-            display_pp = PrettyTable(["cat","sent"], hrules=True)
-            display_pp.align = "l"
-            display_pp.header = False
-            display_pp.add_row(["es ref", textwrap.fill(es,50)])
-            display_pp.add_row(["en ref", textwrap.fill(en,50)])
-            display_pp.add_row(["en pred", textwrap.fill(p,50)])
-
-            print(display_pp)
-            # play_utt(u, m_dict)
-
-    print("total utts matching length filters={0:d}".format(total_matching_len))
 
 def get_en_words_from_list(l):
     if STEMMIFY == False:
@@ -478,40 +436,32 @@ def calc_bleu(m_dict,
               utts,
               dec_key,
               weights=(0.25, 0.25, 0.25, 0.25),
-              min_len=0,
-              max_len=2*MAX_EN_LEN,
               ref_index=-1):
-    print("min length={0:d}, max length={1:d}".format(min_len, max_len))
     en_hyp = []
     en_ref = []
     ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
     src_key = 'es_w'
     for u in tqdm(utts, ncols=80):
-        if len(m_dict[u][src_key]) >= min_len and len(m_dict[u][src_key]) <= max_len:
-            if type(m_dict[u][ref_key]) == list:
-                en_ref.append([get_en_words_from_list(m_dict[u][ref_key])])
+        if type(m_dict[u][ref_key]) == list:
+            en_ref.append([get_en_words_from_list(m_dict[u][ref_key])])
+        else:
+            if ref_index == -1:
+                en_r_list = []
+                for r in m_dict[u][ref_key]:
+                    en_r_list.append(get_en_words_from_list(r))
+                en_ref.append(en_r_list)
             else:
-                if ref_index == -1:
-                    en_r_list = []
-                    for r in m_dict[u][ref_key]:
-                        en_r_list.append(get_en_words_from_list(r))
-                    en_ref.append(en_r_list)
-                else:
-                    en_ref.append([get_en_words_from_list(m_dict[u][ref_key][ref_index])])
+                en_ref.append([get_en_words_from_list(m_dict[u][ref_key][ref_index])])
 
     join_str = ' ' if dec_key.endswith('_w') else ''
 
     total_matching_len = 0
 
     for u, p in zip(utts, preds):
-        if len(m_dict[u][src_key]) >= min_len and len(m_dict[u][src_key]) <= max_len:
-            total_matching_len += 1
-            t_str = join_str.join([v_dict['i2w'][i].decode() for i in p])
-            t_str = t_str[:t_str.find('_EOS')]
-            en_hyp.append(t_str.split())
-
-
-    print("total utts matching length filters={0:d}".format(total_matching_len))
+        total_matching_len += 1
+        t_str = join_str.join([v_dict['i2w'][i].decode() for i in p])
+        t_str = t_str[:t_str.find('_EOS')]
+        en_hyp.append(t_str.split())
 
     smooth_fun = nltk.translate.bleu_score.SmoothingFunction()
 
@@ -529,8 +479,7 @@ def calc_bleu(m_dict,
     return b_score_value, chrf_score_value, en_hyp, en_ref
 
 
-def corpus_precision_recall(r, h, min_len=0,max_len=2*MAX_EN_LEN):
-    print("min length={0:d}, max length={1:d}".format(min_len, max_len))
+def corpus_precision_recall(r, h):
     p_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
     p_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
     r_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
@@ -551,12 +500,14 @@ def corpus_precision_recall(r, h, min_len=0,max_len=2*MAX_EN_LEN):
 
 
     p = [(n / d) * 100 for n,d in zip(p_numerators.values(), p_denominators.values())]
-    r = [(n / d) *100 for n,d in zip(r_numerators.values(), r_denominators.values())]
+    r = [(n / d) * 100 for n,d in zip(r_numerators.values(), r_denominators.values())]
 
     print("{0:10s} | {1:>8s} | {2:>8s}| {3:>8s} | {4:>8s}".format("metric", "1-gram","2-gram","3-gram","4-gram"))
     print("-"*54)
     print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("precision", *p))
     print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("recall", *r))
+#     print("{0:10s} | {1:8.2f}".format("precision", *p))
+#     print("{0:10s} | {1:8.2f}".format("recall", *r))
 
 
     return p, r
@@ -578,24 +529,26 @@ def modified_precision_recall(references, hypothesis, n):
     ## max_counts = reduce(or_, [Counter(ngrams(ref, n)) for ref in references])
     max_counts = {}
     max_reference_count = 0
+    total_ref_count = 0
     for reference in references:
         reference_counts = Counter(ngrams(reference, n)) if len(reference) >= n else Counter()
-        for ngram in counts:
+        for ngram in reference_counts:
             max_counts[ngram] = max(max_counts.get(ngram, 0),
                                     reference_counts[ngram])
         ref_length = sum(reference_counts.values())
         if ref_length > max_reference_count:
             max_reference_count = ref_length
+        total_ref_count += ref_length
 
     # Assigns the intersection between hypothesis and references' counts.
-    clipped_counts = {ngram: min(count, max_counts[ngram])
+    clipped_counts = {ngram: min(count, max_counts.get(ngram, 0))
                       for ngram, count in counts.items()}
 
     numerator = sum(clipped_counts.values())
     # Ensures that denominator is minimum 1 to avoid ZeroDivisionError.
     # Usually this happens when the ngram order is > len(reference).
     denominator = max(1, sum(counts.values()))
-    rec_denominator = max(1, ref_length)
+    rec_denominator = max(1, sum(max_counts.values()))
 
     prec = Fraction(numerator, denominator, _normalize=False)
     rec = Fraction(numerator, rec_denominator, _normalize=False)
