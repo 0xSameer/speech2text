@@ -52,12 +52,12 @@ enc_key = 'sp'
 dec_key = 'en_w'
 
 # ------------------------------------
-gpuid = 1
+gpuid = 0
 # ------------------------------------
 # scaling factor for reducing batch
 # size
 BATCH_SIZE = 256
-BATCH_SIZE_MEDIUM = 200
+BATCH_SIZE_MEDIUM = 256
 BATCH_SIZE_SMALL = 100
 BATCH_SIZE_SCALE = 1
 TRAIN_SIZE_SCALE = 4
@@ -67,7 +67,7 @@ BI_RNN = False
 # ------------------------------------
 
 # ------------------------------------
-LEARNING_RATE = 0.1
+LEARNING_RATE = 1.0
 # ------------------------------------
 teacher_forcing_ratio = 0.8
 # ------------------------------------
@@ -129,9 +129,9 @@ NOISE_STDEV=0.2
 # ------------------------------------
 
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 50
+ITERS_TO_WEIGHT_NOISE = 60
 WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.01
+WEIGHT_NOISE_SIGMA = 0.02
 # ------------------------------------
 
 # ------------------------------------
@@ -152,7 +152,7 @@ if ONLY_LSTM == False:
         # ------------------------------------
         num_highway_layers = 0
         CNN_IN_DIM = SPEECH_DIM
-        num_b = 10
+        num_b = 15
         width_b = 150
 
     elif enc_key == 'es_c':
@@ -470,13 +470,13 @@ perl $BLEU_SCRIPT fisher_dev_en.ref0 fisher_dev_en.ref1 fisher_dev_en.ref2 fishe
 
 perl $BLEU_SCRIPT e2e_ast_decode/refs/fisher_dev/sorted-normalized-fisher_dev.en* < e2e_ast_decode/hyps/fisher_dev/fisher_spa_eng_ast_003_base_r0.txt
 
-perl $BLEU_SCRIPT fisher_dev_en.ref* < fisher_dev_mt-output 
+perl $BLEU_SCRIPT fisher_dev_en.ref* < fisher_dev_mt-output
 BLEU = 22.83, 59.1/31.5/17.2/9.6 (BP=0.970, ratio=0.970, hyp_len=38270, ref_len=39454)
 
-perl $BLEU_SCRIPT google_fisher_dev_ref_* < google_fisher_dev_r0.en 
+perl $BLEU_SCRIPT google_fisher_dev_ref_* < google_fisher_dev_r0.en
 BLEU = 46.41, 76.6/55.2/39.4/27.9 (BP=1.000, ratio=1.002, hyp_len=39703, ref_len=39623)
 
-perl $BLEU_SCRIPT google_fisher_dev_r[1-3]* < fisher_dev_mt-output 
+perl $BLEU_SCRIPT google_fisher_dev_r[1-3]* < fisher_dev_mt-output
 BLEU = 20.82, 54.7/28.6/15.4/8.4 (BP=0.980, ratio=0.980, hyp_len=38270, ref_len=39050)
 
 
