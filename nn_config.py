@@ -56,9 +56,9 @@ gpuid = 0
 # ------------------------------------
 # scaling factor for reducing batch
 # size
-BATCH_SIZE = 256
-BATCH_SIZE_MEDIUM = 256
-BATCH_SIZE_SMALL = 100
+BATCH_SIZE = 200
+BATCH_SIZE_MEDIUM = 100
+BATCH_SIZE_SMALL = 64
 BATCH_SIZE_SCALE = 1
 TRAIN_SIZE_SCALE = 4
 
@@ -67,7 +67,7 @@ BI_RNN = False
 # ------------------------------------
 
 # ------------------------------------
-LEARNING_RATE = 1.0
+LEARNING_RATE = 0.5
 # ------------------------------------
 teacher_forcing_ratio = 0.8
 # ------------------------------------
@@ -131,7 +131,7 @@ NOISE_STDEV=0.2
 # ------------------------------------
 ITERS_TO_WEIGHT_NOISE = 60
 WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.02
+WEIGHT_NOISE_SIGMA = 0.03
 # ------------------------------------
 
 # ------------------------------------
