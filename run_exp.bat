@@ -11,3 +11,7 @@ echo "Finished training mt model"
 # export OUT=$PWD/callhome_fbank_out
 # longjob -28day -c ./"run_exp.bat $PWD/callhome_fbank_out 10 fisher_train 0"
 # longjob -28day -c ./"run_exp.bat $PWD/callhome_fbank_out 10 callhome_train 0"
+
+
+# longjob -28day -c ./"run_exp.bat $PWD/both_fbank_out 10 fisher_train 0"
+# longjob -28day -c ./"run_exp.bat $PWD/both_fbank_out 10 callhome_train 0"

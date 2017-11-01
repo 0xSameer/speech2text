@@ -27,11 +27,12 @@ DEEP_2D_CNN      = 2
 # FBANK
 # out_path = "./fbank_out/"
 # ------------------------------------
-out_path = "./callhome_fbank_out"
+out_path = "./both_fbank_out"
 wavs_path = os.path.join(out_path, "wavs")
 # ------------------------------------
 # model_dir = "fsh_fbank_10_tf0.5"
-model_dir = "fsh_fbank"
+# model_dir = "fsh_fbank"
+model_dir = "new_vocab_fsh_fbank"
 # model_dir = "callhome_fbank"
 # ------------------------------------
 SPEECH_DIM = 40
@@ -41,7 +42,7 @@ SPEECH_DIM = 40
 # model_dir = "fsh_again"
 # SPEECH_DIM = 39
 # ------------------------------------
-RANDOM_SEED_VALUE="full1"
+RANDOM_SEED_VALUE="mini25_1"
 EXP_NAME_PREFIX = "" if RANDOM_SEED_VALUE == "haha" else "_{0:s}_".format(RANDOM_SEED_VALUE)
 # ------------------------------------
 print("fisher + callhome sp/es - en configuration")
@@ -49,16 +50,16 @@ print("fisher + callhome sp/es - en configuration")
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
 enc_key = 'sp'
-dec_key = 'en_w'
+dec_key = 'en_c'
 
 # ------------------------------------
-gpuid = 0
+gpuid = 1
 # ------------------------------------
 # scaling factor for reducing batch
 # size
-BATCH_SIZE = 200
-BATCH_SIZE_MEDIUM = 100
-BATCH_SIZE_SMALL = 64
+BATCH_SIZE = 256
+BATCH_SIZE_MEDIUM = 200
+BATCH_SIZE_SMALL = 100
 BATCH_SIZE_SCALE = 1
 TRAIN_SIZE_SCALE = 4
 
@@ -67,7 +68,7 @@ BI_RNN = False
 # ------------------------------------
 
 # ------------------------------------
-LEARNING_RATE = 0.5
+LEARNING_RATE = 1.0
 # ------------------------------------
 teacher_forcing_ratio = 0.8
 # ------------------------------------
@@ -106,7 +107,7 @@ ONLY_LSTM = False
 CNN_TYPE = DEEP_2D_CNN
 # ------------------------------------
 USE_LN = True
-USE_BN = True
+USE_BN = False
 FINE_TUNE = False
 # ------------------------------------
 
@@ -129,14 +130,14 @@ NOISE_STDEV=0.2
 # ------------------------------------
 
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 60
+ITERS_TO_WEIGHT_NOISE = 80
 WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.03
+WEIGHT_NOISE_SIGMA = 0.02
 # ------------------------------------
 
 # ------------------------------------
-hidden_units = 256
-embedding_units = 256
+hidden_units = 128
+embedding_units = 128
 # ------------------------------------
 
 # if using CNNs, we can have more parameters as sequences are shorter
@@ -238,14 +239,14 @@ else:
     cnn_filters = [
         {"in_channels": None,
         "out_channels": 32,
-        "ksize": (3,3),
-        "stride": (2,2),
-        "pad": (3 // 2, 3 // 2)},
+        "ksize": (5,3),
+        "stride": (3,2),
+        "pad": (5 // 2, 3 // 2)},
         {"in_channels": None,
         "out_channels": 32,
-        "ksize": (3,3),
-        "stride": (2,2),
-        "pad": (3 // 2, 3 // 2)},
+        "ksize": (5,3),
+        "stride": (3,2),
+        "pad": (5 // 2, 3 // 2)},
     ]
     # ------------------------------------
 

@@ -20,8 +20,16 @@ python prep_map_sp_es_en.py -m $JOSHUA -o $PWD/out/
 # borrowed from Google
 # **Based on TensorFlow code:
 # https://github.com/tensorflow/models/blob/master/tutorials/rnn/translate/data_utils.py**
-_WORD_SPLIT = re.compile(b"([.,!?\"':~;)(])")
-_CHAR_SPLIT = re.compile(b"([.,!?\":~;)(])")
+_SQUARE_BRACKS = re.compile(b"\[.*?\]")
+_ANGLE_BRACKS = re.compile(b"\<.*?\>")
+# _WORD_SPLIT = re.compile(b"([.,!?\"':~;)(])")
+# _CHAR_SPLIT = re.compile(b"([.,!?\":~;)(])")
+
+_WORD_SPLIT = re.compile(b"([><=.,!?\"':~;$@%&\-)(])")
+_WORD_SUB = re.compile(b"([><=.,!?:~;$@%&\-)(])")
+
+_CHAR_SPLIT = re.compile(b"([><=.,!?:~;$@%&\-)(])")
+_CHAR_SUB = re.compile(b"([><=.,!?:~;$@%&\-)(])")
 
 '''
 test_sentence = b"haha though,don't say.what could've been"
@@ -34,8 +42,10 @@ char_tokenizer(test_sentence)
 def basic_tokenizer(sentence):
     """Very basic tokenizer: split the sentence into a list of tokens."""
     words = []
-    for space_separated_fragment in sentence.strip().split():
-        words.extend(_WORD_SPLIT.sub(b"", w) for w in _WORD_SPLIT.split(space_separated_fragment))
+    sentence_remove_square = _SQUARE_BRACKS.sub(b"", sentence.strip())
+    sentence_remove_angle = _ANGLE_BRACKS.sub(b"", sentence_remove_square)
+    for space_separated_fragment in sentence_remove_angle.split():
+        words.extend(_WORD_SUB.sub(b"", w) for w in _WORD_SPLIT.split(space_separated_fragment))
     # return b" ".join([w.lower() for w in words if w])
     return [w.lower() for w in words if w]
 
@@ -45,8 +55,10 @@ def char_tokenizer(sentence):
     # preserve apostrophe suffixes as chars
     chars = []
     words = []
-    for space_separated_fragment in sentence.strip().split():
-        words.extend(_CHAR_SPLIT.sub(b"", w) for w in _WORD_SPLIT.split(space_separated_fragment))
+    sentence_remove_square = _SQUARE_BRACKS.sub(b"", sentence.strip())
+    sentence_remove_angle = _ANGLE_BRACKS.sub(b"", sentence_remove_square)
+    for space_separated_fragment in sentence_remove_angle.split():
+        words.extend(_CHAR_SUB.sub(b"", w) for w in _CHAR_SPLIT.split(space_separated_fragment))
 
     words = [w for w in words if w]
 
