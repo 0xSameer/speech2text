@@ -42,7 +42,7 @@ SPEECH_DIM = 40
 # model_dir = "fsh_again"
 # SPEECH_DIM = 39
 # ------------------------------------
-RANDOM_SEED_VALUE="mini25_1"
+RANDOM_SEED_VALUE="mini50_1"
 EXP_NAME_PREFIX = "" if RANDOM_SEED_VALUE == "haha" else "_{0:s}_".format(RANDOM_SEED_VALUE)
 # ------------------------------------
 print("fisher + callhome sp/es - en configuration")
@@ -50,10 +50,10 @@ print("fisher + callhome sp/es - en configuration")
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
 enc_key = 'sp'
-dec_key = 'en_c'
+dec_key = 'en_w'
 
 # ------------------------------------
-gpuid = 1
+gpuid = 0
 # ------------------------------------
 # scaling factor for reducing batch
 # size
@@ -61,16 +61,16 @@ BATCH_SIZE = 256
 BATCH_SIZE_MEDIUM = 200
 BATCH_SIZE_SMALL = 100
 BATCH_SIZE_SCALE = 1
-TRAIN_SIZE_SCALE = 4
+TRAIN_SIZE_SCALE = 2
 
 STEMMIFY = False
-BI_RNN = False
+BI_RNN = True
 # ------------------------------------
 
 # ------------------------------------
 LEARNING_RATE = 1.0
 # ------------------------------------
-teacher_forcing_ratio = 0.8
+teacher_forcing_ratio = 0.5
 # ------------------------------------
 OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
@@ -84,7 +84,7 @@ else:
 # ------------------------------------
 
 # ------------------------------------
-ITERS_GRAD_NOISE = 0
+ITERS_GRAD_NOISE = 1
 # default noise function is
 # recommended to be either:
 # 0.01, 0.3 or 1.0
@@ -93,7 +93,7 @@ GRAD_NOISE_ETA = 0.01
 
 # ------------------------------------
 USE_DROPOUT=True
-DROPOUT_RATIO=0.3
+DROPOUT_RATIO=0.4
 # ------------------------------------
 
 # ------------------------------------
@@ -130,14 +130,14 @@ NOISE_STDEV=0.2
 # ------------------------------------
 
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 80
+ITERS_TO_WEIGHT_NOISE = 50
 WEIGHT_NOISE_MU = 0.0
 WEIGHT_NOISE_SIGMA = 0.02
 # ------------------------------------
 
 # ------------------------------------
 hidden_units = 128
-embedding_units = 128
+embedding_units = 256
 # ------------------------------------
 
 # if using CNNs, we can have more parameters as sequences are shorter
@@ -213,7 +213,7 @@ if CNN_TYPE == SINGLE_1D_CNN:
                     "out_channels": cnn_num_channels,
                     "ksize": k,
                     "stride": 1,
-                    "pad": k //2} for k in cnn_k_widths]
+                    "pad": k // 2} for k in cnn_k_widths]
 elif CNN_TYPE == DEEP_1D_CNN:
     # static CNN configuration
     # cnn_filters = [
