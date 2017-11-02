@@ -42,7 +42,7 @@ SPEECH_DIM = 40
 # model_dir = "fsh_again"
 # SPEECH_DIM = 39
 # ------------------------------------
-RANDOM_SEED_VALUE="mini50_1"
+RANDOM_SEED_VALUE="mini10_1"
 EXP_NAME_PREFIX = "" if RANDOM_SEED_VALUE == "haha" else "_{0:s}_".format(RANDOM_SEED_VALUE)
 # ------------------------------------
 print("fisher + callhome sp/es - en configuration")
@@ -53,7 +53,7 @@ enc_key = 'sp'
 dec_key = 'en_w'
 
 # ------------------------------------
-gpuid = 0
+gpuid = 1
 # ------------------------------------
 # scaling factor for reducing batch
 # size
@@ -61,9 +61,9 @@ BATCH_SIZE = 256
 BATCH_SIZE_MEDIUM = 200
 BATCH_SIZE_SMALL = 100
 BATCH_SIZE_SCALE = 1
-TRAIN_SIZE_SCALE = 2
+TRAIN_SIZE_SCALE = 10
 
-STEMMIFY = False
+STEMMIFY = True
 BI_RNN = True
 # ------------------------------------
 
@@ -132,7 +132,7 @@ NOISE_STDEV=0.2
 # ------------------------------------
 ITERS_TO_WEIGHT_NOISE = 50
 WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.02
+WEIGHT_NOISE_SIGMA = 0.01
 # ------------------------------------
 
 # ------------------------------------
