@@ -32,8 +32,8 @@ wavs_path = os.path.join(out_path, "wavs")
 # ------------------------------------
 # model_dir = "fsh_fbank_10_tf0.5"
 # model_dir = "fsh_fbank"
-model_dir = "new_vocab_fsh_fbank"
-# model_dir = "callhome_fbank"
+model_dir = "nov17"
+# model_dir = "new_vocab_callhome_fbank"
 # ------------------------------------
 SPEECH_DIM = 40
 # ------------------------------------
@@ -41,9 +41,6 @@ SPEECH_DIM = 40
 # out_path = "./mfcc_out/"
 # model_dir = "fsh_again"
 # SPEECH_DIM = 39
-# ------------------------------------
-RANDOM_SEED_VALUE="mini10_1"
-EXP_NAME_PREFIX = "" if RANDOM_SEED_VALUE == "haha" else "_{0:s}_".format(RANDOM_SEED_VALUE)
 # ------------------------------------
 print("fisher + callhome sp/es - en configuration")
 # ------------------------------------
@@ -53,7 +50,7 @@ enc_key = 'sp'
 dec_key = 'en_w'
 
 # ------------------------------------
-gpuid = 1
+gpuid = 2
 # ------------------------------------
 # scaling factor for reducing batch
 # size
@@ -61,16 +58,23 @@ BATCH_SIZE = 256
 BATCH_SIZE_MEDIUM = 200
 BATCH_SIZE_SMALL = 100
 BATCH_SIZE_SCALE = 1
-TRAIN_SIZE_SCALE = 10
+TRAIN_SIZE_SCALE = 1
 
-STEMMIFY = True
-BI_RNN = True
+STEMMIFY = False
+BI_RNN = False
+
+FSH1_CH0 = False
+
+RANDOM_SEED_VALUE="{0:s}_{1:d}".format("fsh" if FSH1_CH0 else "callh",
+                                       100 // TRAIN_SIZE_SCALE)
+
+EXP_NAME_PREFIX = "" if RANDOM_SEED_VALUE == "haha" else "_{0:s}_".format(RANDOM_SEED_VALUE)
 # ------------------------------------
 
 # ------------------------------------
 LEARNING_RATE = 1.0
 # ------------------------------------
-teacher_forcing_ratio = 0.5
+teacher_forcing_ratio = 0.8
 # ------------------------------------
 OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
@@ -78,13 +82,13 @@ OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
 WEIGHT_DECAY=True
 if WEIGHT_DECAY:
-    WD_RATIO=1e-3
+    WD_RATIO=1e-4
 else:
     WD_RATIO=0
 # ------------------------------------
 
 # ------------------------------------
-ITERS_GRAD_NOISE = 1
+ITERS_GRAD_NOISE = 0
 # default noise function is
 # recommended to be either:
 # 0.01, 0.3 or 1.0
@@ -107,7 +111,7 @@ ONLY_LSTM = False
 CNN_TYPE = DEEP_2D_CNN
 # ------------------------------------
 USE_LN = True
-USE_BN = False
+USE_BN = True
 FINE_TUNE = False
 # ------------------------------------
 
@@ -130,13 +134,13 @@ NOISE_STDEV=0.2
 # ------------------------------------
 
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 50
+ITERS_TO_WEIGHT_NOISE = 75
 WEIGHT_NOISE_MU = 0.0
 WEIGHT_NOISE_SIGMA = 0.01
 # ------------------------------------
 
 # ------------------------------------
-hidden_units = 128
+hidden_units = 256
 embedding_units = 256
 # ------------------------------------
 
@@ -174,7 +178,7 @@ if ONLY_LSTM == False:
     if dec_key.endswith('_w'):
         MAX_EN_LEN = 120
     else:
-        MAX_EN_LEN = 150
+        MAX_EN_LEN = 200
 
 else:
     cnn_k_widths = []
