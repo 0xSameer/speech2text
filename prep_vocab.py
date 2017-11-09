@@ -89,21 +89,28 @@ def main():
     print("-"*50)
     print("loading map_dict from={0:s}".format(map_dict_path))
     map_dict = pickle.load(open(map_dict_path, "rb"))
-    print("-"*50)
 
+    print("-"*50)
     train_vocab_dict = create_vocab(map_dict["fisher_train"])
     train_vocab_dict_path = os.path.join(out_path,'train_vocab.dict')
     print("-"*50)
     print("saving vocab dict in: {0:s}".format(train_vocab_dict_path))
     pickle.dump(train_vocab_dict, open(train_vocab_dict_path, "wb"))
 
-    train_stemmed_vocab_dict = create_vocab(map_dict["fisher_train"], 
-                                            stemmify=True)
-    train_stemmed_vocab_dict_path = os.path.join(out_path,'train_stemmed_vocab.dict')
     print("-"*50)
-    print("saving stemmed vocab dict in: {0:s}".format(train_stemmed_vocab_dict_path))
-    pickle.dump(train_stemmed_vocab_dict, open(train_stemmed_vocab_dict_path, "wb"))
-    print("len stemmed dict for en words = {0:d}".format(len(train_stemmed_vocab_dict['en_w']['w2i'])))
+    ch_train_vocab_dict = create_vocab(map_dict["callhome_train"])
+    ch_train_vocab_dict_path = os.path.join(out_path,'ch_train_vocab.dict')
+    print("-"*50)
+    print("saving vocab dict in: {0:s}".format(ch_train_vocab_dict_path))
+    pickle.dump(ch_train_vocab_dict, open(ch_train_vocab_dict_path, "wb"))
+
+    # train_stemmed_vocab_dict = create_vocab(map_dict["fisher_train"], 
+    #                                         stemmify=True)
+    # train_stemmed_vocab_dict_path = os.path.join(out_path,'train_stemmed_vocab.dict')
+    # print("-"*50)
+    # print("saving stemmed vocab dict in: {0:s}".format(train_stemmed_vocab_dict_path))
+    # pickle.dump(train_stemmed_vocab_dict, open(train_stemmed_vocab_dict_path, "wb"))
+    # print("len stemmed dict for en words = {0:d}".format(len(train_stemmed_vocab_dict['en_w']['w2i'])))
     print("all done ...")
     
 

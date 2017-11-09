@@ -32,7 +32,7 @@ wavs_path = os.path.join(out_path, "wavs")
 # ------------------------------------
 # model_dir = "fsh_fbank_10_tf0.5"
 # model_dir = "fsh_fbank"
-model_dir = "nov17"
+model_dir = "nov18"
 # model_dir = "new_vocab_callhome_fbank"
 # ------------------------------------
 SPEECH_DIM = 40
@@ -50,20 +50,21 @@ enc_key = 'sp'
 dec_key = 'en_w'
 
 # ------------------------------------
-gpuid = 2
+gpuid = 1
 # ------------------------------------
 # scaling factor for reducing batch
 # size
 BATCH_SIZE = 256
 BATCH_SIZE_MEDIUM = 200
 BATCH_SIZE_SMALL = 100
-BATCH_SIZE_SCALE = 1
-TRAIN_SIZE_SCALE = 1
+BATCH_SIZE_SCALE = 1.25
+TRAIN_SIZE_SCALE = 2
 
 STEMMIFY = False
+
 BI_RNN = False
 
-FSH1_CH0 = False
+FSH1_CH0 = True
 
 RANDOM_SEED_VALUE="{0:s}_{1:d}".format("fsh" if FSH1_CH0 else "callh",
                                        100 // TRAIN_SIZE_SCALE)
@@ -82,7 +83,7 @@ OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
 WEIGHT_DECAY=True
 if WEIGHT_DECAY:
-    WD_RATIO=1e-4
+    WD_RATIO=1e-6
 else:
     WD_RATIO=0
 # ------------------------------------
@@ -97,7 +98,7 @@ GRAD_NOISE_ETA = 0.01
 
 # ------------------------------------
 USE_DROPOUT=True
-DROPOUT_RATIO=0.4
+DROPOUT_RATIO=0.5
 # ------------------------------------
 
 # ------------------------------------
@@ -126,22 +127,25 @@ ATTN_W = True
 # ------------------------------------
 
 # ------------------------------------
-ADD_NOISE=True
-if enc_key != 'sp':
-    ADD_NOISE=False
+if FSH1_CH0:
+    ADD_NOISE=True
+    if enc_key != 'sp':
+        ADD_NOISE=False
+else:
+    ADD_NOISE=True
 
-NOISE_STDEV=0.2
+NOISE_STDEV=0.250
 # ------------------------------------
 
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 75
+ITERS_TO_WEIGHT_NOISE = 50
 WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.01
+WEIGHT_NOISE_SIGMA = 0.02
 # ------------------------------------
 
 # ------------------------------------
 hidden_units = 256
-embedding_units = 256
+embedding_units = 128
 # ------------------------------------
 
 # if using CNNs, we can have more parameters as sequences are shorter
@@ -329,10 +333,14 @@ print("loading dict: {0:s}".format(map_dict_path))
 map_dict = pickle.load(open(map_dict_path, "rb"))
 
 
-if STEMMIFY == False:
-    vocab_dict_path = os.path.join(out_path, 'train_vocab.dict')
+if FSH1_CH0:
+    if STEMMIFY == False:
+        vocab_dict_path = os.path.join(out_path, 'train_vocab.dict')
+    else:
+        vocab_dict_path = os.path.join(out_path, 'train_stemmed_vocab.dict')
 else:
-    vocab_dict_path = os.path.join(out_path, 'train_stemmed_vocab.dict')
+    vocab_dict_path = os.path.join(out_path, 'ch_train_vocab.dict')
+
 
 print("loading dict: {0:s}".format(vocab_dict_path))
 vocab_dict = pickle.load(open(vocab_dict_path, "rb"))

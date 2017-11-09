@@ -168,6 +168,7 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
         b_len = len(bucket)
         total_utts += b_len
         random.shuffle(bucket)
+        b_size = int(b_size)
         for i in range(0,b_len, b_size):
             utt_list_batches.append((bucket[i:i+b_size],b))
         # end bucket loop
