@@ -4,7 +4,6 @@ import prep_buckets
 # Data Parameters
 #------------------------------------------------------------------------------
 max_vocab_size = {"en" : 200000, "fr" : 200000}
-
 # Special vocabulary symbols - we always put them at the start.
 PAD = b"_PAD"
 GO = b"_GO"
@@ -24,23 +23,18 @@ SINGLE_1D_CNN    = 0
 DEEP_1D_CNN      = 1
 DEEP_2D_CNN      = 2
 #------------------------------------------------------------------------------
-# FBANK
-# out_path = "./fbank_out/"
-# ------------------------------------
-out_path = "./both_fbank_out"
+NEW1_OLD0 = True
+if NEW1_OLD0:
+    out_path = "./both_fbank_out"
+    model_dir = "nov10"
+else:
+    out_path = "./callhome_fbank_out"
+    model_dir = "fsh_fbank"
 wavs_path = os.path.join(out_path, "wavs")
-# ------------------------------------
-# model_dir = "fsh_fbank_10_tf0.5"
-# model_dir = "fsh_fbank"
-model_dir = "nov18"
-# model_dir = "new_vocab_callhome_fbank"
 # ------------------------------------
 SPEECH_DIM = 40
 # ------------------------------------
-# MFCC
-# out_path = "./mfcc_out/"
-# model_dir = "fsh_again"
-# SPEECH_DIM = 39
+# MFCC ,out_path = "./mfcc_out/", SPEECH_DIM = 39
 # ------------------------------------
 print("fisher + callhome sp/es - en configuration")
 # ------------------------------------
@@ -48,17 +42,20 @@ print("fisher + callhome sp/es - en configuration")
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
 enc_key = 'sp'
 dec_key = 'en_w'
-
 # ------------------------------------
 gpuid = 1
 # ------------------------------------
 # scaling factor for reducing batch
-# size
 BATCH_SIZE = 256
 BATCH_SIZE_MEDIUM = 200
 BATCH_SIZE_SMALL = 100
+# BATCH_SIZE = 128
+# BATCH_SIZE_MEDIUM = 100
+# BATCH_SIZE_SMALL = 80
 BATCH_SIZE_SCALE = 1.25
-TRAIN_SIZE_SCALE = 2
+TRAIN_SIZE_SCALE = 1
+# only applicable for mini mode
+SHUFFLE_BATCHES = False
 
 STEMMIFY = False
 
@@ -66,12 +63,13 @@ BI_RNN = False
 
 FSH1_CH0 = True
 
-RANDOM_SEED_VALUE="{0:s}_{1:d}".format("fsh" if FSH1_CH0 else "callh",
+if NEW1_OLD0:
+    RANDOM_SEED_VALUE="{0:s}_{1:d}".format("fsh" if FSH1_CH0 else "callh",
                                        100 // TRAIN_SIZE_SCALE)
+else:
+    RANDOM_SEED_VALUE="full1"
 
 EXP_NAME_PREFIX = "" if RANDOM_SEED_VALUE == "haha" else "_{0:s}_".format(RANDOM_SEED_VALUE)
-# ------------------------------------
-
 # ------------------------------------
 LEARNING_RATE = 1.0
 # ------------------------------------
@@ -79,17 +77,15 @@ teacher_forcing_ratio = 0.8
 # ------------------------------------
 OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
-
-# ------------------------------------
 WEIGHT_DECAY=True
 if WEIGHT_DECAY:
-    WD_RATIO=1e-6
+    WD_RATIO=1e-4
 else:
     WD_RATIO=0
 # ------------------------------------
 
 # ------------------------------------
-ITERS_GRAD_NOISE = 0
+ITERS_GRAD_NOISE = 1
 # default noise function is
 # recommended to be either:
 # 0.01, 0.3 or 1.0
@@ -98,7 +94,7 @@ GRAD_NOISE_ETA = 0.01
 
 # ------------------------------------
 USE_DROPOUT=True
-DROPOUT_RATIO=0.5
+DROPOUT_RATIO=0.3
 # ------------------------------------
 
 # ------------------------------------
@@ -114,13 +110,6 @@ CNN_TYPE = DEEP_2D_CNN
 USE_LN = True
 USE_BN = True
 FINE_TUNE = False
-# ------------------------------------
-
-# ------------------------------------
-# only applicable for mini mode
-SHUFFLE_BATCHES = False
-# ------------------------------------
-
 # ------------------------------------
 use_attn = SOFT_ATTN
 ATTN_W = True
@@ -138,13 +127,13 @@ NOISE_STDEV=0.250
 # ------------------------------------
 
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 50
+ITERS_TO_WEIGHT_NOISE = 0
 WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.02
+WEIGHT_NOISE_SIGMA = 0.01
 # ------------------------------------
 
 # ------------------------------------
-hidden_units = 256
+hidden_units = 300
 embedding_units = 128
 # ------------------------------------
 
@@ -247,9 +236,9 @@ else:
     cnn_filters = [
         {"in_channels": None,
         "out_channels": 32,
-        "ksize": (5,3),
-        "stride": (3,2),
-        "pad": (5 // 2, 3 // 2)},
+        "ksize": (3,3),
+        "stride": (2,2),
+        "pad": (3 // 2, 3 // 2)},
         {"in_channels": None,
         "out_channels": 32,
         "ksize": (5,3),
