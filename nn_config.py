@@ -43,23 +43,29 @@ print("fisher + callhome sp/es - en configuration")
 enc_key = 'sp'
 dec_key = 'en_w'
 # ------------------------------------
-gpuid = 1
+gpuid = 2
 # ------------------------------------
 # scaling factor for reducing batch
-BATCH_SIZE = 256
-BATCH_SIZE_MEDIUM = 200
-BATCH_SIZE_SMALL = 100
-# BATCH_SIZE = 128
-# BATCH_SIZE_MEDIUM = 100
-# BATCH_SIZE_SMALL = 80
-BATCH_SIZE_SCALE = 1.25
-TRAIN_SIZE_SCALE = 1
+if NEW1_OLD0:
+    BATCH_SIZE = 256
+    BATCH_SIZE_MEDIUM = 200
+    BATCH_SIZE_SMALL = 100
+    BATCH_SIZE_SCALE = 1.25
+    TRAIN_SIZE_SCALE = 4
+else:
+    BATCH_SIZE = 128
+    BATCH_SIZE_MEDIUM = 100
+    BATCH_SIZE_SMALL = 80
+    BATCH_SIZE_SCALE = 1
+    TRAIN_SIZE_SCALE = 1
+
+
 # only applicable for mini mode
 SHUFFLE_BATCHES = False
 
 STEMMIFY = False
 
-BI_RNN = False
+BI_RNN = True
 
 FSH1_CH0 = True
 
@@ -133,7 +139,7 @@ WEIGHT_NOISE_SIGMA = 0.01
 # ------------------------------------
 
 # ------------------------------------
-hidden_units = 300
+hidden_units = 128
 embedding_units = 128
 # ------------------------------------
 
