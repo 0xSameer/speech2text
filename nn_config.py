@@ -40,33 +40,22 @@ print("fisher + callhome sp/es - en configuration")
 # ------------------------------------
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'sp'
+enc_key = 'es_w'
 dec_key = 'en_w'
 # ------------------------------------
-gpuid = 2
+gpuid = 1
 # ------------------------------------
 # scaling factor for reducing batch
-if NEW1_OLD0:
-    BATCH_SIZE = 256
-    BATCH_SIZE_MEDIUM = 200
-    BATCH_SIZE_SMALL = 100
-    BATCH_SIZE_SCALE = 1.25
-    TRAIN_SIZE_SCALE = 4
-else:
-    BATCH_SIZE = 128
-    BATCH_SIZE_MEDIUM = 100
-    BATCH_SIZE_SMALL = 80
-    BATCH_SIZE_SCALE = 1
-    TRAIN_SIZE_SCALE = 1
-
+BATCH_SIZE = 256
+BATCH_SIZE_MEDIUM = 200
+BATCH_SIZE_SMALL = 100
+BATCH_SIZE_SCALE = 1
+TRAIN_SIZE_SCALE = 1
 
 # only applicable for mini mode
 SHUFFLE_BATCHES = False
-
 STEMMIFY = False
-
-BI_RNN = True
-
+BI_RNN = False
 FSH1_CH0 = True
 
 if NEW1_OLD0:
@@ -77,7 +66,7 @@ else:
 
 EXP_NAME_PREFIX = "" if RANDOM_SEED_VALUE == "haha" else "_{0:s}_".format(RANDOM_SEED_VALUE)
 # ------------------------------------
-LEARNING_RATE = 1.0
+LEARNING_RATE = 0.01
 # ------------------------------------
 teacher_forcing_ratio = 0.8
 # ------------------------------------
@@ -89,24 +78,18 @@ if WEIGHT_DECAY:
 else:
     WD_RATIO=0
 # ------------------------------------
-
-# ------------------------------------
-ITERS_GRAD_NOISE = 1
+ITERS_GRAD_NOISE = 0
 # default noise function is
 # recommended to be either:
 # 0.01, 0.3 or 1.0
 GRAD_NOISE_ETA = 0.01
 # ------------------------------------
-
-# ------------------------------------
 USE_DROPOUT=True
+USE_CNN_DROPOUT=True
+USE_OUT_DROPOUT=True
 DROPOUT_RATIO=0.3
 # ------------------------------------
-
-# ------------------------------------
 ITERS_TO_SAVE = 5
-# ------------------------------------
-
 # ------------------------------------
 lstm1_or_gru0 = False
 ONLY_LSTM = False
@@ -120,8 +103,6 @@ FINE_TUNE = False
 use_attn = SOFT_ATTN
 ATTN_W = True
 # ------------------------------------
-
-# ------------------------------------
 if FSH1_CH0:
     ADD_NOISE=True
     if enc_key != 'sp':
@@ -131,16 +112,14 @@ else:
 
 NOISE_STDEV=0.250
 # ------------------------------------
-
-# ------------------------------------
 ITERS_TO_WEIGHT_NOISE = 0
 WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.01
+WEIGHT_NOISE_SIGMA = 0.001
 # ------------------------------------
 
 # ------------------------------------
-hidden_units = 128
-embedding_units = 128
+hidden_units = 512
+embedding_units = 256
 # ------------------------------------
 
 # if using CNNs, we can have more parameters as sequences are shorter
@@ -156,20 +135,20 @@ if ONLY_LSTM == False:
         # ------------------------------------
         num_highway_layers = 0
         CNN_IN_DIM = SPEECH_DIM
-        num_b = 15
-        width_b = 150
+        num_b = 20
+        width_b = 100
 
     elif enc_key == 'es_c':
-        num_layers_enc = 3
-        num_layers_dec = 3
-        num_highway_layers = 2
+        num_layers_enc = 2
+        num_layers_dec = 2
+        num_highway_layers = 0
         CNN_IN_DIM = embedding_units
-        num_b = 10
-        width_b = 15
+        num_b = 20
+        width_b = 10
     else:
         num_layers_enc = 2
         num_layers_dec = 2
-        num_highway_layers = 2
+        num_highway_layers = 0
         CNN_IN_DIM = embedding_units
         num_b = 20
         width_b = 3
@@ -177,21 +156,21 @@ if ONLY_LSTM == False:
     if dec_key.endswith('_w'):
         MAX_EN_LEN = 120
     else:
-        MAX_EN_LEN = 200
+        MAX_EN_LEN = 250
 
 else:
     cnn_k_widths = []
     num_layers_enc = 4
     num_layers_dec = 2
-    num_highway_layers = 2
+    num_highway_layers = 0
 
     if enc_key == 'sp':
         print("Cannot train speech using only LSTM")
 
     elif enc_key == 'es_c':
         CNN_IN_DIM = embedding_units
-        num_b = 50
-        width_b = 4
+        num_b = 20
+        width_b = 10
     else:
         CNN_IN_DIM = embedding_units
         num_b = 20
@@ -239,17 +218,28 @@ else:
     # static CNN configuration
     # googlish
     # ------------------------------------
+    if enc_key == 'sp':
+        k_size_1 = 3
+        stride_1 = 2
+        k_size_2 = 5
+        stride_2 = 3
+    else:
+        k_size_1 = 3
+        stride_1 = 2
+        k_size_2 = 3
+        stride_2 = 2
+
     cnn_filters = [
         {"in_channels": None,
         "out_channels": 32,
-        "ksize": (3,3),
-        "stride": (2,2),
-        "pad": (3 // 2, 3 // 2)},
+        "ksize": (k_size_1,3),
+        "stride": (stride_1,2),
+        "pad": (k_size_1 // 2, 3 // 2)},
         {"in_channels": None,
         "out_channels": 32,
-        "ksize": (5,3),
-        "stride": (3,2),
-        "pad": (5 // 2, 3 // 2)},
+        "ksize": (k_size_2,3),
+        "stride": (stride_2,2),
+        "pad": (k_size_2 // 2, 3 // 2)},
     ]
     # ------------------------------------
 
@@ -487,5 +477,5 @@ BLEU = 46.41, 76.6/55.2/39.4/27.9 (BP=1.000, ratio=1.002, hyp_len=39703, ref_len
 perl $BLEU_SCRIPT google_fisher_dev_r[1-3]* < fisher_dev_mt-output
 BLEU = 20.82, 54.7/28.6/15.4/8.4 (BP=0.980, ratio=0.980, hyp_len=38270, ref_len=39050)
 
-
+rsync -vPr sameer@13.82.235.4:/home/sameer/work/chainer2/speech2text/nov10 nov10/
 '''

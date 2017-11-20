@@ -310,7 +310,10 @@ class SpeechEncoderDecoder(Chain):
         #     ht = self.context_bn(ht)
         ht = F.tanh(ht)
 
-        predicted_out = self.out(ht)
+        if USE_OUT_DROPOUT:
+            predicted_out = F.dropout(self.out(ht), ratio=DROPOUT_RATIO)
+        else:
+            predicted_out = self.out(ht)
 
         return predicted_out, ht
 
@@ -443,7 +446,10 @@ class SpeechEncoderDecoder(Chain):
             if USE_BN:
                 bn_lname = '{0:s}_bn'.format(cnn_layer)
                 h = self[bn_lname](h)
-            h = F.relu(h)
+            if USE_CNN_DROPOUT:
+                h = F.dropout(F.relu(h), ratio=DROPOUT_RATIO)
+            else:
+                h = F.relu(h)
 
         # out dimension:
         # batch size * num time frames after pooling * cnn out dim

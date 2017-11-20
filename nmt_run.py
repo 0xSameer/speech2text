@@ -391,7 +391,7 @@ def my_main(out_path, epochs, key, use_y, mini):
 
     cat_speech_path = os.path.join(out_path, key)
 
-    if (last_epoch >= ITERS_GRAD_NOISE) and ITERS_GRAD_NOISE > 0:
+    if ((last_epoch+1) >= ITERS_GRAD_NOISE) and ITERS_GRAD_NOISE > 0:
         print("------ Adding gradient noise")
         optimizer.add_hook(chainer.optimizer.GradientNoise(eta=GRAD_NOISE_ETA))
         print("Finished adding gradient noise")
