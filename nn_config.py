@@ -1,143 +1,81 @@
 from basics import *
 import prep_buckets
-#------------------------------------------------------------------------------
-# Data Parameters
-#------------------------------------------------------------------------------
-max_vocab_size = {"en" : 200000, "fr" : 200000}
-# Special vocabulary symbols - we always put them at the start.
-PAD = b"_PAD"
-GO = b"_GO"
-EOS = b"_EOS"
-UNK = b"_UNK"
-START_VOCAB = [PAD, GO, EOS, UNK]
 
-PAD_ID = 0
-GO_ID = 1
-EOS_ID = 2
-UNK_ID = 3
 
-NO_ATTN = 0
-SOFT_ATTN = 1
-
-SINGLE_1D_CNN    = 0
-DEEP_1D_CNN      = 1
-DEEP_2D_CNN      = 2
-#------------------------------------------------------------------------------
-NEW1_OLD0 = True
-if NEW1_OLD0:
-    out_path = "./both_fbank_out"
-    model_dir = "nov10"
-else:
-    out_path = "./callhome_fbank_out"
-    model_dir = "fsh_fbank"
-wavs_path = os.path.join(out_path, "wavs")
-# ------------------------------------
-SPEECH_DIM = 40
-# ------------------------------------
-# MFCC ,out_path = "./mfcc_out/", SPEECH_DIM = 39
-# ------------------------------------
 print("fisher + callhome sp/es - en configuration")
-# ------------------------------------
-# encoder key
-# 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'es_w'
-dec_key = 'en_w'
-# ------------------------------------
-gpuid = 1
-# ------------------------------------
-# scaling factor for reducing batch
-BATCH_SIZE = 256
-BATCH_SIZE_MEDIUM = 200
-BATCH_SIZE_SMALL = 100
-BATCH_SIZE_SCALE = 1
-TRAIN_SIZE_SCALE = 1
 
-# only applicable for mini mode
-SHUFFLE_BATCHES = False
-STEMMIFY = False
-BI_RNN = False
-FSH1_CH0 = True
+nn_config = {}
 
-if NEW1_OLD0:
-    RANDOM_SEED_VALUE="{0:s}_{1:d}".format("fsh" if FSH1_CH0 else "callh",
-                                       100 // TRAIN_SIZE_SCALE)
-else:
-    RANDOM_SEED_VALUE="full1"
+def create_config(nn_config):
+    nn_config['out_path'] = "./both_fbank_out"
+    nn_config['wavs_path'] = os.path.join(nn_config['out_path'], "wavs")
+    nn_config['model_dir'] = "nov10"
+    # ------------------------------------
+    model_dir['SPEECH_DIM'] = 40
+    # ------------------------------------
+    # encoder key
+    # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
+    nn_config['enc_key'] = 'es_w'
+    nn_config['dec_key'] = 'en_w'
+    # ------------------------------------
+    # scaling factor for reducing batch
 
-EXP_NAME_PREFIX = "" if RANDOM_SEED_VALUE == "haha" else "_{0:s}_".format(RANDOM_SEED_VALUE)
-# ------------------------------------
-LEARNING_RATE = 0.01
-# ------------------------------------
-teacher_forcing_ratio = 0.8
-# ------------------------------------
-OPTIMIZER_ADAM1_SGD_0 = True
-# ------------------------------------
-WEIGHT_DECAY=True
-if WEIGHT_DECAY:
-    WD_RATIO=1e-4
-else:
-    WD_RATIO=0
-# ------------------------------------
-ITERS_GRAD_NOISE = 0
-# default noise function is
-# recommended to be either:
-# 0.01, 0.3 or 1.0
-GRAD_NOISE_ETA = 0.01
-# ------------------------------------
-USE_DROPOUT=True
-USE_CNN_DROPOUT=True
-USE_OUT_DROPOUT=True
-DROPOUT_RATIO=0.3
-# ------------------------------------
-ITERS_TO_SAVE = 5
-# ------------------------------------
-lstm1_or_gru0 = False
-ONLY_LSTM = False
-# ------------------------------------
-CNN_TYPE = DEEP_2D_CNN
-# ------------------------------------
-USE_LN = True
-USE_BN = True
-FINE_TUNE = False
-# ------------------------------------
-use_attn = SOFT_ATTN
-ATTN_W = True
-# ------------------------------------
-if FSH1_CH0:
-    ADD_NOISE=True
-    if enc_key != 'sp':
-        ADD_NOISE=False
-else:
-    ADD_NOISE=True
+    nn_config['BATCH_SIZE'] = 256
+    nn_config['BATCH_SIZE_MEDIUM'] = 200
+    nn_config['BATCH_SIZE_SMALL'] = 100
+    nn_config['BATCH_SIZE_SCALE'] = 1
 
-NOISE_STDEV=0.250
-# ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 0
-WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.001
-# ------------------------------------
+    nn_config['SHUFFLE_BATCHES'] = False
+    nn_config['STEMMIFY'] = False
+    nn_config['BI_RNN'] = False
+    nn_config['FSH1_CH0'] = True
 
-# ------------------------------------
-hidden_units = 512
-embedding_units = 256
-# ------------------------------------
+    nn_config['RANDOM_SEED_VALUE']="{0:s}_{1:d}".format("fsh" 
+                        if nn_config['FSH1_CH0'] else "callh",
+                        100 // nn_config['TRAIN_SIZE_SCALE'])
 
-# if using CNNs, we can have more parameters as sequences are shorter
-# due to max pooling
-if ONLY_LSTM == False:
-    # cnn_k_widths = [i for i in range(cnn_filter_start,
-    #                              cnn_filter_end+1,
-    #                              cnn_filter_gap)]
-    if enc_key == 'sp':
-        # ------------------------------------
-        num_layers_enc = 3
-        num_layers_dec = 3
-        # ------------------------------------
-        num_highway_layers = 0
-        CNN_IN_DIM = SPEECH_DIM
-        num_b = 20
-        width_b = 100
+    EXP_NAME_PREFIX = "_{0:s}_".format(nn_config['RANDOM_SEED_VALUE'])
+    nn_config['WD_RATIO']=1e-4
+    
+    # ------------------------------------
+    nn_config['gpuid'] = 0
+    nn_config['LEARNING_RATE'] = 0.01
+    nn_config['teacher_forcing_ratio'] = 0.8
+    nn_config['OPTIMIZER_ADAM1_SGD_0'] = True
+    nn_config['ITERS_GRAD_NOISE'] = 0
+    # default noise function is
+    # recommended to be either:
+    # 0.01, 0.3 or 1.0
+    nn_config['GRAD_NOISE_ETA'] = 0.01
+    # ------------------------------------
+    nn_config['USE_DROPOUT']=0.3
+    nn_config['USE_CNN_DROPOUT']=0.3
+    nn_config['USE_OUT_DROPOUT']=0.3
+    # ------------------------------------
+    nn_config['ITERS_TO_SAVE'] = 5
+    # ------------------------------------
+    nn_config['lstm1_or_gru0'] = False
+    # ------------------------------------
+    nn_config['USE_LN'] = True
+    nn_config['USE_BN'] = True
+    nn_config['use_attn'] = SOFT_ATTN
+    nn_config['NOISE_STDEV']=0.250
 
+    # ------------------------------------
+    nn_config['ITERS_TO_WEIGHT_NOISE'] = 0
+    nn_config['WEIGHT_NOISE_MU'] = 0.0
+    nn_config['WEIGHT_NOISE_SIGMA'] = 0.001
+    # ------------------------------------
+    nn_config['hidden_units'] = 512
+    nn_config['embedding_units'] = 256
+    nn_config['attn_units'] = 128
+    # ------------------------------------
+    nn_config['enc_layers'] = 3
+    nn_config['dec_layers'] = 3
+    nn_config['highway_layers'] = 0
+    CNN_IN_DIM = SPEECH_DIM
+    num_b = 20
+    width_b = 100
     elif enc_key == 'es_c':
         num_layers_enc = 2
         num_layers_dec = 2

@@ -25,3 +25,21 @@ import random
 Align = namedtuple('Align', ['word', 'start', 'end'])
 
 
+# Special vocabulary symbols - we always put them at the start.
+PAD = b"_PAD"
+GO = b"_GO"
+EOS = b"_EOS"
+UNK = b"_UNK"
+START_VOCAB = [PAD, GO, EOS, UNK]
+
+PAD_ID = 0
+GO_ID = 1
+EOS_ID = 2
+UNK_ID = 3
+
+NO_ATTN = 0
+SOFT_ATTN = 1
+
+SINGLE_1D_CNN    = 0
+DEEP_1D_CNN      = 1
+DEEP_2D_CNN      = 2
