@@ -4,190 +4,83 @@ import prep_buckets
 
 print("fisher + callhome sp/es - en configuration")
 
-nn_config = {}
-
-def create_config(nn_config):
-    nn_config['out_path'] = "./both_fbank_out"
-    nn_config['wavs_path'] = os.path.join(nn_config['out_path'], "wavs")
-    nn_config['model_dir'] = "nov10"
+def create_sp_config(cfg):
+    model_cfg = {}
+    train_cfg = {}
+    model_cfg['data_path'] = "./both_fbank_out"
+    model_cfg['wavs_path'] = os.path.join(cfg['data_path'], "wavs")
     # ------------------------------------
-    model_dir['SPEECH_DIM'] = 40
+    # FIXED params
     # ------------------------------------
     # encoder key
     # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-    nn_config['enc_key'] = 'es_w'
-    nn_config['dec_key'] = 'en_w'
-    # ------------------------------------
-    # scaling factor for reducing batch
+    model_cfg['enc_key'] = 'es_w'
+    model_cfg['dec_key'] = 'en_w'
+    model_cfg['sp_dim'] = 40
+    model_cfg['batch_size'] = { 'max': 256, 'med': 200, 'min': 100, 'scale':1}
+    model_cfg['stemmify'] = False
+    model_cfg['bi_rnn'] = False
+    model_cfg['dataset'] = 'fisher'
 
-    nn_config['BATCH_SIZE'] = 256
-    nn_config['BATCH_SIZE_MEDIUM'] = 200
-    nn_config['BATCH_SIZE_SMALL'] = 100
-    nn_config['BATCH_SIZE_SCALE'] = 1
+    model_cfg['rnn_unit'] = RNN_GRU
+    model_cfg['ln'] = True
+    model_cfg['bn'] = True
+    model_cfg['attn'] = SOFT_ATTN
 
-    nn_config['SHUFFLE_BATCHES'] = False
-    nn_config['STEMMIFY'] = False
-    nn_config['BI_RNN'] = False
-    nn_config['FSH1_CH0'] = True
+    model_cfg['L2']=1e-4
+    model_cfg['rnn_dropout']=0.3
+    model_cfg['out_dropout']=0.3
 
-    nn_config['RANDOM_SEED_VALUE']="{0:s}_{1:d}".format("fsh" 
-                        if nn_config['FSH1_CH0'] else "callh",
-                        100 // nn_config['TRAIN_SIZE_SCALE'])
+    model_cfg['hidden_units'] = 512
+    model_cfg['embedding_units'] = 256
+    model_cfg['attn_units'] = 128
 
-    EXP_NAME_PREFIX = "_{0:s}_".format(nn_config['RANDOM_SEED_VALUE'])
-    nn_config['WD_RATIO']=1e-4
-    
-    # ------------------------------------
-    nn_config['gpuid'] = 0
-    nn_config['LEARNING_RATE'] = 0.01
-    nn_config['teacher_forcing_ratio'] = 0.8
-    nn_config['OPTIMIZER_ADAM1_SGD_0'] = True
-    nn_config['ITERS_GRAD_NOISE'] = 0
-    # default noise function is
-    # recommended to be either:
-    # 0.01, 0.3 or 1.0
-    nn_config['GRAD_NOISE_ETA'] = 0.01
-    # ------------------------------------
-    nn_config['USE_DROPOUT']=0.3
-    nn_config['USE_CNN_DROPOUT']=0.3
-    nn_config['USE_OUT_DROPOUT']=0.3
-    # ------------------------------------
-    nn_config['ITERS_TO_SAVE'] = 5
-    # ------------------------------------
-    nn_config['lstm1_or_gru0'] = False
-    # ------------------------------------
-    nn_config['USE_LN'] = True
-    nn_config['USE_BN'] = True
-    nn_config['use_attn'] = SOFT_ATTN
-    nn_config['NOISE_STDEV']=0.250
+    model_cfg['enc_layers'] = 3
+    model_cfg['dec_layers'] = 3
+    model_cfg['highway_layers'] = 0
 
-    # ------------------------------------
-    nn_config['ITERS_TO_WEIGHT_NOISE'] = 0
-    nn_config['WEIGHT_NOISE_MU'] = 0.0
-    nn_config['WEIGHT_NOISE_SIGMA'] = 0.001
-    # ------------------------------------
-    nn_config['hidden_units'] = 512
-    nn_config['embedding_units'] = 256
-    nn_config['attn_units'] = 128
-    # ------------------------------------
-    nn_config['enc_layers'] = 3
-    nn_config['dec_layers'] = 3
-    nn_config['highway_layers'] = 0
-    CNN_IN_DIM = SPEECH_DIM
-    num_b = 20
-    width_b = 100
-    elif enc_key == 'es_c':
-        num_layers_enc = 2
-        num_layers_dec = 2
-        num_highway_layers = 0
-        CNN_IN_DIM = embedding_units
-        num_b = 20
-        width_b = 10
-    else:
-        num_layers_enc = 2
-        num_layers_dec = 2
-        num_highway_layers = 0
-        CNN_IN_DIM = embedding_units
-        num_b = 20
-        width_b = 3
-
-    if dec_key.endswith('_w'):
-        MAX_EN_LEN = 120
-    else:
-        MAX_EN_LEN = 250
-
-else:
-    cnn_k_widths = []
-    num_layers_enc = 4
-    num_layers_dec = 2
-    num_highway_layers = 0
-
-    if enc_key == 'sp':
-        print("Cannot train speech using only LSTM")
-
-    elif enc_key == 'es_c':
-        CNN_IN_DIM = embedding_units
-        num_b = 20
-        width_b = 10
-    else:
-        CNN_IN_DIM = embedding_units
-        num_b = 20
-        width_b = 3
-
-    if dec_key.endswith('_w'):
-        MAX_EN_LEN = 50
-    else:
-        MAX_EN_LEN = 150
-
-
-# prepare buckets
-prep_buckets.buckets_main(out_path, num_b, width_b, enc_key)
-
-max_pool_stride = 5
-max_pool_pad = 0
-
-if CNN_TYPE == SINGLE_1D_CNN:
-    cnn_num_channels = 100
-    cnn_filters = [{"ndim": 1,
-                    "in_channels": CNN_IN_DIM,
-                    "out_channels": cnn_num_channels,
-                    "ksize": k,
-                    "stride": 1,
-                    "pad": k // 2} for k in cnn_k_widths]
-elif CNN_TYPE == DEEP_1D_CNN:
-    # static CNN configuration
-    # cnn_filters = [
-    #     {"ndim": 1,
-    #     "in_channels": CNN_IN_DIM,
-    #     "out_channels": 64,
-    #     "ksize": 4,
-    #     "stride": 2,
-    #     "pad": 4 // 2},
-    #     {"ndim": 1,
-    #     "in_channels": 64,
-    #     "out_channels": 64,
-    #     "ksize": 4,
-    #     "stride": 3,
-    #     "pad": 4 // 2},
-    # ]
-    pass
-
-else:
-    # static CNN configuration
-    # googlish
-    # ------------------------------------
-    if enc_key == 'sp':
-        k_size_1 = 3
-        stride_1 = 2
-        k_size_2 = 5
-        stride_2 = 3
-    else:
-        k_size_1 = 3
-        stride_1 = 2
-        k_size_2 = 3
-        stride_2 = 2
-
-    cnn_filters = [
-        {"in_channels": None,
-        "out_channels": 32,
-        "ksize": (k_size_1,3),
-        "stride": (stride_1,2),
-        "pad": (k_size_1 // 2, 3 // 2)},
-        {"in_channels": None,
-        "out_channels": 32,
-        "ksize": (k_size_2,3),
-        "stride": (stride_2,2),
-        "pad": (k_size_2 // 2, 3 // 2)},
+    model_cfg['cnn_layers'] = [
+            {"in_channels": None,
+            "out_channels": 32,
+            "ksize": (k_size_1,3),
+            "stride": (stride_1,2),
+            "pad": (k_size_1 // 2, 3 // 2)},
+            {"in_channels": None,
+            "out_channels": 32,
+            "ksize": (k_size_2,3),
+            "stride": (stride_2,2),
+            "pad": (k_size_2 // 2, 3 // 2)},
     ]
+
     # ------------------------------------
+    # VARIABLE params
+    # ------------------------------------
+    model_cfg['model_dir'] = "nov10"
+    model_cfg['gpuid'] = 0
+    model_cfg['lr'] = 0.01
+    model_cfg['teach_ratio'] = 0.8
+    model_cfg['optimizer'] = OPT_ADAM
+    # default noise function is recommended to be either: 0.01, 0.3 or 1.0
+    model_cfg['iter_add_grad_noise'] = 0
+    model_cfg['grad_noise_eta'] = 0.01
 
-print("cnn details:")
-for d in cnn_filters:
-    print(d)
+    model_cfg['iters_save_model'] = 5
+    model_cfg['speech_noise']=0.250
+    model_cfg['iter_add_weight_noise'] = 0
+    model_cfg['weight_noise_mean'] = 0.0
+    model_cfg['weight_noise_sigma'] = 0.001
 
-#------------------------------------------------------------------------------
+    model_cfg['buckets_num'] = 20
+    model_cfg['buckets_width'] = 100
+    model_cfg['max_en_pred'] = 120
 
-EXP_NAME_PREFIX += "_{0:s}_{1:s}".format(enc_key, dec_key)
+    model_prep_buckets.buckets_main(cfg['data_path'], num_b, width_b, enc_key)
+    print("cnn details:")
+    for d in cnn_filters:
+        print(d)
+
+EXP_NAME_PREFIX
+EXP_NAME_PREFIX += "{0:s}_{1:s}".format(enc_key, dec_key)
 
 if lstm1_or_gru0:
     EXP_NAME_PREFIX += "_lstm"
@@ -246,30 +139,30 @@ EXP_NAME_PREFIX += "_BI_RNN" if BI_RNN else ''
 
 EXP_NAME_PREFIX += "_enc-{0:d}".format(num_layers_enc) if num_layers_enc > 1 else ""
 
-if not os.path.exists(out_path):
-    print("Input folder not found".format(out_path))
+model_if not os.path.exists(cfg['data_path']):
+    model_print("Input folder not found".format(cfg['data_path']))
 
 print("-"*50)
 # load dictionaries
-map_dict_path = os.path.join(out_path,'map.dict')
+model_map_dict_path = os.path.join(cfg['data_path'],'map.dict')
 print("loading dict: {0:s}".format(map_dict_path))
 map_dict = pickle.load(open(map_dict_path, "rb"))
 
 
 if FSH1_CH0:
     if STEMMIFY == False:
-        vocab_dict_path = os.path.join(out_path, 'train_vocab.dict')
+        model_vocab_dict_path = os.path.join(cfg['data_path'], 'train_vocab.dict')
     else:
-        vocab_dict_path = os.path.join(out_path, 'train_stemmed_vocab.dict')
+        model_vocab_dict_path = os.path.join(cfg['data_path'], 'train_stemmed_vocab.dict')
 else:
-    vocab_dict_path = os.path.join(out_path, 'ch_train_vocab.dict')
+    model_vocab_dict_path = os.path.join(cfg['data_path'], 'ch_train_vocab.dict')
 
 
 print("loading dict: {0:s}".format(vocab_dict_path))
 vocab_dict = pickle.load(open(vocab_dict_path, "rb"))
 print("-"*50)
 
-bucket_dict_path = os.path.join(out_path,'buckets_{0:s}.dict'.format(enc_key))
+model_bucket_dict_path = os.path.join(cfg['data_path'],'buckets_{0:s}.dict'.format(enc_key))
 print("loading dict: {0:s}".format(bucket_dict_path))
 bucket_dict = pickle.load(open(bucket_dict_path, "rb"))
 print("-"*50)

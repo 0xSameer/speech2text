@@ -8,6 +8,7 @@ import pickle
 import re
 from tqdm import tqdm
 import numpy as np
+import random
 
 program_descrp = """
 create buckets for data based on length/duration
@@ -31,7 +32,7 @@ def display_buckets(buckets_info, cat):
     # end for
 # end def
 
-def create_buckets(cat_dict, num_b, width_b, key):
+def create_buckets(cat_dict, num_b, width_b, key, scale, seed):
     print("creating buckets for key: {0:s}".format(key))
 
     # dict to store buckets information
@@ -46,11 +47,18 @@ def create_buckets(cat_dict, num_b, width_b, key):
         buckets_info['buckets'][bucket].append(utt_id)
     # end for
 
+    # sample from buckets if scale > 1:
+    if scale > 1:
+        random.seed(seed)
+        for i in range(len(buckets_info['buckets'])):
+            sample_len = len(buckets_info['buckets'][i]) // scale
+            buckets_info['buckets'][i] =  random.sample(buckets_info['buckets'][i], sample_len)
+
     return buckets_info
     print("done...")
 # end def
 
-def buckets_main(out_path, num_b, width_b, key):
+def buckets_main(out_path, num_b, width_b, key, scale=1, seed='haha'):
     # create output file directory:
     if not os.path.exists(out_path):
         print("{0:s} does not exist. Exiting".format(out_path))
@@ -72,7 +80,14 @@ def buckets_main(out_path, num_b, width_b, key):
 
     for cat in info_dict:
         print("creating buckets for: {0:s}".format(cat))
-        bucket_dict[cat] = create_buckets(info_dict[cat], num_b, width_b, key)
+        # scale is only applicable for train
+        scale_val = scale if "train" in cat else 1
+        bucket_dict[cat] = create_buckets(info_dict[cat], 
+                                          num_b, 
+                                          width_b, 
+                                          key, 
+                                          scale_val,
+                                          seed)
     # end for category: dev, dev2, test, train
 
     # save buckets info

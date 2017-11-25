@@ -43,3 +43,13 @@ SOFT_ATTN = 1
 SINGLE_1D_CNN    = 0
 DEEP_1D_CNN      = 1
 DEEP_2D_CNN      = 2
+
+FSH = 'fisher'
+CALLH = 'callhome'
+
+OPT_ADAM = 0
+OPT_SGD = 1
+
+RNN_GRU = 0
+RNN_LSTM = 1
+RNN_SRU = 2

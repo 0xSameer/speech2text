@@ -1,7 +1,5 @@
 # coding: utf-8
-
 from basics import *
-from nn_config import *
 from enc_dec import *
 from prettytable import PrettyTable
 import argparse
@@ -26,108 +24,112 @@ try:
 except TypeError:
     from nltk.compat import Fraction
 
-
-program_descrp = """
-run nmt experiments
-"""
+program_descrp = """run nmt experiments"""
 
 '''
 example:
 python nmt_run.py -o $PWD/out -e 2 -k fisher_train
-
 '''
-xp = cuda.cupy if gpuid >= 0 else np
 
-model = SpeechEncoderDecoder(gpuid)
-# model_1 = SpeechEncoderDecoder(gpuid_2)
-
-model.to_gpu(gpuid)
-# model_1.to_gpu(gpuid_2)
-
-if OPTIMIZER_ADAM1_SGD_0:
-    print("using ADAM optimizer")
-    # optimizer = optimizers.Adam(alpha=0.001,
-    #                             beta1=0.9,
-    #                             beta2=0.999,
-    #                             eps=1e-08)
-    # optimizer = optimizers.AdaGrad()
-    optimizer = optimizers.Adam()
-    optimizer.setup(model)
-else:
-    print("using SGD optimizer")
-    optimizer = optimizers.SGD(lr=LEARNING_RATE)
-    optimizer.setup(model)
-
-if WEIGHT_DECAY:
-    optimizer.add_hook(chainer.optimizer.WeightDecay(WD_RATIO))
-
-# gradient clipping
-optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=10))
-# optimizer.add_hook(chainer.optimizer.GradientNoise(eta=0.3))
-
-def get_batch(m_dict, x_key, y_key,
-              utt_list, vocab_dict,
-              max_enc, max_dec, cat_speech_path=''):
-
+def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
+              max_enc, max_dec, input_path=''):
     batch_data = {'X':[], 'y':[]}
+    # -------------------------------------------------------------------------
+    # loop through each utterance in utt list
+    # -------------------------------------------------------------------------
     for u in utt_list:
-        # for speech data
-        x_data_found = False
+        # ---------------------------------------------------------------------
+        #  add X data
+        # ---------------------------------------------------------------------
         if x_key == 'sp':
-            utt_sp_path = os.path.join(cat_speech_path,
-                                      "{0:s}.npy".format(u))
+            # -----------------------------------------------------------------
+            # for speech data
+            # -----------------------------------------------------------------
+            # get path to speech file
+            utt_sp_path = os.path.join(input_path, "{0:s}.npy".format(u))
             if not os.path.exists(utt_sp_path):
-                utt_sp_path = os.path.join(cat_speech_path,
+                # for training data, there are sub-folders
+                utt_sp_path = os.path.join(input_path,
                                            u.split('_',1)[0],
                                            "{0:s}.npy".format(u))
             if os.path.exists(utt_sp_path):
-                x_data_found = True
                 x_data = xp.load(utt_sp_path)
+                # truncate max length
                 batch_data['X'].append(x_data[:max_enc])
             else:
-                print("ERROR!! file not found: {0:s}".format(utt_sp_path))
+                # -------------------------------------------------------------
+                # exception if file not found
+                # -------------------------------------------------------------
+                raise FileNotFoundError("ERROR!! file not found: {0:s}".format(utt_sp_path))
+                # -------------------------------------------------------------
         else:
-            u_x_ids = [vocab_dict[x_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][x_key]]
-            u_x_ids = xp.asarray(u_x_ids, dtype=xp.int32)
-            x_data_found = True
-            batch_data['X'].append(u_x_ids[:max_enc])
-        #  add english labels
-
-        if x_data_found:
-            if type(m_dict[u][y_key]) == list:
-                en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]]
-            else:
-                # dev and test data have multiple translations
-                # choose the first one for computing perplexity
-                en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]]
-            u_y_ids = [GO_ID] + en_ids[:MAX_EN_LEN-2] + [EOS_ID]
-            if x_data_found == True:
-                batch_data['y'].append(xp.asarray(u_y_ids, dtype=xp.int32))
+            # -----------------------------------------------------------------
+            # for text data
+            # -----------------------------------------------------------------
+            x_ids = [vocab_dict[x_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][x_key]]
+            x_ids = xp.asarray(x_ids, dtype=xp.int32)
+            batch_data['X'].append(x_ids[:max_enc])
+            # -----------------------------------------------------------------
+        # ---------------------------------------------------------------------
+        #  add labels
+        # ---------------------------------------------------------------------
+        if type(m_dict[u][y_key]) == list:
+            en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]]
+        else:
+            # dev and test data have multiple translations
+            # choose the first one for computing perplexity
+            en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]]
+        y_ids = [GO_ID] + en_ids[:MAX_EN_LEN-2] + [EOS_ID]
+        batch_data['y'].append(xp.asarray(y_ids, dtype=xp.int32))
+        # ---------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # end for all utterances in batch
+    # -------------------------------------------------------------------------
     if len(batch_data['X']) > 0 and len(batch_data['y']) > 0:
         batch_data['X'] = F.pad_sequence(batch_data['X'], padding=PAD_ID)
         batch_data['y'] = F.pad_sequence(batch_data['y'], padding=PAD_ID)
     return batch_data
 
+def create_batches(b_dict, batch_size):
+    num_b = b_dict['num_b']
+    width_b = b_dict['width_b']
+    b_shuffled = list(range(num_b))
+    random.shuffle(b_shuffled)
+    total_utts = 0
+    utt_list_batches = []
+    # 'max': 256, 'med': 200, 'min': 100, 'scale':1
+    for b in b_shuffled:
+        # ---------------------------------------------------------------------
+        # compute batch size to use for current bucket
+        # ---------------------------------------------------------------------
+        if b < num_b // 3:
+            b_size = int(batch_size['max'] // batch_size['scale'])
+        elif b < (num_b*2) // 3:
+            b_size = int(batch_size['med'] // batch_size['scale'])
+        else:
+            b_size = int(batch_size['min'] // batch_size['scale'])
+        # ---------------------------------------------------------------------
+        bucket = b_dict['buckets'][b]
+        b_len = len(bucket)
+        total_utts += b_len
+        random.shuffle(bucket)
+        # ---------------------------------------------------------------------
+        # append all utterances in slices of batch size
+        # ---------------------------------------------------------------------
+        for i in range(0,b_len, b_size):
+            utt_list_batches.append((bucket[i:i+b_size],b))
+        # ---------------------------------------------------------------------
+        # end bucket loop
+    # end all buckets loop
+    # -------------------------------------------------------------------------
+    # shuffle the entire list of batches
+    random.shuffle(utt_list_batches)
 
 def feed_model(m_dict, b_dict, batch_size, vocab_dict,
-               x_key, y_key, train, cat_speech_path, use_y=True,
-               mini=False):
+               x_key, y_key, train, input_path, use_y=True):
     # number of buckets
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
-
-    if mini:
-        # shuffle buckets
-        if not SHUFFLE_BATCHES:
-            random.seed(RANDOM_SEED_VALUE)
-        # leave out the last bucket as it includes pruned utterances
-        b_shuffled = list(range(num_b))
-    else:
-        b_shuffled = list(range(num_b))
-
-    random.shuffle(b_shuffled)
-
     pred_sents = []
     utts = []
     total_loss = 0
@@ -135,141 +137,169 @@ def feed_model(m_dict, b_dict, batch_size, vocab_dict,
     total_loss_updates= 0
 
     sys.stderr.flush()
-
-    total_utts = 0
-    utt_list_batches = []
-    for b in b_shuffled:
-        if enc_key == 'sp':
-            if b < num_b // 3:
-                b_size = batch_size // BATCH_SIZE_SCALE
-            elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
-                if batch_size > BATCH_SIZE_MEDIUM:
-                    b_size = BATCH_SIZE_MEDIUM // BATCH_SIZE_SCALE
-                else:
-                    b_size = batch_size // BATCH_SIZE_SCALE
-            else:
-                if batch_size > BATCH_SIZE_SMALL:
-                    b_size = BATCH_SIZE_SMALL // BATCH_SIZE_SCALE
-                else:
-                    b_size = batch_size // BATCH_SIZE_SCALE
-        else:
-            if b < num_b // 2:
-                b_size = batch_size
-            elif (b >= num_b // 3) and (b < ((num_b*2) // 3)):
-                b_size = batch_size
-            else:
-                b_size = batch_size
-
-        bucket = b_dict['buckets'][b]
-        if mini:
-            # select % of the dataset for training
-            bucket = random.sample(bucket, len(bucket) // TRAIN_SIZE_SCALE)
-
-        b_len = len(bucket)
-        total_utts += b_len
-        random.shuffle(bucket)
-        b_size = int(b_size)
-        for i in range(0,b_len, b_size):
-            utt_list_batches.append((bucket[i:i+b_size],b))
-        # end bucket loop
-    # end all buckets loop
-
-    random.shuffle(utt_list_batches)
-
+    # -------------------------------------------------------------------------
+    # create batches of utterances - shuffled
+    # -------------------------------------------------------------------------
+    utt_list_batches = create_batches(b_dict, batch_size)
+    # -------------------------------------------------------------------------
     with tqdm(total=total_utts, ncols=80) as pbar:
         for i, (utt_list, b) in enumerate(utt_list_batches):
-            utt_list_0 = utt_list[:len(utt_list)//2]
-            utt_list_1 = utt_list[len(utt_list)//2:]
-
+            # -----------------------------------------------------------------
             # get batch_data
-            batch_data_0 = get_batch(m_dict,
+            # -----------------------------------------------------------------
+            batch_data = get_batch(m_dict,
                                    x_key, y_key,
                                    utt_list,
                                    vocab_dict,
                                    ((b+1) * width_b),
                                    (num_b * width_b),
-                                   cat_speech_path=cat_speech_path)
-            # batch_data_1 = get_batch(m_dict,
-            #                        x_key, y_key,
-            #                        utt_list_1,
-            #                        vocab_dict,
-            #                        ((b+1) * width_b),
-            #                        (num_b * width_b),
-            #                        cat_speech_path=cat_speech_path)
-
-            # if (len(batch_data_0['X']) > 0 and len(batch_data_0['y']) > 0 and
-            #                len(batch_data_1['X']) > 0 and len(batch_data_1['y']) > 0):
-            if (len(batch_data_0['X']) > 0 and len(batch_data_0['y']) > 0):
-                # batch_data_0['X'].to_gpu(gpuid)
-                # batch_data_0['y'].to_gpu(gpuid)
-                # batch_data_1['X'].to_gpu(gpuid_2)
-                # batch_data_1['y'].to_gpu(gpuid_2)
-
+                                   input_path=input_path)
+            # -----------------------------------------------------------------
+            if (len(batch_data['X']) > 0 and len(batch_data['y']) > 0):
                 if use_y:
+                    # ---------------------------------------------------------
+                    # using labels, computing loss
+                    # also used for dev set
+                    # ---------------------------------------------------------
                     with chainer.using_config('train', train):
                         cuda.get_device(gpuid).use()
-                        p0, loss_0 = model.forward(batch_data_0['X'], batch_data_0['y'])
-                        loss_val = float(loss_0.data) / batch_data_0['y'].shape[1]
-
-                        # cuda.get_device(gpuid_2).use()
-                        # p1, loss_1 = model_1.forward(batch_data_1['X'], batch_data_1['y'])
-                        # # store loss values for printing
-                        # loss_val = (float(loss_0.data) + float(loss_1.data)) / (batch_data_0['y'].shape[1] + batch_data_1['y'].shape[1])
+                        p, loss = model.forward(batch_data['X'], batch_data['y'])
+                        loss_val = float(loss.data) / batch_data['y'].shape[1]
                 else:
+                    # ---------------------------------------------------------
+                    # prediction only
+                    # ---------------------------------------------------------
                     with chainer.using_config('train', False):
                         cuda.get_device(gpuid).use()
-                        p0, _ = model.forward(batch_data_0['X'])
-                        # cuda.get_device(gpuid_2).use()
-                        # p1, _ = model_1.forward(batch_data_1['X'])
+                        p, _ = model.forward(batch_data['X'])
                         loss_val = 0.0
-
+                # -------------------------------------------------------------
+                # add list of utterances used
+                # -------------------------------------------------------------
                 utts.extend(utt_list)
-
-                if len(p0) > 0:
-                    pred_sents.extend(p0.tolist())
-
-                # if len(p1) > 0:
-                #     pred_sents.extend(p1.tolist())
+                # -------------------------------------------------------------
+                if len(p) > 0:
+                    pred_sents.extend(p.tolist())
 
                 total_loss += loss_val
                 total_loss_updates += 1
-
                 loss_per_epoch = (total_loss / total_loss_updates)
-
+                # -------------------------------------------------------------
+                # train mode logic
+                # -------------------------------------------------------------
                 if train:
-                    # set up for backprop
                     model.cleargrads()
-                    # model_1.cleargrads()
-
-                    loss_0.backward()
-                    # loss_1.backward()
-
-                    # model.addgrads(model_1)
+                    loss.backward()
                     optimizer.update()
-
-                    # model_1.copyparams(model)
-
-
+                # -------------------------------------------------------------
                 out_str = "b={0:d},l={1:.2f},avg={2:.2f}".format((b+1),loss_val,loss_per_epoch)
-
                 pbar.set_description('{0:s}'.format(out_str))
             else:
                 print("no data in batch")
-                print(len(batch_data_0['X']),
-                      len(batch_data_0['y']),
-                      len(batch_data_1['X']),
-                      len(batch_data_1['y']))
                 print(utt_list)
-
+            # update progress bar
             pbar.update(len(utt_list))
         # end for batches
     # end tqdm
     return pred_sents, utts, loss_per_epoch
 # end feed_model
 
-def check_model():
-    max_epoch = 0
+# map_dict, vocab_dict, bucket_dict = get_data_dicts(model_cfg)
+def get_data_dicts(m_cfg):
+    print("-"*50)
+    # load dictionaries
+    # -------------------------------------------------------------------------
+    # MAP dict
+    # -------------------------------------------------------------------------
+    map_dict_path = os.path.join(m_cfg['data_path'],'map.dict')
+    print("loading dict: {0:s}".format(map_dict_path))
+    map_dict = pickle.load(open(map_dict_path, "rb"))
+    # -------------------------------------------------------------------------
+    # VOCAB
+    # -------------------------------------------------------------------------
+    if 'fisher' in m_cfg['train_set']:
+        if m_cfg['stemmify'] == False:
+            vocab_path = os.path.join(m_cfg['data_path'], 'train_vocab.dict')
+        else:
+            vocab_path = os.path.join(m_cfg['data_path'], 'train_stemmed_vocab.dict')
+    else:
+        vocab_path = os.path.join(m_cfg['data_path'], 'ch_train_vocab.dict')
+    print("loading dict: {0:s}".format(vocab_path))
+    vocab_dict = pickle.load(open(vocab_path, "rb"))
+    print("-"*50)
+    # -------------------------------------------------------------------------
+    # BUCKETS
+    # -------------------------------------------------------------------------
+    prep_buckets.buckets_main(m_cfg['data_path'], 
+                              m_cfg['buckets_num'], 
+                              m_cfg['buckets_num'], 
+                              m_cfg['enc_key'], 
+                              scale=m_cfg['train_scale'], 
+                              seed=m_cfg['seed'])
 
+    buckets_path = os.path.join(m_cfg['data_path'],
+                                'buckets_{0:s}.dict'.format(m_cfg['enc_key']))
+    print("loading dict: {0:s}".format(buckets_path))
+    bucket_dict = pickle.load(open(buckets_path, "rb"))
+    print("-"*50)
+    # -------------------------------------------------------------------------
+    # INFORMATION
+    # -------------------------------------------------------------------------
+    for cat in map_dict:
+        print('utterances in {0:s} = {1:d}'.format(cat, len(map_dict[cat])))
+
+    if m_cfg['enc_key'] != 'sp':
+        vocab_size_es = len(vocab_dict[m_cfg['enc_key']]['w2i'])
+    else:
+        vocab_size_es = 0
+    vocab_size_en = len(vocab_dict[m_cfg['dec_key']]['w2i'])
+    print('vocab size for {0:s} = {1:d}'.format(m_cfg['enc_key'],
+                                                vocab_size_es))
+    print('vocab size for {0:s} = {1:d}'.format(m_cfg['dec_key'], 
+                                                vocab_size_en))
+    # -------------------------------------------------------------------------
+    return map_dict, vocab_dict, bucket_dict
+
+def check_model(model_cfg, train_cfg):
+    xp = cuda.cupy if train_cfg['gpuid'] >= 0 else np
+    # -------------------------------------------------------------------------
+    # initialize new model
+    # -------------------------------------------------------------------------
+    model = SpeechEncoderDecoder(model_cfg, train_cfg['gpuid'])
+    model.to_gpu(train_cfg['gpuid'])
+    # -------------------------------------------------------------------------
+    # set up optimizer
+    # -------------------------------------------------------------------------
+    if train_cfg['optimizer'] == OPT_ADAM:
+        print("using ADAM optimizer")
+        optimizer = optimizers.Adam(alpha=train_cfg['lr'],
+                                    beta1=0.9,
+                                    beta2=0.999,
+                                    eps=1e-08)
+    else:
+        print("using SGD optimizer")
+        optimizer = optimizers.SGD(lr=train_cfg['lr'])
+
+    # attach optimizer
+    optimizer.setup(model)
+    # -------------------------------------------------------------------------
+    # optimizer settings
+    # -------------------------------------------------------------------------
+    if model_cfg['l2'] > 0:
+        optimizer.add_hook(chainer.optimizer.WeightDecay(model_cfg['l2']))
+    
+    # gradient clipping
+    optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=model_cfg['grad_clip']))
+
+    # gradient noise
+    if train_cfg['grad_noise_eta'] > 0:
+        print("------ Adding gradient noise")
+        optimizer.add_hook(chainer.optimizer.GradientNoise(eta=train_cfg['grad_noise_eta']))
+        print("Finished adding gradient noise")
+    # -------------------------------------------------------------------------
+    # check last saved model
+    # -------------------------------------------------------------------------
+    max_epoch = 0
     model_files = [f for f in os.listdir(os.path.dirname(model_fil))
                    if os.path.basename(model_fil).replace('.model','') in f]
     if len(model_files) > 0:
@@ -278,70 +308,81 @@ def check_model():
         max_model_fil = os.path.join(os.path.dirname(model_fil),
                                      max_model_fil)
         print('model found = \n{0:s}'.format(max_model_fil))
-        print('loading ...')
         serializers.load_npz(max_model_fil, model)
-        # serializers.load_npz(max_model_fil, model_1)
         print("finished loading ..")
         max_epoch = int(max_model_fil.split('_')[-1].split('.')[0])
     else:
         print("-"*80)
         print('model not found')
     # end if model found
-
-    return max_epoch
+    # -------------------------------------------------------------------------
+    return max_epoch, model, optimizer
 # end check_model
 
-def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
-    if "fisher" in key:
-        dev_key = "fisher_dev"
-    else:
-        dev_key = "callhome_devtest"
-
-    with open(log_train_fil_name, mode='a') as train_log, open(log_dev_fil_name, mode='a') as dev_log:
+def train_loop(m_cfg, t_cfg, epochs, last_epoch, use_y, data_dicts):
+    train_key = m_cfg['train_set']
+    dev_key = m_cfg['train_set']
+    batch_size=t_cfg['batch_size']
+    enc_key=m_cfg['enc_key']
+    dec_key=m_cfg['dec_key']
+    # -------------------------------------------------------------------------
+    # get data dictionaries
+    # -------------------------------------------------------------------------
+    map_dict, vocab_dict, bucket_dict = get_data_dicts(model_cfg)
+    # -------------------------------------------------------------------------
+    # start train loop
+    # -------------------------------------------------------------------------
+    with open(m_cfg['train_log'], mode='a') as train_log, open(m_cfg['dev_log'], mode='a') as dev_log:
         for i in range(epochs):
             print("-"*80)
             print("EPOCH = {0:d} / {1:d}".format(last_epoch+i+1, last_epoch+epochs))
-
-            if (last_epoch+i+1 >= ITERS_TO_WEIGHT_NOISE) and (ITERS_TO_WEIGHT_NOISE > 0):
-                print("Adding Gaussian weight noise, mean={0:.2f}, stdev={1:0.6f}".format(WEIGHT_NOISE_MU, WEIGHT_NOISE_SIGMA))
-                model.add_weight_noise(WEIGHT_NOISE_MU, WEIGHT_NOISE_SIGMA)
+            # -----------------------------------------------------------------
+            # Check to add Gaussian weight noise
+            # -----------------------------------------------------------------
+            if (last_epoch+i+1 >= t_cfg['iter_weight_noise']) and (t_cfg['iter_weight_noise'] > 0):
+                print("Adding Gaussian weight noise, mean={0:.2f}, stdev={1:0.6f}".format(t_cfg['weight_noise_mean'], ))
+                model.add_weight_noise(t_cfg['weight_noise_mean'], t_cfg['weight_noise_sigma'])
                 print("Finished adding Gaussian weight noise")
-                # end adding gaussian weight noise
-
-            # call train
-            cat_speech_path = os.path.join(out_path, key)
-            pred_sents, utts, train_loss = feed_model(map_dict[key],
-                              b_dict=bucket_dict[key],
+            # end adding gaussian weight noise
+            # -----------------------------------------------------------------
+            # train
+            # -----------------------------------------------------------------
+            input_path = os.path.join(model_cfg['data_path'], 
+                                      model_cfg['train_set'])
+            pred_sents, utts, train_loss = feed_model(map_dict[train_key],
+                              b_dict=bucket_dict[train_key],
                               vocab_dict=vocab_dict,
-                              batch_size=BATCH_SIZE,
+                              batch_size=batch_size,
                               x_key=enc_key,
                               y_key=dec_key,
                               train=True,
-                              cat_speech_path=cat_speech_path,
-                              use_y=use_y,
-                              mini=mini)
+                              input_path=input_path,
+                              use_y=True)
             # log train loss
             train_log.write("{0:d}, {1:.4f}\n".format(last_epoch+i+1, train_loss))
             train_log.flush()
             os.fsync(train_log.fileno())
+            # -----------------------------------------------------------------
 
-            # compute dev loss
-            cat_speech_path = os.path.join(out_path, dev_key)
+            # -----------------------------------------------------------------
+            # dev
+            # -----------------------------------------------------------------
+            input_path = os.path.join(model_cfg['data_path'], 
+                                      model_cfg['dev_set'])
             pred_sents, utts, dev_loss = feed_model(map_dict[dev_key],
                               b_dict=bucket_dict[dev_key],
                               vocab_dict=vocab_dict,
-                              batch_size=BATCH_SIZE,
+                              batch_size=batch_size,
                               x_key=enc_key,
                               y_key=dec_key,
                               train=False,
-                              cat_speech_path=cat_speech_path,
-                              use_y=use_y,
-                              mini=False)
+                              input_path=input_path,
+                              use_y=True)
 
             dev_b_score, chr_f_score, _, _ = calc_bleu(map_dict[dev_key],
-                                                        vocab_dict[dec_key],
-                                                        pred_sents, utts,
-                                                        dec_key)
+                                                       vocab_dict[dec_key],
+                                                       pred_sents, utts,
+                                                       dec_key)
 
             # log dev loss
             dev_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1, dev_loss, dev_b_score, chr_f_score))
@@ -351,91 +392,81 @@ def train_loop(out_path, epochs, key, last_epoch, use_y, mini):
             print("^"*80)
             print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}, dev bleu={3:.4f}".format("*" * 10, train_loss, dev_loss, dev_b_score))
             print("^"*80)
-
+            # -----------------------------------------------------------------
             # save model
+            # -----------------------------------------------------------------
             if ((i+1) % ITERS_TO_SAVE == 0) or (i == (epochs-1)):
                 print("Saving model")
                 serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch+i+1)), model)
                 print("Finished saving model")
             # end if save model
-
-            print("learning rate: {0:.6f}, optimizer: {1:s}, teacher_forcing_ratio: {2:.2f}".format(LEARNING_RATE,
-                                "ADAM" if OPTIMIZER_ADAM1_SGD_0 else "SGD",
-                                teacher_forcing_ratio))
-            print("using GPU={0:d}".format(gpuid))
-            print('model file name: {0:s}'.format(model_fil))
-            print('dev log file name: {0:s}'.format(log_dev_fil_name))
-            if ADD_NOISE:
-                print('Adding gaussian noise to speech with stddev={0:.6f}'.format(NOISE_STDEV))
-
-            print("-")
-            print("-"*80)
-
+            # -----------------------------------------------------------------
         # end for epochs
     # end open log files
 # end train loop
 
-
-def my_main(out_path, epochs, key, use_y, mini):
-    train = True if 'train' in key else False
-
+def train_main(model_cfg, train_cfg, epochs):
+    # -------------------------------------------------------------------------
     # check for existing model
-    last_epoch = check_model()
-
-    # check output file directory
-    print(out_path)
-    if not os.path.exists(out_path):
-        print("{0:s} does not exist. Exiting".format(out_path))
+    # -------------------------------------------------------------------------
+    last_epoch, model, optimizer = check_model(model_cfg, train_cfg)
+    # -------------------------------------------------------------------------
+    # check model path
+    # -------------------------------------------------------------------------
+    print(model_cfg['data_path'])
+    if not os.path.exists(model_cfg['data_path']):
+        print("{0:s} does not exist. Exiting".format(model_cfg['data_path']))
         return 0
     # end if
-
-    cat_speech_path = os.path.join(out_path, key)
-
-    if ((last_epoch+1) >= ITERS_GRAD_NOISE) and ITERS_GRAD_NOISE > 0:
-        print("------ Adding gradient noise")
-        optimizer.add_hook(chainer.optimizer.GradientNoise(eta=GRAD_NOISE_ETA))
-        print("Finished adding gradient noise")
-
-    if train:
-        train_loop(out_path, epochs, key, last_epoch, use_y=use_y, mini=mini)
-    else:
-        # call compute perplexity
-        print("-"*80)
-        print("EPOCH = {0:d}".format(last_epoch+1))
-        pred_sents, utts, loss = feed_model(map_dict[key],
-                          b_dict=bucket_dict[key],
-                          vocab_dict=vocab_dict,
-                          batch_size=BATCH_SIZE,
-                          x_key=enc_key,
-                          y_key=dec_key,
-                          train=False,
-                          cat_speech_path=cat_speech_path,
-                          use_y=use_y,
-                          mini=False)
-
-        print("{0:s} {1:s} mean loss={2:.4f}".format("*" * 10,
-                                            "train" if train else "dev",
-                                            loss))
-        print("-")
-        print("-"*80)
-        # print(model.cnn_bn.avg_mean)
-        # print(model.cnn_bn.avg_var)
-
+    # -------------------------------------------------------------------------
+    # call train loop
+    # -------------------------------------------------------------------------
+    train_loop(m_cfg, t_cfg, epochs, last_epoch, use_y=True)
+    # -------------------------------------------------------------------------
     print("all done ...")
-# end my_main
+# end train_main
+
+# -----------------------------------------------------------------------------
+def main():
+    parser = argparse.ArgumentParser(description=program_descrp)
+    parser.add_argument('-m','--model_cfg_path', help='path for model config',
+                        required=True)
+    parser.add_argument('-t','--train_cfg_path', help='path for train config',
+                        required=True)
+    parser.add_argument('-e','--epochs', help='num epochs',
+                        required=True)
+
+    args = vars(parser.parse_args())
+
+    with open(model_cfg_path, "r") as model_f:
+        model_cfg = json.load(model_f)
+
+    with open(train_cfg_path, "r") as train_f:
+        train_cfg = json.load(train_f)
+
+    epochs = int(args['epochs'])
+
+    print("number of epochs={0:d}".format(epochs))
+
+    train_main(model_cfg, train_cfg, epochs)
+# end main
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+if __name__ == "__main__":
+    main()
+# -----------------------------------------------------------------------------
 
 
+# -----------------------------------------------------------------------------
+# helper functions for metrics
+# -----------------------------------------------------------------------------
 def get_en_words_from_list(l):
-    if STEMMIFY == False:
+    if m_cfg['stemmify'] == False:
         return [w.decode() for w in l]
     else:
         return [stem(w.decode()) for w in l]
 
-def calc_bleu(m_dict,
-              v_dict,
-              preds,
-              utts,
-              dec_key,
+def calc_bleu(m_dict, v_dict, preds, utts, dec_key,
               weights=(0.25, 0.25, 0.25, 0.25),
               ref_index=-1):
     en_hyp = []
@@ -507,8 +538,6 @@ def corpus_precision_recall(r, h):
     print("-"*54)
     print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("precision", *p))
     print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("recall", *r))
-#     print("{0:10s} | {1:8.2f}".format("precision", *p))
-#     print("{0:10s} | {1:8.2f}".format("recall", *r))
 
 
     return p, r
@@ -555,130 +584,3 @@ def modified_precision_recall(references, hypothesis, n):
     rec = Fraction(numerator, rec_denominator, _normalize=False)
 
     return prec, rec
-
-
-def test_func(out_path, batch_size, bucket_id, num_sent):
-    m_dict = map_dict["fisher_train"]
-    b_dict = bucket_dict["fisher_train"]
-
-    cat_speech_path = os.path.join(out_path, "fisher_train")
-
-    # number of buckets
-    num_b = b_dict['num_b']
-    width_b = b_dict['width_b']
-
-    pred_sents = []
-    utts = []
-    total_loss = 0
-    loss_per_epoch = 0
-    total_loss_updates= 0
-
-    sys.stderr.flush()
-    total_utts = len(b_dict['buckets'][bucket_id])
-
-    # a = input("pehla")
-    # print("a")
-
-    with tqdm(total=min(total_utts, num_sent)) as pbar:
-        bucket = b_dict['buckets'][bucket_id]
-        # random.shuffle(bucket)
-        b_len = len(bucket)
-        for i in range(0, min(b_len, num_sent), batch_size):
-            utt_list = bucket[i:i+batch_size]
-            utts.extend(utt_list)
-            # get batch_data
-            batch_data = get_batch(m_dict,
-                                   enc_key, dec_key,
-                                   utt_list,
-                                   vocab_dict,
-                                   ((bucket_id+1) * width_b),
-                                   (num_b * width_b),
-                                   cat_speech_path=cat_speech_path)
-
-            # a = input("bhook")
-            # print("a")
-
-            with chainer.using_config('train', True):
-                _, loss = model.forward(batch_data['X'], batch_data['y'])
-            # store loss values for printing
-            loss_val = float(loss.data)
-
-            total_loss += loss_val
-            total_loss_updates += 1
-
-            loss_per_epoch = (total_loss / total_loss_updates)
-
-            # a = input("doosra")
-            # print("a")
-
-            # set up for backprop
-            model.cleargrads()
-            loss.backward()
-            # update parameters
-            optimizer.update()
-
-            # a = input("maar diya")
-            # print("a")
-
-            batch_data = get_batch(m_dict,
-                                   enc_key, dec_key,
-                                   utt_list,
-                                   vocab_dict,
-                                   ((bucket_id+1) * width_b),
-                                   (num_b * width_b),
-                                   cat_speech_path=cat_speech_path)
-            if len(batch_data['X']) > 0 and len(batch_data['y']) > 0:
-                with chainer.using_config('train', False):
-                    p, _ = model.forward(batch_data['X'])
-
-            # a = input("tijja")
-            # print("a")
-
-            if len(p) > 0:
-                pred_sents.extend(p.tolist())
-
-            # a = input("oooooooo")
-            # print("a")
-
-            out_str = "b={0:d},i={1:d}/{2:d},l={3:.2f},avg={4:.2f}".format((bucket_id+1),i,b_len,loss_val,loss_per_epoch)
-
-            pbar.set_description('{0:s}'.format(out_str))
-
-            pbar.update(len(utt_list))
-        # end for batches
-    # end tqdm
-
-    return pred_sents, utts, loss_per_epoch
-# end test_func
-
-def main():
-    parser = argparse.ArgumentParser(description=program_descrp)
-    parser.add_argument('-o','--out_path', help='output path',
-                        required=True)
-
-    parser.add_argument('-e','--epochs', help='num epochs',
-                        required=True)
-
-    parser.add_argument('-k','--key', help='length/duration key cat, e.g. fisher_train, fisher_dev',
-                        required=True)
-
-    parser.add_argument('-y','--use_y', help='use y or just make predictions',
-                        required=True)
-
-    parser.add_argument('-m','--mini', help='use subset of training data',
-                        required=True)
-
-    args = vars(parser.parse_args())
-    out_path = args['out_path']
-    epochs = int(args['epochs'])
-    key = args['key']
-    use_y = False if int(args['use_y']) == 0 else True
-    mini = False if int(args['mini']) == 0 else True
-
-    print("number of epochs={0:d}".format(epochs))
-
-    my_main(out_path, epochs, key, use_y, mini)
-# end main
-
-if __name__ == "__main__":
-    main()

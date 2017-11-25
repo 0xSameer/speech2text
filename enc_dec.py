@@ -1,20 +1,12 @@
 # coding: utf-8
 
 from basics import *
-from nn_config import *
 
 
 class SpeechEncoderDecoder(Chain):
-
-    def __init__(self, gpunum):
-        '''
-        n_speech_dim: dimensions for the speech features
-        vsize:   vocabulary size
-        nlayers: # layers
-        attn:    if True, use attention
-        '''
-        # Store GPU id
-        self.gpuid = gpunum
+    def __init__(self, m_cfg, gpuid):
+        self.m_cfg = m_cfg
+        self.gpuid = gpuid
 
         self.init_params()
 
@@ -22,7 +14,6 @@ class SpeechEncoderDecoder(Chain):
             cuda.get_device(self.gpuid).use()
 
         super(SpeechEncoderDecoder, self).__init__()
-
         self.init_model()
 
 
