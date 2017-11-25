@@ -40,8 +40,8 @@ print("fisher + callhome sp/es - en configuration")
 # ------------------------------------
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'es_w'
-dec_key = 'en_w'
+enc_key = 'es_c'
+dec_key = 'en_c'
 # ------------------------------------
 gpuid = 1
 # ------------------------------------
@@ -49,7 +49,7 @@ gpuid = 1
 BATCH_SIZE = 256
 BATCH_SIZE_MEDIUM = 200
 BATCH_SIZE_SMALL = 100
-BATCH_SIZE_SCALE = 1
+BATCH_SIZE_SCALE = 1.5
 TRAIN_SIZE_SCALE = 1
 
 # only applicable for mini mode
@@ -66,7 +66,8 @@ else:
 
 EXP_NAME_PREFIX = "" if RANDOM_SEED_VALUE == "haha" else "_{0:s}_".format(RANDOM_SEED_VALUE)
 # ------------------------------------
-LEARNING_RATE = 0.01
+# Adam(alpha=0.001, beta1=0.9, beta2=0.999, eps=1e-08)
+LEARNING_RATE = 0.001
 # ------------------------------------
 teacher_forcing_ratio = 0.8
 # ------------------------------------
@@ -74,25 +75,28 @@ OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
 WEIGHT_DECAY=True
 if WEIGHT_DECAY:
-    WD_RATIO=1e-4
+    WD_RATIO=1e-3
 else:
     WD_RATIO=0
 # ------------------------------------
-ITERS_GRAD_NOISE = 0
+ITERS_GRAD_NOISE = 1
 # default noise function is
 # recommended to be either:
 # 0.01, 0.3 or 1.0
 GRAD_NOISE_ETA = 0.01
 # ------------------------------------
 USE_DROPOUT=True
-USE_CNN_DROPOUT=True
-USE_OUT_DROPOUT=True
+USE_CNN_DROPOUT=False
+USE_OUT_DROPOUT=False
 DROPOUT_RATIO=0.3
 # ------------------------------------
-ITERS_TO_SAVE = 5
+if enc_key == 'sp':
+    ITERS_TO_SAVE = 5
+else:
+    ITERS_TO_SAVE = 10
 # ------------------------------------
 lstm1_or_gru0 = False
-ONLY_LSTM = False
+ONLY_LSTM = True
 # ------------------------------------
 CNN_TYPE = DEEP_2D_CNN
 # ------------------------------------
@@ -118,8 +122,8 @@ WEIGHT_NOISE_SIGMA = 0.001
 # ------------------------------------
 
 # ------------------------------------
-hidden_units = 512
-embedding_units = 256
+hidden_units = 300
+embedding_units = 128
 # ------------------------------------
 
 # if using CNNs, we can have more parameters as sequences are shorter
@@ -135,8 +139,8 @@ if ONLY_LSTM == False:
         # ------------------------------------
         num_highway_layers = 0
         CNN_IN_DIM = SPEECH_DIM
-        num_b = 20
-        width_b = 100
+        num_b = 15
+        width_b = 128
 
     elif enc_key == 'es_c':
         num_layers_enc = 2
@@ -160,8 +164,8 @@ if ONLY_LSTM == False:
 
 else:
     cnn_k_widths = []
-    num_layers_enc = 4
-    num_layers_dec = 2
+    num_layers_enc = 3
+    num_layers_dec = 3
     num_highway_layers = 0
 
     if enc_key == 'sp':

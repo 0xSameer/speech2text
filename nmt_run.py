@@ -46,12 +46,7 @@ model.to_gpu(gpuid)
 
 if OPTIMIZER_ADAM1_SGD_0:
     print("using ADAM optimizer")
-    # optimizer = optimizers.Adam(alpha=0.001,
-    #                             beta1=0.9,
-    #                             beta2=0.999,
-    #                             eps=1e-08)
-    # optimizer = optimizers.AdaGrad()
-    optimizer = optimizers.Adam()
+    optimizer = optimizers.Adam(alpha=LEARNING_RATE)
     optimizer.setup(model)
 else:
     print("using SGD optimizer")
@@ -62,7 +57,7 @@ if WEIGHT_DECAY:
     optimizer.add_hook(chainer.optimizer.WeightDecay(WD_RATIO))
 
 # gradient clipping
-optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=10))
+optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=5))
 # optimizer.add_hook(chainer.optimizer.GradientNoise(eta=0.3))
 
 def get_batch(m_dict, x_key, y_key,
