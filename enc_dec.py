@@ -2,7 +2,6 @@
 
 from basics import *
 
-
 class SpeechEncoderDecoder(Chain):
     def __init__(self, m_cfg, gpuid):
         self.m_cfg = m_cfg
@@ -16,199 +15,181 @@ class SpeechEncoderDecoder(Chain):
         super(SpeechEncoderDecoder, self).__init__()
         self.init_model()
 
-
     def init_params(self):
-
-        #--------------------------------------------------------------------
-        # initialize model
-        #--------------------------------------------------------------------
-        if lstm1_or_gru0:
-            self.RNN = L.LSTM
-        else:
+        #----------------------------------------------------------------------
+        # determine rnn type
+        #----------------------------------------------------------------------
+        if self.m_cfg['rnn_unit'] == RNN_GRU:
             self.RNN = L.GRU
+        else:
+            self.RNN = L.LSTM
+        #----------------------------------------------------------------------
+        # get vocab size
+        #----------------------------------------------------------------------
+        if 'fisher' in self.m_cfg['train_set']:
+            if self.m_cfg['stemmify'] == False:
+                v_path = os.path.join(self.m_cfg['data_path'], 'train_vocab.dict')
+            else:
+                v_path = os.path.join(self.m_cfg['data_path'], 'train_stemmed_vocab.dict')
+        else:
+            v_path = os.path.join(self.m_cfg['data_path'], 'ch_train_vocab.dict')
+        vocab_dict = pickle.load(open(v_path, "rb"))
+        if self.m_cfg['enc_key'] != 'sp':
+            self.v_size_es = len(vocab_dict[self.m_cfg['enc_key']]['w2i'])
+        else:
+            self.v_size_es = 0
+        self.v_size_en = len(vocab_dict[self.m_cfg['dec_key']]['w2i'])
+        #----------------------------------------------------------------------
 
-        self.lstm1_or_gru0 = lstm1_or_gru0
-
-        self.speech_dim = SPEECH_DIM
-        self.n_units = hidden_units
-        self.embed_units = embedding_units
-
-        self.attn =  use_attn
-
-        self.vocab_size_es = vocab_size_es
-
-        self.vocab_size_en = vocab_size_en
-
-        self.max_pool_stride = max_pool_stride
-        self.max_pool_pad = max_pool_pad
-
-
-    def add_rnn_layers(self, layer_names, in_units, out_units, scale):
+    def add_rnn_layers(self, layer_names, in_units, out_units):
         w = chainer.initializers.HeNormal()
-        # add first layer
-        self.add_link(layer_names[0], self.RNN(in_units, out_units))
-        if USE_LN:
-            self.add_link("{0:s}_ln".format(layer_names[0]), L.LayerNormalization(out_units))
-        # add remaining layers
-        for rnn_name in layer_names[1:]:
-            self.add_link(rnn_name, self.RNN(out_units*scale, out_units))
-            if USE_LN:
+        for i, rnn_name in enumerate(layer_names):
+            #------------------------------------------------------------------
+            # for first layer, use in_units
+            #------------------------------------------------------------------
+            curr_in = in_units if i == 0 else out_units
+            #------------------------------------------------------------------
+            # add rnn layer
+            #------------------------------------------------------------------
+            self.add_link(rnn_name, self.RNN(curr_in, out_units))
+            #------------------------------------------------------------------
+            # add layer normalization
+            #------------------------------------------------------------------
+            if self.m_cfg['ln']:
                 self.add_link("{0:s}_ln".format(rnn_name), L.LayerNormalization(out_units))
+            #------------------------------------------------------------------
 
-
-    def init_rnn_model(self, scale, in_dim):
-        #--------------------------------------------------------------------
+    def init_rnn_model(self, in_dim):
+        h_units = self.m_cfg['hidden_units']
+        #----------------------------------------------------------------------
         # add encoder layers
-        #--------------------------------------------------------------------
-        self.rnn_enc = ["L{0:d}_enc".format(i) for i in range(num_layers_enc)]
-        self.add_rnn_layers(self.rnn_enc,
-                            in_dim,
-                            self.n_units,
-                            scale=scale)
+        #----------------------------------------------------------------------
+        self.rnn_enc = ["L{0:d}_enc".format(i) 
+                         for i in range(self.m_cfg['enc_layers'])]
+        self.add_rnn_layers(self.rnn_enc, in_dim, h_units)
 
-        # reverse LSTM layer
-        if BI_RNN:
-            self.rnn_rev_enc = ["L{0:d}_rev_enc".format(i) for i in range(num_layers_enc)]
-            self.add_rnn_layers(self.rnn_rev_enc,
-                                in_dim,
-                                self.n_units,
-                                scale=scale)
+        if self.m_cfg['bi_rnn']:
+            #------------------------------------------------------------------
+            # if bi rnn, add rev rnn layer
+            #------------------------------------------------------------------
+            self.rnn_rev_enc = ["L{0:d}_rev_enc".format(i) for i in range(self.m_cfg['enc_layers'])]
+            self.add_rnn_layers(self.rnn_rev_enc, in_dim, h_units)
 
-        # add LSTM layers
+        #----------------------------------------------------------------------
+        # add attention layers
+        #----------------------------------------------------------------------
+        a_units = self.m_cfg['attn_units']
+        if self.m_cfg['bi_rnn']:
+            self.add_link("attn_Wa", L.Linear(2*h_units, 2*h_units))
+            #------------------------------------------------------------------
+            # context layer = 2*h_units from enc + 1*h_units from dec
+            #------------------------------------------------------------------
+            self.add_link("context", L.Linear(3*h_units, a_units))
+        else:
+            self.add_link("attn_Wa", L.Linear(h_units, h_units))
+            #------------------------------------------------------------------
+            # context layer = 1*h_units from enc + 1*h_units from dec
+            #------------------------------------------------------------------
+            self.add_link("context", L.Linear(2*h_units, a_units))
+
+        #----------------------------------------------------------------------
+        # add decoder layers
+        #----------------------------------------------------------------------
+        e_units = self.m_cfg['embedding_units']
         # first layer appends previous ht, and therefore,
         # in_units = embed units + hidden units
-        self.rnn_dec = ["L{0:d}_dec".format(i) for i in range(num_layers_dec)]
-        # self.add_rnn_layers(self.rnn_dec,
-        #                     self.embed_units,
-        #                     2*self.n_units,
-        #                     scale=scale)
-        if BI_RNN:
-            self.add_rnn_layers(self.rnn_dec,
-                            self.embed_units+(2*self.n_units),
-                            2*self.n_units,
-                            scale=scale)
-        else:
-            self.add_rnn_layers(self.rnn_dec,
-                            self.embed_units+(2*self.n_units),
-                            self.n_units,
-                            scale=scale)
-
-    def init_cnn_model(self):
-        w = chainer.initializers.HeNormal()
-        self.cnns = []
-        # add CNN layers
-        cnn_out_dim = 0
-        if len(cnn_filters) > 0:
-            for l in cnn_filters:
-                lname = "CNN_{0:d}".format(l['ksize'])
-                cnn_out_dim += l["out_channels"]
-                self.cnns.append(lname)
-                self.add_link(lname, L.ConvolutionND(**l, initialW=w))
-
-            self.cnn_out_dim = cnn_out_dim
-
-            if USE_BN:
-                # add batch normalization layer on the output of the conv layer
-                self.add_link('cnn_bn', L.BatchNormalization(self.cnn_out_dim))
-
-            # add highway layers
-            self.highway = ["highway_{0:d}".format(i)
-                             for i in range(num_highway_layers)]
-            for hname in self.highway:
-                self.add_link(hname, L.Highway(self.cnn_out_dim))
-        else:
-            self.cnn_out_dim = CNN_IN_DIM
-    # end init_cnn_model()
+        self.rnn_dec = ["L{0:d}_dec".format(i) 
+                        for i in range(self.m_cfg['dec_layers'])]
+        #----------------------------------------------------------------------
+        # decoder rnn input = emb + prev. context vector
+        #----------------------------------------------------------------------
+        self.add_rnn_layers(self.rnn_dec, e_units+a_units, h_units)
+        #----------------------------------------------------------------------
 
     def init_deep_cnn_model(self):
-        w = chainer.initializers.HeNormal()
+        CNN_IN_DIM = (self.m_cfg['sp_dim'] if self.m_cfg['enc_key'] == 'sp' 
+                             else self.m_cfg['embedding_units'])
+        # ---------------------------------------------------------------------
+        # initialize list of cnn layers
+        # ---------------------------------------------------------------------
         self.cnns = []
-        # add CNN layers
-        cnn_out_dim = 0
-        reduce_dim = CNN_IN_DIM
-        if CNN_TYPE == DEEP_2D_CNN:
-            reduce_dim = reduce_dim // 1
-        if len(cnn_filters) > 0:
-            for i, l in enumerate(cnn_filters):
+        if len(self.m_cfg['cnn_layers']) > 0:
+            # -----------------------------------------------------------------
+            # using He initializer
+            # -----------------------------------------------------------------
+            w = chainer.initializers.HeNormal()
+            # add CNN layers
+            cnn_out_dim = 0
+            reduce_dim = CNN_IN_DIM
+            for i, l in enumerate(self.m_cfg['cnn_layers']):
                 lname = "CNN_{0:d}".format(i)
                 cnn_out_dim += l["out_channels"]
                 self.cnns.append(lname)
-                if CNN_TYPE == DEEP_1D_CNN:
-                    self.add_link(lname, L.ConvolutionND(**l, initialW=w))
-                else:
-                    self.add_link(lname, L.Convolution2D(**l, initialW=w))
-                    reduce_dim = math.ceil(reduce_dim / l["stride"][1])
-                if USE_BN:
+                self.add_link(lname, L.Convolution2D(**l, initialW=w))
+                reduce_dim = math.ceil(reduce_dim / l["stride"][1])
+                if self.m_cfg['bn']:
+                    # ---------------------------------------------------------
+                    # add batch normalization
+                    # ---------------------------------------------------------
                     self.add_link('{0:s}_bn'.format(lname), L.BatchNormalization((l["out_channels"])))
-
-            self.cnn_out_dim = cnn_filters[-1]["out_channels"]
-            if CNN_TYPE == DEEP_2D_CNN:
-                self.cnn_out_dim *= reduce_dim
-
-            # add highway layers
-            self.highway = ["highway_{0:d}".format(i)
-                             for i in range(num_highway_layers)]
-            for hname in self.highway:
-                self.add_link(hname, L.Highway(self.cnn_out_dim))
+                    # ---------------------------------------------------------
+            self.cnn_out_dim = self.m_cfg['cnn_layers'][-1]["out_channels"]
+            # -----------------------------------------------------------------
+            # cnn output has reduced dimensions based on strides
+            # -----------------------------------------------------------------
+            self.cnn_out_dim *= reduce_dim
+            # -----------------------------------------------------------------
         else:
+            # -----------------------------------------------------------------
+            # no cnns added
+            # -----------------------------------------------------------------
             self.cnn_out_dim = CNN_IN_DIM
+            # -----------------------------------------------------------------
     # end init_deep_cnn_model()
 
-
     def init_model(self):
-
-        if enc_key != 'sp':
-            # add embedding layer
-            self.add_link("embed_enc", L.EmbedID(self.vocab_size_es,
-                                                 self.embed_units))
-
-        self.scale = 1
-
-        if CNN_TYPE == SINGLE_1D_CNN:
-            self.init_cnn_model()
-        else:
-            self.init_deep_cnn_model()
+        xp = cuda.cupy if self.gpuid >= 0 else np
+        # ---------------------------------------------------------------------
+        # add enc embedding layer if text model
+        # ---------------------------------------------------------------------
+        if self.m_cfg['enc_key'] != 'sp':
+            self.add_link("embed_enc", L.EmbedID(self.v_size_es,
+                                                self.m_cfg['embedding_units']))
+        # ---------------------------------------------------------------------
+        # add cnn layer
+        # ---------------------------------------------------------------------
+        self.init_deep_cnn_model()
         rnn_in_units = self.cnn_out_dim
-
-        # initialize RNN layers
+        # ---------------------------------------------------------------------
+        # add rnn layers
+        # ---------------------------------------------------------------------
         print("cnn_out_dim = rnn_in_units = ", rnn_in_units)
-        self.init_rnn_model(self.scale, rnn_in_units)
-
-        # add embedding layer
-        self.add_link("embed_dec", L.EmbedID(self.vocab_size_en,
-                                             self.embed_units))
-
-        if self.attn > 0:
-            # add context layer for attention
-            # self.add_link("context", L.Linear(4*self.n_units, 2*self.n_units))
-            # if USE_BN:
-            #     self.add_link("context_bn",
-            #                    L.BatchNormalization(2*self.n_units))
-            if ATTN_W:
-                if BI_RNN:
-                    self.add_link("attn_Wa", L.Linear(2*self.n_units, 2*self.n_units))
-                    self.add_link("context", L.Linear(4*self.n_units, 2*self.n_units))
-                else:
-                    self.add_link("attn_Wa", L.Linear(self.n_units, self.n_units))
-                    self.add_link("context", L.Linear(2*self.n_units, 2*self.n_units))
-            # if USE_BN:
-            #     self.add_link("context_bn",
-            #                    L.BatchNormalization(2*self.n_units))
-
+        self.init_rnn_model(rnn_in_units)
+        # ---------------------------------------------------------------------
+        # add dec embedding layer
+        # ---------------------------------------------------------------------
+        self.add_link("embed_dec", L.EmbedID(self.v_size_en,
+                                             self.m_cfg['embedding_units']))
+        # ---------------------------------------------------------------------
         # add output layer
-        self.add_link("out", L.Linear(2*self.n_units, vocab_size_en))
-
+        # ---------------------------------------------------------------------
+        self.add_link("out", L.Linear(self.m_cfg['attn_units'], 
+                                      self.v_size_en))
+        # ---------------------------------------------------------------------
         # create masking array for pad id
+        # ---------------------------------------------------------------------
         with cupy.cuda.Device(self.gpuid):
-            self.mask_pad_id = xp.ones(self.vocab_size_en, dtype=xp.float32)
+            self.mask_pad_id = xp.ones(self.v_size_en, dtype=xp.float32)
         # make the class weight for pad id equal to 0
         # this way loss will not be computed for this predicted loss
         self.mask_pad_id[0] = 0
-
+        # ---------------------------------------------------------------------
 
     def reset_state(self):
+        # ---------------------------------------------------------------------
         # reset the state of LSTM layers
-        if BI_RNN:
+        # ---------------------------------------------------------------------
+        if self.m_cfg['bi_rnn']:
             for rnn_name in self.rnn_enc + self.rnn_rev_enc + self.rnn_dec:
                 self[rnn_name].reset_state()
         else:
@@ -217,127 +198,148 @@ class SpeechEncoderDecoder(Chain):
         self.loss = 0
 
     def set_decoder_state(self):
-        # set the hidden and cell state (if LSTM) of the first RNN in the decoder
-        if BI_RNN:
+        # ---------------------------------------------------------------------
+        # set the hidden and cell state (LSTM) of the first RNN in the decoder
+        # ---------------------------------------------------------------------
+        if self.m_cfg['bi_rnn']:
             for enc, rev_enc, dec in zip(self.rnn_enc, 
                                          self.rnn_rev_enc, 
                                          self.rnn_dec):
                 h_state = F.concat((self[enc].h, self[rev_enc].h))
-                if self.lstm1_or_gru0:
+                if self.m_cfg['rnn_unit'] == RNN_LSTM:
                     c_state = F.concat((self[enc].c, self[rev_enc].c))
                     self[dec].set_state(c_state, h_state)
                 else:
                     self[dec].set_state(h_state)
         else:
             for enc, dec in zip(self.rnn_enc, self.rnn_dec):
-                if self.lstm1_or_gru0:
+                if self.m_cfg['rnn_unit'] == RNN_LSTM:
                     self[dec].set_state(self[enc].c, self[enc].h)
                 else:
                     self[dec].set_state(self[enc].h)
+        # ---------------------------------------------------------------------
 
     def compute_context_vector(self, dec_h):
         batch_size, n_units = dec_h.shape
         # attention weights for the hidden states of each word in the input list
-
-        if ATTN_W:
-            # learnable parameters
-            ht = self.attn_Wa(dec_h)
-        else:
-            # dot product attention
-            ht = dec_h
-
+        # ---------------------------------------------------------------------
+        # compute weights
+        ht = self.attn_Wa(dec_h)
         weights = F.batch_matmul(self.enc_states, ht)
-
+        # ---------------------------------------------------------------------
         # '''
         # this line is valid when no max pooling or sequence length manipulation is performed
         # weights = F.where(self.mask, weights, self.minf)
             # '''
-
+        # ---------------------------------------------------------------------
+        # softmax to compute alphas
+        # ---------------------------------------------------------------------
         alphas = F.softmax(weights)
+        # ---------------------------------------------------------------------
         # compute context vector
+        # ---------------------------------------------------------------------
         cv = F.squeeze(F.batch_matmul(F.swapaxes(self.enc_states, 2, 1), alphas), axis=2)
-
+        # ---------------------------------------------------------------------
         return cv, alphas
-
+        # ---------------------------------------------------------------------
 
     def feed_rnn(self, rnn_in, rnn_layers, highway_layers=None):
-        # feed into first rnn layer
         hs = rnn_in
-        # feed into remaining rnn layers
         for rnn_layer in rnn_layers:
-            if USE_DROPOUT:
-                hs = F.dropout(self[rnn_layer](hs), ratio=DROPOUT_RATIO)
+            # -----------------------------------------------------------------
+            # apply rnn
+            # -----------------------------------------------------------------
+            if self.m_cfg['rnn_dropout'] > 0:
+                hs = F.dropout(self[rnn_layer](hs), 
+                               ratio=self.m_cfg['rnn_dropout'])
             else:
                 hs = self[rnn_layer](hs)
-
-            if USE_LN:
-                bn_name = "{0:s}_ln".format(rnn_layer)
-                hs = self[bn_name](hs)
+            # -----------------------------------------------------------------
+            # layer normalization
+            # -----------------------------------------------------------------
+            if self.m_cfg['ln']:
+                ln_name = "{0:s}_ln".format(rnn_layer)
+                hs = self[ln_name](hs)
+            # -----------------------------------------------------------------
         return hs
 
     def encode(self, data_in, rnn_layers):
-        # if cnn + highways used
-        if num_highway_layers > 0:
+        if self.m_cfg['highway_layers'] > 0:
             h = self.forward_highway(data_in)
             h = self.feed_rnn(h, rnn_layers)
         else:
             h = self.feed_rnn(data_in, rnn_layers)
-        # return F.relu(h)
         return h
 
     def decode(self, word, ht):
-        if USE_DROPOUT:
-            embed_id = F.dropout(self.embed_dec(word),DROPOUT_RATIO)
+        # ---------------------------------------------------------------------
+        # get embedding
+        # ---------------------------------------------------------------------
+        if self.m_cfg['rnn_dropout'] > 0:
+            embed_id = F.dropout(self.embed_dec(word),
+                                 ratio=self.m_cfg['rnn_dropout'])
         else:
             embed_id = self.embed_dec(word)
+        # ---------------------------------------------------------------------
+        # apply rnn - input feeding, use previous ht
+        # ---------------------------------------------------------------------
         rnn_in = F.concat((embed_id, ht), axis=1)
         h = self.feed_rnn(rnn_in, self.rnn_dec)
-
+        # ---------------------------------------------------------------------
+        # compute context vector
+        # ---------------------------------------------------------------------
         cv, _ = self.compute_context_vector(h)
         cv_hdec = F.concat((cv, h), axis=1)
-        ht = self.context(cv_hdec)
-        # batch normalization before non-linearity
-        # if USE_BN:
-        #     ht = self.context_bn(ht)
-        ht = F.tanh(ht)
-
-        if USE_OUT_DROPOUT:
-            predicted_out = F.dropout(self.out(ht), ratio=DROPOUT_RATIO)
+        # ---------------------------------------------------------------------
+        # compute attentional hidden state
+        # ---------------------------------------------------------------------
+        ht = F.tanh(self.context(cv_hdec))
+        # ---------------------------------------------------------------------
+        # make prediction
+        # ---------------------------------------------------------------------
+        if self.m_cfg['out_dropout'] > 0:
+            predicted_out = F.dropout(self.out(ht), 
+                                      ratio=self.m_cfg['out_dropout'])
         else:
             predicted_out = self.out(ht)
-
+        # ---------------------------------------------------------------------
         return predicted_out, ht
 
-    def decode_batch(self, decoder_batch):
+    def decode_batch(self, decoder_batch, teacher_ratio):
+        xp = cuda.cupy if self.gpuid >= 0 else np
         batch_size = decoder_batch.shape[1]
         loss = 0
-        ht = Variable(xp.zeros((batch_size, 2*self.n_units), dtype=xp.float32))
-
+        # ---------------------------------------------------------------------
+        # initialize hidden states as a zero vector
+        # ---------------------------------------------------------------------
+        a_units = self.m_cfg['attn_units']
+        ht = Variable(xp.zeros((batch_size, a_units), dtype=xp.float32))
+        # ---------------------------------------------------------------------
         decoder_input = decoder_batch[0]
-
         # for all sequences in the batch, feed the characters one by one
         for curr_word, next_word in zip(decoder_batch, decoder_batch[1:]):
-
-            use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
-
-            if use_teacher_forcing:
+            # -----------------------------------------------------------------
+            # teacher forcing logic
+            # -----------------------------------------------------------------
+            use_label = True if random.random() < teacher_ratio else False
+            if use_label:
                 decoder_input = curr_word
-            # else:
-            #     decoder_input = F.argmax(predicted_out, axis=1)
-
+            # -----------------------------------------------------------------
             # encode tokens
-
+            # -----------------------------------------------------------------
             predicted_out, ht = self.decode(decoder_input, ht)
-
             decoder_input = F.argmax(predicted_out, axis=1)
-
+            # -----------------------------------------------------------------
+            # compute loss
+            # -----------------------------------------------------------------
             loss_arr = F.softmax_cross_entropy(predicted_out, next_word,
                                                class_weight=self.mask_pad_id)
             loss += loss_arr
-
+            # -----------------------------------------------------------------
         return loss
 
     def predict_batch(self, batch_size, pred_limit, y=None):
+        xp = cuda.cupy if self.gpuid >= 0 else np
         # max number of predictions to make
         # if labels are provided, this variable is not used
         stop_limit = pred_limit
@@ -347,7 +349,7 @@ class SpeechEncoderDecoder(Chain):
         loss = 0
         # if labels are provided, use them for computing loss
         compute_loss = True if y is not None else False
-
+        # ---------------------------------------------------------------------
         if compute_loss:
             stop_limit = len(y)-1
             # get starting word to initialize decoder
@@ -355,118 +357,91 @@ class SpeechEncoderDecoder(Chain):
         else:
             # intialize starting word to GO_ID symbol
             curr_word = Variable(xp.full((batch_size,), GO_ID, dtype=xp.int32))
-
+        # ---------------------------------------------------------------------
         # flag to track if all sentences in batch have predicted EOS
+        # ---------------------------------------------------------------------
         with cupy.cuda.Device(self.gpuid):
             check_if_all_eos = xp.full((batch_size,), False, dtype=xp.bool_)
-
-        ht = Variable(xp.zeros((batch_size, 2*self.n_units), dtype=xp.float32))
-
+        # ---------------------------------------------------------------------
+        a_units = self.m_cfg['attn_units']
+        ht = Variable(xp.zeros((batch_size, a_units), dtype=xp.float32))
+        # ---------------------------------------------------------------------
         while npred < (stop_limit):
-            # encode tokens
+            # -----------------------------------------------------------------
+            # decode and predict
             pred_out, ht = self.decode(curr_word, ht)
             pred_word = F.argmax(pred_out, axis=1)
-
+            # -----------------------------------------------------------------
             # save prediction at this time step
+            # -----------------------------------------------------------------
             if npred == 0:
                 pred_sents = pred_word.data
             else:
                 pred_sents = xp.vstack((pred_sents, pred_word.data))
-
+            # -----------------------------------------------------------------
             if compute_loss:
                 # compute loss
-                # softmax not required to select the most probable output
-                # of the decoder
-                # softmax only required if sampling from the predicted
-                # distribution
                 loss += F.softmax_cross_entropy(pred_out, y[npred+1],
                                                    class_weight=self.mask_pad_id)
-                # uncomment following line if labeled data to be
-                # used at next time step
-                # curr_word = y[npred+1]
-            # else:
+            # -----------------------------------------------------------------
             curr_word = pred_word
-
             # check if EOS is predicted for all sentences
-            # exit function if True
+            # -----------------------------------------------------------------
             check_if_all_eos[pred_word.data == EOS_ID] = True
             if xp.all(check_if_all_eos == EOS_ID):
                 break
+            # -----------------------------------------------------------------
             # increment number of predictions made
             npred += 1
-
+            # -----------------------------------------------------------------
         return pred_sents.T, loss
 
-
-    def forward_cnn(self, X):
-        # perform convolutions
-        h = F.swapaxes(X,1,2)
-        h = F.relu(self[self.cnns[0]](h))
-
-        for i in range(len(self.cnns[1:])):
-            h = F.concat((h, F.relu(self[self.cnns[i]](X))), axis=1)
-
-        # max pooling
-        # h = F.max_pooling_nd(h, ksize=max_pool_stride,
-        #                      stride=max_pool_stride,
-        #                      pad=max_pool_pad)
-
-        # batch normalization
-        if USE_BN:
-            h = self.cnn_bn(h, finetune=FINE_TUNE)
-
-        # out dimension:
-        # batch size * num time frames after pooling * cnn out dim
-        h = F.rollaxis(h, 2)
-        return h
-    # end forward_cnn()
-
     def forward_deep_cnn(self, h):
+        # ---------------------------------------------------------------------
         # check and prepare for 2d convolutions
-        if CNN_TYPE == DEEP_2D_CNN:
-            h = F.expand_dims(h, 2)
-            # h = F.reshape(h, (h.shape[:2] + tuple([-1,SPEECH_DIM // 3])))
+        # ---------------------------------------------------------------------
+        h = F.expand_dims(h, 2)
         h = F.swapaxes(h,1,2)
-
+        # ---------------------------------------------------------------------
         for i, cnn_layer in enumerate(self.cnns):
+            # -----------------------------------------------------------------
+            # apply cnn
+            # -----------------------------------------------------------------
             h = self[cnn_layer](h)
-            # h = F.max_pooling_nd(h, ksize=cnn_max_pool[i],
-            #                      stride=cnn_max_pool[i],
-            #                      pad=max_pool_pad)
+            # -----------------------------------------------------------------
             # batch normalization before non-linearity
-            if USE_BN:
+            # -----------------------------------------------------------------
+            if self.m_cfg['bn']:
                 bn_lname = '{0:s}_bn'.format(cnn_layer)
                 h = self[bn_lname](h)
-            if USE_CNN_DROPOUT:
-                h = F.dropout(F.relu(h), ratio=DROPOUT_RATIO)
-            else:
-                h = F.relu(h)
+            # -----------------------------------------------------------------
+            h = F.relu(h)
+            # -----------------------------------------------------------------
 
-        # out dimension:
+        # ---------------------------------------------------------------------
+        # prepare return
         # batch size * num time frames after pooling * cnn out dim
-        if CNN_TYPE == DEEP_2D_CNN:
-            h = F.swapaxes(h,1,2)
-            h = F.reshape(h, h.shape[:2] + tuple([-1]))
-            h = F.rollaxis(h,1)
-        else:
-            h = F.rollaxis(h, 2)
+        # ---------------------------------------------------------------------
+        h = F.swapaxes(h,1,2)
+        h = F.reshape(h, h.shape[:2] + tuple([-1]))
+        h = F.rollaxis(h,1)
+        # ---------------------------------------------------------------------
         return h
 
     def forward_highway(self, X):
-        # highway
         for i in range(len(self.highway)):
-            if USE_DROPOUT:
-                h = F.dropout(self[self.highway[i]](X), ratio=DROPOUT_RATIO)
-                # if USE_BN:
-                #     h = self[self.highway_bn[i]](h, finetune=FINE_TUNE)
+            if self.m_cfg['rnn_dropout'] > 0:
+                h = F.dropout(self[self.highway[i]](X), ratio=self.m_cfg['rnn_dropout'])
             else:
                 h = self[self.highway[i]](X)
-                # if USE_BN:
-                #     h = self[self.highway_bn[i]](h, finetune=FINE_TUNE)
         return h
 
     def forward_rnn(self, X):
+        # ---------------------------------------------------------------------
+        # reset rnn state
+        # ---------------------------------------------------------------------
         self.reset_state()
+        # ---------------------------------------------------------------------
         in_size, batch_size, in_dim = X.shape
         for i in range(in_size):
             if i > 0:
@@ -474,70 +449,94 @@ class SpeechEncoderDecoder(Chain):
                                   F.expand_dims(self.encode(X[i],
                                     self.rnn_enc), 0)),
                                   axis=0)
-                if BI_RNN:
+                if self.m_cfg['bi_rnn']:
                     h_rev = F.concat((h_rev,
                                       F.expand_dims(self.encode(X[-i],
                                         self.rnn_rev_enc), 0)),
                                       axis=0)
             else:
                 h_fwd = F.expand_dims(self.encode(X[i], self.rnn_enc), 0)
-                if BI_RNN:
+                if self.m_cfg['bi_rnn']:
                     h_rev = F.expand_dims(self.encode(X[-i], self.rnn_rev_enc), 0)
-
-        if BI_RNN:
+        # ---------------------------------------------------------------------
+        if self.m_cfg['bi_rnn']:
             h_rev = F.flipud(h_rev)
             self.enc_states = F.concat((h_fwd, h_rev), axis=2)
         else:
             self.enc_states = h_fwd
+        # ---------------------------------------------------------------------
         self.enc_states = F.swapaxes(self.enc_states, 0, 1)
-        # return h_fwd, h_rev
+        # ---------------------------------------------------------------------
 
     def forward_enc(self, X):
-        if enc_key != 'sp':
+        if self.m_cfg['enc_key'] != 'sp':
+            # -----------------------------------------------------------------
+            # get encoder embedding for text input
+            # -----------------------------------------------------------------
             h = self.embed_enc(X)
+            # -----------------------------------------------------------------
         else:
             h = X
+        # ---------------------------------------------------------------------
+        # call cnn logic
+        # ---------------------------------------------------------------------
         if len(self.cnns) > 0:
-            if CNN_TYPE == SINGLE_1D_CNN:
-                h = self.forward_cnn(h)
-            else:
-                h = self.forward_deep_cnn(h)
+            h = self.forward_deep_cnn(h)
+        # ---------------------------------------------------------------------
+        # call rnn logic
+        # ---------------------------------------------------------------------
         self.forward_rnn(h)
+        # ---------------------------------------------------------------------
 
-
-    def forward(self, X, y=None):
+    def forward(self, X, add_noise=0, teacher_ratio=0, y=None):
         # get shape
         batch_size = X.shape[0]
         # check whether to add noi, start=1se
-        if ADD_NOISE and chainer.config.train:
+        # ---------------------------------------------------------------------
+        # check whether to add noise to speech input
+        # ---------------------------------------------------------------------
+        if add_noise > 0 and chainer.config.train:
             # due to CUDA issues with random number generator
             # creating a numpy array and moving to GPU
             noise = Variable(np.random.normal(1.0,
-                            NOISE_STDEV,
-                            size=X.shape).astype(np.float32))
-            if gpuid >= 0:
-                noise.to_gpu(gpuid)
+                                              add_noise,
+                                              size=X.shape).astype(np.float32))
+            if self.gpuid >= 0:
+                noise.to_gpu(self.gpuid)
             X = X * noise
+        # ---------------------------------------------------------------------
         # encode input
         self.forward_enc(X)
+        # ---------------------------------------------------------------------
         # initialize decoder LSTM to final encoder state
+        # ---------------------------------------------------------------------
         self.set_decoder_state()
+        # ---------------------------------------------------------------------
         # swap axes of the decoder batch
         if y is not None:
             y = F.swapaxes(y, 0, 1)
+        # ---------------------------------------------------------------------
         # check if train or test
+        # ---------------------------------------------------------------------
         if chainer.config.train:
+            # -----------------------------------------------------------------
             # decode
-            self.loss = self.decode_batch(y)
-            # self.enc_states = []
-            # consistent return statement
+            # -----------------------------------------------------------------
+            self.loss = self.decode_batch(y, teacher_ratio)
+            # -----------------------------------------------------------------
+            # make return statements consistent
             return [], self.loss
         else:
+            # -----------------------------------------------------------------
             # predict
-            return(self.predict_batch(batch_size=batch_size, pred_limit=MAX_EN_LEN, y=y))
-            # consistent return statement
+            # -----------------------------------------------------------------
+            # make return statements consistent
+            return(self.predict_batch(batch_size=batch_size, 
+                                      pred_limit=self.m_cfg['max_en_pred'], 
+                                      y=y))
 
     def add_gru_weight_noise(self, rnn_layer, mu, sigma):
+        xp = cuda.cupy if self.gpuid >= 0 else np
         # W_shape = self[rnn_layer].W.W.shape
         # b_shape = self[rnn_layer].W.b.shape
         rnn_params = ["W", "W_r", "W_z", "U", "U_r", "U_z"]

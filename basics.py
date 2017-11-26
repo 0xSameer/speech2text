@@ -21,6 +21,7 @@ import importlib
 from collections import namedtuple
 import cupy
 import random
+import json
 
 Align = namedtuple('Align', ['word', 'start', 'end'])
 
