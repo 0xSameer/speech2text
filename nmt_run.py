@@ -543,6 +543,7 @@ def train_loop(m_cfg, t_cfg, epochs, use_y):
             # -----------------------------------------------------------------
             # save model
             # -----------------------------------------------------------------
+            model_fil = m_cfg['model_fname']
             if ((i+1) % t_cfg['iters_save_model'] == 0) or (i == (epochs-1)):
                 print("Saving model")
                 serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch+i+1)), model)
