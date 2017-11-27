@@ -64,7 +64,7 @@ class SpeechEncoderDecoder(Chain):
         #----------------------------------------------------------------------
         # add encoder layers
         #----------------------------------------------------------------------
-        self.rnn_enc = ["L{0:d}_enc".format(i) 
+        self.rnn_enc = ["L{0:d}_enc".format(i)
                          for i in range(self.m_cfg['enc_layers'])]
         self.add_rnn_layers(self.rnn_enc, in_dim, h_units)
 
@@ -98,7 +98,7 @@ class SpeechEncoderDecoder(Chain):
         e_units = self.m_cfg['embedding_units']
         # first layer appends previous ht, and therefore,
         # in_units = embed units + hidden units
-        self.rnn_dec = ["L{0:d}_dec".format(i) 
+        self.rnn_dec = ["L{0:d}_dec".format(i)
                         for i in range(self.m_cfg['dec_layers'])]
         #----------------------------------------------------------------------
         # decoder rnn input = emb + prev. context vector
@@ -107,7 +107,7 @@ class SpeechEncoderDecoder(Chain):
         #----------------------------------------------------------------------
 
     def init_deep_cnn_model(self):
-        CNN_IN_DIM = (self.m_cfg['sp_dim'] if self.m_cfg['enc_key'] == 'sp' 
+        CNN_IN_DIM = (self.m_cfg['sp_dim'] if self.m_cfg['enc_key'] == 'sp'
                              else self.m_cfg['embedding_units'])
         # ---------------------------------------------------------------------
         # initialize list of cnn layers
@@ -173,7 +173,7 @@ class SpeechEncoderDecoder(Chain):
         # ---------------------------------------------------------------------
         # add output layer
         # ---------------------------------------------------------------------
-        self.add_link("out", L.Linear(self.m_cfg['attn_units'], 
+        self.add_link("out", L.Linear(self.m_cfg['attn_units'],
                                       self.v_size_en))
         # ---------------------------------------------------------------------
         # create masking array for pad id
@@ -202,8 +202,8 @@ class SpeechEncoderDecoder(Chain):
         # set the hidden and cell state (LSTM) of the first RNN in the decoder
         # ---------------------------------------------------------------------
         if self.m_cfg['bi_rnn']:
-            for enc, rev_enc, dec in zip(self.rnn_enc, 
-                                         self.rnn_rev_enc, 
+            for enc, rev_enc, dec in zip(self.rnn_enc,
+                                         self.rnn_rev_enc,
                                          self.rnn_dec):
                 h_state = F.concat((self[enc].h, self[rev_enc].h))
                 if self.m_cfg['rnn_unit'] == RNN_LSTM:
@@ -250,7 +250,7 @@ class SpeechEncoderDecoder(Chain):
             # apply rnn
             # -----------------------------------------------------------------
             if self.m_cfg['rnn_dropout'] > 0:
-                hs = F.dropout(self[rnn_layer](hs), 
+                hs = F.dropout(self[rnn_layer](hs),
                                ratio=self.m_cfg['rnn_dropout'])
             else:
                 hs = self[rnn_layer](hs)
@@ -298,7 +298,7 @@ class SpeechEncoderDecoder(Chain):
         # make prediction
         # ---------------------------------------------------------------------
         if self.m_cfg['out_dropout'] > 0:
-            predicted_out = F.dropout(self.out(ht), 
+            predicted_out = F.dropout(self.out(ht),
                                       ratio=self.m_cfg['out_dropout'])
         else:
             predicted_out = self.out(ht)
@@ -480,8 +480,8 @@ class SpeechEncoderDecoder(Chain):
         # ---------------------------------------------------------------------
         # call cnn logic
         # ---------------------------------------------------------------------
-        if len(self.cnns) > 0:
-            h = self.forward_deep_cnn(h)
+        # if len(self.cnns) > 0:
+        h = self.forward_deep_cnn(h)
         # ---------------------------------------------------------------------
         # call rnn logic
         # ---------------------------------------------------------------------
@@ -531,8 +531,8 @@ class SpeechEncoderDecoder(Chain):
             # predict
             # -----------------------------------------------------------------
             # make return statements consistent
-            return(self.predict_batch(batch_size=batch_size, 
-                                      pred_limit=self.m_cfg['max_en_pred'], 
+            return(self.predict_batch(batch_size=batch_size,
+                                      pred_limit=self.m_cfg['max_en_pred'],
                                       y=y))
 
     def add_gru_weight_noise(self, rnn_layer, mu, sigma):
@@ -542,13 +542,13 @@ class SpeechEncoderDecoder(Chain):
         rnn_params = ["W", "W_r", "W_z", "U", "U_r", "U_z"]
         for p in rnn_params:
             # add noise to W
-            s_w = xp.random.normal(mu, 
-                                   sigma, 
-                                   self[rnn_layer][p].W.shape, 
+            s_w = xp.random.normal(mu,
+                                   sigma,
+                                   self[rnn_layer][p].W.shape,
                                    dtype=xp.float32)
-            s_b = xp.random.normal(mu, 
-                                   sigma, 
-                                   self[rnn_layer][p].b.shape, 
+            s_b = xp.random.normal(mu,
+                                   sigma,
+                                   self[rnn_layer][p].b.shape,
                                    dtype=xp.float32)
             self[rnn_layer][p].W.data = self[rnn_layer][p].W.data + s_w
             self[rnn_layer][p].b.data = self[rnn_layer][p].b.data + s_b
@@ -558,10 +558,10 @@ class SpeechEncoderDecoder(Chain):
         for rnn_layer in self.rnn_enc + self.rnn_dec:
             self.add_gru_weight_noise(rnn_layer, mu, sigma)
         # add noise to decoder embeddings
-        self.embed_dec.W.data = (self.embed_dec.W.data + 
-                                   xp.random.normal(mu, 
-                                                    sigma, 
-                                                    self.embed_dec.W.shape, 
+        self.embed_dec.W.data = (self.embed_dec.W.data +
+                                   xp.random.normal(mu,
+                                                    sigma,
+                                                    self.embed_dec.W.shape,
                                                     dtype=xp.float32))
 
 # In[ ]:

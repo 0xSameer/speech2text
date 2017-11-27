@@ -395,47 +395,70 @@ def get_data_dicts(m_cfg):
     # -------------------------------------------------------------------------
     return map_dict, vocab_dict, bucket_dict
 
-def check_model(model_cfg, train_cfg):
-    xp = cuda.cupy if train_cfg['gpuid'] >= 0 else np
+def check_model(cfg_path):
+    # -------------------------------------------------------------------------
+    # read config files model
+    # -------------------------------------------------------------------------
+    with open(os.path.join(cfg_path, "model_cfg.json"), "r") as model_f:
+        m_cfg = json.load(model_f)
+    # -------------------------------------------------------------------------
+    with open(os.path.join(cfg_path, "train_cfg.json"), "r") as train_f:
+        t_cfg = json.load(train_f)
+    xp = cuda.cupy if t_cfg['gpuid'] >= 0 else np
+    # -------------------------------------------------------------------------
+    # check model path
+    # -------------------------------------------------------------------------
+    if not os.path.exists(m_cfg['data_path']):
+        raise FileNotFoundError("ERROR!! file not found: {0:s}".format(m_cfg['data_path']))
+    # end if
     # -------------------------------------------------------------------------
     # initialize new model
     # -------------------------------------------------------------------------
-    model = SpeechEncoderDecoder(model_cfg, train_cfg['gpuid'])
-    model.to_gpu(train_cfg['gpuid'])
+    model = SpeechEncoderDecoder(m_cfg, t_cfg['gpuid'])
+    model.to_gpu(t_cfg['gpuid'])
     # -------------------------------------------------------------------------
     # set up optimizer
     # -------------------------------------------------------------------------
-    if train_cfg['optimizer'] == OPT_ADAM:
+    if t_cfg['optimizer'] == OPT_ADAM:
         print("using ADAM optimizer")
-        optimizer = optimizers.Adam(alpha=train_cfg['lr'],
+        optimizer = optimizers.Adam(alpha=t_cfg['lr'],
                                     beta1=0.9,
                                     beta2=0.999,
                                     eps=1e-08)
     else:
         print("using SGD optimizer")
-        optimizer = optimizers.SGD(lr=train_cfg['lr'])
+        optimizer = optimizers.SGD(lr=t_cfg['lr'])
 
     # attach optimizer
     optimizer.setup(model)
     # -------------------------------------------------------------------------
     # optimizer settings
     # -------------------------------------------------------------------------
-    if model_cfg['l2'] > 0:
-        optimizer.add_hook(chainer.optimizer.WeightDecay(model_cfg['l2']))
+    if m_cfg['l2'] > 0:
+        optimizer.add_hook(chainer.optimizer.WeightDecay(m_cfg['l2']))
     
     # gradient clipping
-    optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=model_cfg['grad_clip']))
+    optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=m_cfg['grad_clip']))
 
     # gradient noise
-    if train_cfg['grad_noise_eta'] > 0:
+    if t_cfg['grad_noise_eta'] > 0:
         print("------ Adding gradient noise")
-        optimizer.add_hook(chainer.optimizer.GradientNoise(eta=train_cfg['grad_noise_eta']))
+        optimizer.add_hook(chainer.optimizer.GradientNoise(eta=t_cfg['grad_noise_eta']))
         print("Finished adding gradient noise")
     # -------------------------------------------------------------------------
     # check last saved model
     # -------------------------------------------------------------------------
     max_epoch = 0
-    model_fil = model_cfg['model_fname']
+    # -------------------------------------------------------------------------
+    # add debug info
+    # -------------------------------------------------------------------------
+    m_cfg['model_dir'] = cfg_path
+    m_cfg['train_log'] = os.path.join(m_cfg['model_dir'], "train.log")
+    m_cfg['dev_log'] = os.path.join(m_cfg['model_dir'], "dev.log")
+    m_cfg['model_fname'] = os.path.join(m_cfg['model_dir'], 
+                                            "seq2seq.model")
+    # -------------------------------------------------------------------------
+    model_fil = m_cfg['model_fname']
     model_files = [f for f in os.listdir(os.path.dirname(model_fil))
                    if os.path.basename(model_fil).replace('.model','') in f]
     if len(model_files) > 0:
@@ -452,19 +475,20 @@ def check_model(model_cfg, train_cfg):
         print('model not found')
     # end if model found
     # -------------------------------------------------------------------------
-    return max_epoch, model, optimizer
+    return max_epoch, model, optimizer, m_cfg, t_cfg
 # end check_model
 
-def train_loop(m_cfg, t_cfg, epochs, use_y):
+def train_loop(cfg_path, epochs):
+    # -------------------------------------------------------------------------
+    # check for existing model
+    # -------------------------------------------------------------------------
+    last_epoch, model, optimizer, m_cfg, t_cfg = check_model(cfg_path)
+    # -------------------------------------------------------------------------
     train_key = m_cfg['train_set']
     dev_key = m_cfg['dev_set']
     batch_size=t_cfg['batch_size']
     enc_key=m_cfg['enc_key']
     dec_key=m_cfg['dec_key']
-    # -------------------------------------------------------------------------
-    # check for existing model
-    # -------------------------------------------------------------------------
-    last_epoch, model, optimizer = check_model(m_cfg, t_cfg)
     # -------------------------------------------------------------------------
     # get data dictionaries
     # -------------------------------------------------------------------------
@@ -476,6 +500,8 @@ def train_loop(m_cfg, t_cfg, epochs, use_y):
         for i in range(epochs):
             print("-"*80)
             print("EPOCH = {0:d} / {1:d}".format(last_epoch+i+1, last_epoch+epochs))
+            print("using GPU={0:d}".format(t_cfg['gpuid']))
+            print('model details in : {0:s}'.format(m_cfg['model_dir']))
             # -----------------------------------------------------------------
             # Check to add Gaussian weight noise
             # -----------------------------------------------------------------
@@ -554,26 +580,6 @@ def train_loop(m_cfg, t_cfg, epochs, use_y):
     # end open log files
 # end train loop
 
-def train_main(model_cfg, train_cfg, epochs):
-    # -------------------------------------------------------------------------
-    # check model path
-    # -------------------------------------------------------------------------
-    print(model_cfg['data_path'])
-    if not os.path.exists(model_cfg['data_path']):
-        print("{0:s} does not exist. Exiting".format(model_cfg['data_path']))
-        return 0
-    # end if
-    # -------------------------------------------------------------------------
-    # call train loop
-    # -------------------------------------------------------------------------
-    train_loop(m_cfg=model_cfg, 
-               t_cfg=train_cfg, 
-               epochs=epochs, 
-               use_y=True)
-    # -------------------------------------------------------------------------
-    print("all done ...")
-# end train_main
-
 # -----------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description=program_descrp)
@@ -586,17 +592,16 @@ def main():
 
     cfg_path = args['cfg_path']
 
-    with open(os.path.join(cfg_path, "model_cfg.json"), "r") as model_f:
-        model_cfg = json.load(model_f)
-
-    with open(os.path.join(cfg_path, "train_cfg.json"), "r") as train_f:
-        train_cfg = json.load(train_f)
-
     epochs = int(args['epochs'])
 
     print("number of epochs={0:d}".format(epochs))
 
-    train_main(model_cfg, train_cfg, epochs)
+    # -------------------------------------------------------------------------
+    # call train loop
+    # -------------------------------------------------------------------------
+    train_loop(cfg_path=cfg_path, epochs=epochs)
+    # -------------------------------------------------------------------------
+    print("all done ...")
 # end main
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
