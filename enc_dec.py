@@ -1,4 +1,4 @@
-# coding: utf-8
+ #coding: utf-8
 
 from basics import *
 
@@ -275,7 +275,7 @@ class SpeechEncoderDecoder(Chain):
         # ---------------------------------------------------------------------
         # get embedding
         # ---------------------------------------------------------------------
-        if self.m_cfg['rnn_dropout'] > 0:
+        if 'embed_dropout' in self.m_cfg:
             embed_id = F.dropout(self.embed_dec(word),
                                  ratio=self.m_cfg['rnn_dropout'])
         else:
@@ -554,6 +554,7 @@ class SpeechEncoderDecoder(Chain):
             self[rnn_layer][p].b.data = self[rnn_layer][p].b.data + s_b
 
     def add_weight_noise(self, mu, sigma):
+        xp = cuda.cupy if self.gpuid >= 0 else np
         # add noise to rnn weights
         for rnn_layer in self.rnn_enc + self.rnn_dec:
             self.add_gru_weight_noise(rnn_layer, mu, sigma)

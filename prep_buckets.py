@@ -51,7 +51,7 @@ def create_buckets(cat_dict, num_b, width_b, key, scale, seed):
     if scale > 1:
         random.seed(seed)
         for i in range(len(buckets_info['buckets'])):
-            sample_len = len(buckets_info['buckets'][i]) // scale
+            sample_len = int(len(buckets_info['buckets'][i]) // scale)
             buckets_info['buckets'][i] =  random.sample(buckets_info['buckets'][i], sample_len)
 
     return buckets_info

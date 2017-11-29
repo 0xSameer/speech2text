@@ -256,8 +256,8 @@ def create_batches(b_dict, batch_size):
     random.shuffle(utt_list_batches)
     return utt_list_batches, total_utts
 
-def feed_model(model, optimizer, m_dict, b_dict, 
-               batch_size, vocab_dict, x_key, y_key, 
+def feed_model(model, optimizer, m_dict, b_dict,
+               batch_size, vocab_dict, x_key, y_key,
                train, input_path, max_dec, t_cfg, use_y=True):
     # number of buckets
     num_b = b_dict['num_b']
@@ -295,8 +295,8 @@ def feed_model(model, optimizer, m_dict, b_dict,
                     # ---------------------------------------------------------
                     with chainer.using_config('train', train):
                         cuda.get_device(t_cfg['gpuid']).use()
-                        p, loss = model.forward(X=batch_data['X'], 
-                                    y=batch_data['y'], 
+                        p, loss = model.forward(X=batch_data['X'],
+                                    y=batch_data['y'],
                                     add_noise=t_cfg['speech_noise'],
                                     teacher_ratio = t_cfg['teach_ratio'])
                         loss_val = float(loss.data) / batch_data['y'].shape[1]
@@ -365,11 +365,11 @@ def get_data_dicts(m_cfg):
     # -------------------------------------------------------------------------
     # BUCKETS
     # -------------------------------------------------------------------------
-    prep_buckets.buckets_main(m_cfg['data_path'], 
-                              m_cfg['buckets_num'], 
-                              m_cfg['buckets_width'], 
-                              m_cfg['enc_key'], 
-                              scale=m_cfg['train_scale'], 
+    prep_buckets.buckets_main(m_cfg['data_path'],
+                              m_cfg['buckets_num'],
+                              m_cfg['buckets_width'],
+                              m_cfg['enc_key'],
+                              scale=m_cfg['train_scale'],
                               seed=m_cfg['seed'])
 
     buckets_path = os.path.join(m_cfg['data_path'],
@@ -390,7 +390,7 @@ def get_data_dicts(m_cfg):
     vocab_size_en = len(vocab_dict[m_cfg['dec_key']]['w2i'])
     print('vocab size for {0:s} = {1:d}'.format(m_cfg['enc_key'],
                                                 vocab_size_es))
-    print('vocab size for {0:s} = {1:d}'.format(m_cfg['dec_key'], 
+    print('vocab size for {0:s} = {1:d}'.format(m_cfg['dec_key'],
                                                 vocab_size_en))
     # -------------------------------------------------------------------------
     return map_dict, vocab_dict, bucket_dict
@@ -436,7 +436,7 @@ def check_model(cfg_path):
     # -------------------------------------------------------------------------
     if m_cfg['l2'] > 0:
         optimizer.add_hook(chainer.optimizer.WeightDecay(m_cfg['l2']))
-    
+
     # gradient clipping
     optimizer.add_hook(chainer.optimizer.GradientClipping(threshold=m_cfg['grad_clip']))
 
@@ -455,7 +455,7 @@ def check_model(cfg_path):
     m_cfg['model_dir'] = cfg_path
     m_cfg['train_log'] = os.path.join(m_cfg['model_dir'], "train.log")
     m_cfg['dev_log'] = os.path.join(m_cfg['model_dir'], "dev.log")
-    m_cfg['model_fname'] = os.path.join(m_cfg['model_dir'], 
+    m_cfg['model_fname'] = os.path.join(m_cfg['model_dir'],
                                             "seq2seq.model")
     # -------------------------------------------------------------------------
     model_fil = m_cfg['model_fname']
@@ -506,14 +506,14 @@ def train_loop(cfg_path, epochs):
             # Check to add Gaussian weight noise
             # -----------------------------------------------------------------
             if (last_epoch+i+1 >= t_cfg['iter_weight_noise']) and (t_cfg['iter_weight_noise'] > 0):
-                print("Adding Gaussian weight noise, mean={0:.2f}, stdev={1:0.6f}".format(t_cfg['weight_noise_mean'], ))
+                print("Adding Gaussian weight noise, mean={0:.2f}, stdev={1:0.6f}".format(t_cfg['weight_noise_mean'], t_cfg['weight_noise_sigma']))
                 model.add_weight_noise(t_cfg['weight_noise_mean'], t_cfg['weight_noise_sigma'])
                 print("Finished adding Gaussian weight noise")
             # end adding gaussian weight noise
             # -----------------------------------------------------------------
             # train
             # -----------------------------------------------------------------
-            input_path = os.path.join(m_cfg['data_path'], 
+            input_path = os.path.join(m_cfg['data_path'],
                                       m_cfg['train_set'])
             pred_sents, utts, train_loss = feed_model(model,
                                               optimizer=optimizer,
@@ -537,7 +537,7 @@ def train_loop(cfg_path, epochs):
             # -----------------------------------------------------------------
             # dev
             # -----------------------------------------------------------------
-            input_path = os.path.join(m_cfg['data_path'], 
+            input_path = os.path.join(m_cfg['data_path'],
                                       m_cfg['dev_set'])
             pred_sents, utts, dev_loss = feed_model(model,
                                               optimizer=optimizer,
