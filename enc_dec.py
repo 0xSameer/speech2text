@@ -295,10 +295,10 @@ class SpeechEncoderDecoder(Chain):
         return h
 
     def decode(self, word, ht):
-        if USE_DROPOUT:
-            embed_id = F.dropout(self.embed_dec(word),DROPOUT_RATIO)
-        else:
-            embed_id = self.embed_dec(word)
+        # if USE_DROPOUT:
+        #     embed_id = F.dropout(self.embed_dec(word),DROPOUT_RATIO)
+        # else:
+        embed_id = self.embed_dec(word)
         rnn_in = F.concat((embed_id, ht), axis=1)
         h = self.feed_rnn(rnn_in, self.rnn_dec)
 

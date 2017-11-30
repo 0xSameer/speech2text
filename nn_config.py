@@ -40,16 +40,16 @@ print("fisher + callhome sp/es - en configuration")
 # ------------------------------------
 # encoder key
 # 'es_w', 'es_c', or 'sp', and: # 'en_w', 'en_c', or 'sp'
-enc_key = 'es_c'
-dec_key = 'en_c'
+enc_key = 'sp'
+dec_key = 'en_w'
 # ------------------------------------
-gpuid = 1
+gpuid = 0
 # ------------------------------------
 # scaling factor for reducing batch
-BATCH_SIZE = 256
-BATCH_SIZE_MEDIUM = 200
-BATCH_SIZE_SMALL = 100
-BATCH_SIZE_SCALE = 1.5
+BATCH_SIZE = 64
+BATCH_SIZE_MEDIUM = 64
+BATCH_SIZE_SMALL = 64
+BATCH_SIZE_SCALE = 1
 TRAIN_SIZE_SCALE = 1
 
 # only applicable for mini mode
@@ -60,14 +60,14 @@ FSH1_CH0 = True
 
 if NEW1_OLD0:
     RANDOM_SEED_VALUE="{0:s}_{1:d}".format("fsh" if FSH1_CH0 else "callh",
-                                       100 // TRAIN_SIZE_SCALE)
+                                       int(100 // TRAIN_SIZE_SCALE))
 else:
     RANDOM_SEED_VALUE="full1"
 
 EXP_NAME_PREFIX = "" if RANDOM_SEED_VALUE == "haha" else "_{0:s}_".format(RANDOM_SEED_VALUE)
 # ------------------------------------
 # Adam(alpha=0.001, beta1=0.9, beta2=0.999, eps=1e-08)
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0001
 # ------------------------------------
 teacher_forcing_ratio = 0.8
 # ------------------------------------
@@ -75,11 +75,11 @@ OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
 WEIGHT_DECAY=True
 if WEIGHT_DECAY:
-    WD_RATIO=1e-3
+    WD_RATIO=1e-4
 else:
     WD_RATIO=0
 # ------------------------------------
-ITERS_GRAD_NOISE = 1
+ITERS_GRAD_NOISE = 0
 # default noise function is
 # recommended to be either:
 # 0.01, 0.3 or 1.0
@@ -91,12 +91,12 @@ USE_OUT_DROPOUT=False
 DROPOUT_RATIO=0.3
 # ------------------------------------
 if enc_key == 'sp':
-    ITERS_TO_SAVE = 5
+    ITERS_TO_SAVE = 10
 else:
     ITERS_TO_SAVE = 10
 # ------------------------------------
 lstm1_or_gru0 = False
-ONLY_LSTM = True
+ONLY_LSTM = False
 # ------------------------------------
 CNN_TYPE = DEEP_2D_CNN
 # ------------------------------------
@@ -114,18 +114,15 @@ if FSH1_CH0:
 else:
     ADD_NOISE=True
 
-NOISE_STDEV=0.250
+NOISE_STDEV=0.2
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 0
+ITERS_TO_WEIGHT_NOISE = 1
 WEIGHT_NOISE_MU = 0.0
-WEIGHT_NOISE_SIGMA = 0.001
-# ------------------------------------
-
+WEIGHT_NOISE_SIGMA = 0.0001
 # ------------------------------------
 hidden_units = 300
 embedding_units = 128
 # ------------------------------------
-
 # if using CNNs, we can have more parameters as sequences are shorter
 # due to max pooling
 if ONLY_LSTM == False:
@@ -482,4 +479,10 @@ perl $BLEU_SCRIPT google_fisher_dev_r[1-3]* < fisher_dev_mt-output
 BLEU = 20.82, 54.7/28.6/15.4/8.4 (BP=0.980, ratio=0.980, hyp_len=38270, ref_len=39050)
 
 rsync -vPr sameer@13.82.235.4:/home/sameer/work/chainer2/speech2text/nov10 nov10/
+
+export AZURE=sameer@52.224.160.107
+rsync -vPr *.*py* $AZURE:/home/sameer/work/chainer2/speech2text/
+
+ssh <YOUR UUN>@eddie3.ecdf.ed.ac.uk
+/exports/csce/datastore/inf/groups/speech_nn
 '''
