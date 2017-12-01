@@ -46,9 +46,9 @@ dec_key = 'en_w'
 gpuid = 0
 # ------------------------------------
 # scaling factor for reducing batch
-BATCH_SIZE = 64
-BATCH_SIZE_MEDIUM = 64
-BATCH_SIZE_SMALL = 64
+BATCH_SIZE = 100
+BATCH_SIZE_MEDIUM = 100
+BATCH_SIZE_SMALL = 100
 BATCH_SIZE_SCALE = 1
 TRAIN_SIZE_SCALE = 1
 
@@ -67,7 +67,7 @@ else:
 EXP_NAME_PREFIX = "" if RANDOM_SEED_VALUE == "haha" else "_{0:s}_".format(RANDOM_SEED_VALUE)
 # ------------------------------------
 # Adam(alpha=0.001, beta1=0.9, beta2=0.999, eps=1e-08)
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.00001
 # ------------------------------------
 teacher_forcing_ratio = 0.8
 # ------------------------------------
@@ -75,7 +75,7 @@ OPTIMIZER_ADAM1_SGD_0 = True
 # ------------------------------------
 WEIGHT_DECAY=True
 if WEIGHT_DECAY:
-    WD_RATIO=1e-4
+    WD_RATIO=1e-3
 else:
     WD_RATIO=0
 # ------------------------------------
@@ -116,7 +116,7 @@ else:
 
 NOISE_STDEV=0.2
 # ------------------------------------
-ITERS_TO_WEIGHT_NOISE = 1
+ITERS_TO_WEIGHT_NOISE = 0
 WEIGHT_NOISE_MU = 0.0
 WEIGHT_NOISE_SIGMA = 0.0001
 # ------------------------------------
