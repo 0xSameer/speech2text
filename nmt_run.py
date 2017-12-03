@@ -305,7 +305,7 @@ def feed_model(model, optimizer, m_dict, b_dict,
                     # prediction only
                     # ---------------------------------------------------------
                     with chainer.using_config('train', False):
-                        cuda.get_device(gpuid).use()
+                        cuda.get_device(t_cfg['gpuid']).use()
                         p, _ = model.forward(X=batch_data['X'])
                         loss_val = 0.0
                 # -------------------------------------------------------------
