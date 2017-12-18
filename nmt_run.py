@@ -455,8 +455,8 @@ def check_model(cfg_path):
     m_cfg['model_dir'] = cfg_path
     m_cfg['train_log'] = os.path.join(m_cfg['model_dir'], "train.log")
     m_cfg['dev_log'] = os.path.join(m_cfg['model_dir'], "dev.log")
-    m_cfg['model_fname'] = os.path.join(m_cfg['model_dir'],
-                                            "seq2seq.model")
+    m_cfg['model_fname'] = os.path.join(m_cfg['model_dir'], "seq2seq.model")
+    m_cfg['opt_fname'] = os.path.join(m_cfg['model_dir'], "train.opt")
     # -------------------------------------------------------------------------
     model_fil = m_cfg['model_fname']
     model_files = [f for f in os.listdir(os.path.dirname(model_fil))
@@ -470,6 +470,13 @@ def check_model(cfg_path):
         serializers.load_npz(max_model_fil, model)
         print("finished loading ..")
         max_epoch = int(max_model_fil.split('_')[-1].split('.')[0])
+        # load optimizer
+        if os.path.exists(m_cfg['opt_fname']):
+            print("optimizer found = {0:s}".format(m_cfg['opt_fname']))
+            serializers.load_npz(m_cfg['opt_fname'], optimizer)
+            print("finished loading optimizer ...")
+        else:
+            print("optimizer not found")
     else:
         print("-"*80)
         print('model not found')
@@ -574,6 +581,9 @@ def train_loop(cfg_path, epochs):
                 print("Saving model")
                 serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch+i+1)), model)
                 print("Finished saving model")
+                print("Saving optimizer")
+                serializers.save_npz(m_cfg['opt_fname'], optimizer)
+                print("Finished saving optimizer")
             # end if save model
             # -----------------------------------------------------------------
         # end for epochs
