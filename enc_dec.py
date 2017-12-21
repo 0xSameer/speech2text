@@ -82,9 +82,9 @@ class SpeechEncoderDecoder(Chain):
         if self.m_cfg['bi_rnn']:
             self.add_link("attn_Wa", L.Linear(2*h_units, 2*h_units))
             #------------------------------------------------------------------
-            # context layer = 2*h_units from enc + 1*h_units from dec
+            # context layer = 2*h_units from enc + 2*h_units from dec
             #------------------------------------------------------------------
-            self.add_link("context", L.Linear(3*h_units, a_units))
+            self.add_link("context", L.Linear(4*h_units, a_units))
         else:
             self.add_link("attn_Wa", L.Linear(h_units, h_units))
             #------------------------------------------------------------------
@@ -103,7 +103,10 @@ class SpeechEncoderDecoder(Chain):
         #----------------------------------------------------------------------
         # decoder rnn input = emb + prev. context vector
         #----------------------------------------------------------------------
-        self.add_rnn_layers(self.rnn_dec, e_units+a_units, h_units)
+        if self.m_cfg['bi_rnn']:
+            self.add_rnn_layers(self.rnn_dec, e_units+a_units, 2*h_units)
+        else:
+            self.add_rnn_layers(self.rnn_dec, e_units+a_units, h_units)
         #----------------------------------------------------------------------
 
     def init_deep_cnn_model(self):

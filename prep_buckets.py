@@ -97,10 +97,10 @@ def buckets_main(out_path, num_b, width_b, key, scale=1, seed='haha'):
     pickle.dump(bucket_dict, open(bucket_dict_path, "wb"))
     print("all done ...")
 
-    # display bucket stats
-    for cat in bucket_dict:
-        print("-"*50)
-        display_buckets(bucket_dict, cat)
+    # # display bucket stats
+    # for cat in bucket_dict:
+    #     print("-"*50)
+    #     display_buckets(bucket_dict, cat)
 
 
 
