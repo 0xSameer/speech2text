@@ -426,8 +426,8 @@ def check_model(cfg_path):
                                     beta2=0.999,
                                     eps=1e-08)
     else:
-        print("using SGD optimizer")
-        optimizer = optimizers.SGD(lr=t_cfg['lr'])
+        print("using Momentum SGD optimizer")
+        optimizer = optimizers.MomentumSGD(lr=t_cfg['lr'])
 
     # attach optimizer
     optimizer.setup(model)
