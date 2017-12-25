@@ -341,7 +341,7 @@ class SpeechEncoderDecoder(Chain):
             # -----------------------------------------------------------------
         return loss
 
-    def predict_batch(self, batch_size, pred_limit, y=None):
+    def predict_batch(self, batch_size, pred_limit, y=None, display=False):
         xp = cuda.cupy if self.gpuid >= 0 else np
         # max number of predictions to make
         # if labels are provided, this variable is not used
@@ -391,7 +391,8 @@ class SpeechEncoderDecoder(Chain):
             # check if EOS is predicted for all sentences
             # -----------------------------------------------------------------
             check_if_all_eos[pred_word.data == EOS_ID] = True
-            if xp.all(check_if_all_eos == EOS_ID):
+            # if xp.all(check_if_all_eos == EOS_ID):
+            if xp.all(check_if_all_eos):
                 break
             # -----------------------------------------------------------------
             # increment number of predictions made
