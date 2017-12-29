@@ -233,11 +233,13 @@ def create_batches(b_dict, batch_size):
         # compute batch size to use for current bucket
         # ---------------------------------------------------------------------
         if b < num_b // 3:
-            b_size = int(batch_size['max'] // batch_size['scale'])
+            b_size = int(batch_size['max'])
         elif b < (num_b*2) // 3:
-            b_size = int(batch_size['med'] // batch_size['scale'])
+            b_size = int(batch_size['med'])
         else:
-            b_size = int(batch_size['min'] // batch_size['scale'])
+            b_size = int(batch_size['min'])
+        # ---------------------------------------------------------------------
+        # old logic: divide each by batch_size['scale']
         # ---------------------------------------------------------------------
         bucket = b_dict['buckets'][b]
         b_len = len(bucket)
@@ -274,7 +276,7 @@ def feed_model(model, optimizer, m_dict, b_dict,
     # -------------------------------------------------------------------------
     utt_list_batches, total_utts = create_batches(b_dict, batch_size)
     # -------------------------------------------------------------------------
-    with tqdm(total=total_utts, ncols=80) as pbar:
+    with tqdm(total=total_utts, ncols=120) as pbar:
         for i, (utt_list, b) in enumerate(utt_list_batches):
             # -----------------------------------------------------------------
             # get batch_data
@@ -319,15 +321,28 @@ def feed_model(model, optimizer, m_dict, b_dict,
                 total_loss += loss_val
                 total_loss_updates += 1
                 loss_per_epoch = (total_loss / total_loss_updates)
+
+                out_str = "b={0:d},l={1:.2f},avg={2:.2f}".format((b+1),loss_val,loss_per_epoch)
                 # -------------------------------------------------------------
                 # train mode logic
                 # -------------------------------------------------------------
                 if train:
+                    # if SGD, apply linear scaling for learning rate:
+                    # https://arxiv.org/pdf/1706.02677.pdf
+                    if 'lr_scale' in t_cfg and t_cfg['lr_scale'] == True and t_cfg['optimizer'] == OPT_SGD:
+                        if len(utt_list) > batch_size['min']:
+                            lr_scaled = t_cfg['lr'] * (len(utt_list) / batch_size['min'])
+                            optimizer.hyperparam.lr = lr_scaled
+                        else:
+                            optimizer.hyperparam.lr = t_cfg['lr']
+
+                        out_str = "b={0:d},l={1:.2f},avg={2:.2f},lr={3:.7f}".format((b+1),loss_val,loss_per_epoch, optimizer.hyperparam.lr)
+                    # ---------------------------------------------------------
                     model.cleargrads()
                     loss.backward()
                     optimizer.update()
-                # -------------------------------------------------------------
-                out_str = "b={0:d},l={1:.2f},avg={2:.2f}".format((b+1),loss_val,loss_per_epoch)
+                    # ---------------------------------------------------------
+
                 pbar.set_description('{0:s}'.format(out_str))
             else:
                 print("no data in batch")
@@ -426,8 +441,8 @@ def check_model(cfg_path):
                                     beta2=0.999,
                                     eps=1e-08)
     else:
-        print("using Momentum SGD optimizer")
-        optimizer = optimizers.MomentumSGD(lr=t_cfg['lr'])
+        print("using SGD optimizer")
+        optimizer = optimizers.SGD(lr=t_cfg['lr'])
 
     # attach optimizer
     optimizer.setup(model)
