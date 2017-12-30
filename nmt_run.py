@@ -276,7 +276,7 @@ def feed_model(model, optimizer, m_dict, b_dict,
     # -------------------------------------------------------------------------
     utt_list_batches, total_utts = create_batches(b_dict, batch_size)
     # -------------------------------------------------------------------------
-    with tqdm(total=total_utts, ncols=120) as pbar:
+    with tqdm(total=total_utts, ncols=80) as pbar:
         for i, (utt_list, b) in enumerate(utt_list_batches):
             # -----------------------------------------------------------------
             # get batch_data

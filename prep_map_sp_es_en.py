@@ -6,6 +6,7 @@ import argparse
 import json
 import pickle
 import re
+from nltk.tokenize import word_tokenize
 program_descrp = """
 create a training data dict
 """
@@ -45,7 +46,8 @@ def basic_tokenizer(sentence):
     sentence_remove_square = _SQUARE_BRACKS.sub(b"", sentence.strip())
     sentence_remove_angle = _ANGLE_BRACKS.sub(b"", sentence_remove_square)
     for space_separated_fragment in sentence_remove_angle.split():
-        words.extend(_WORD_SUB.sub(b"", w) for w in _WORD_SPLIT.split(space_separated_fragment))
+        # words.extend(_WORD_SUB.sub(b"", w) for w in _WORD_SPLIT.split(space_separated_fragment))
+        words.extend([_WORD_SUB.sub(b"", w.encode()) for w in word_tokenize(space_separated_fragment.decode())])
     # return b" ".join([w.lower() for w in words if w])
     return [w.lower() for w in words if w]
 
@@ -202,9 +204,11 @@ def main():
     # prepare map dictionary
     map_dict = {}
     map_dict_path = os.path.join(out_path,'map.dict')
+    # map_dict_path = os.path.join(out_path,'map_nltk_tokenize.dict')
 
     rev_map_dict = {}
     rev_map_dict_path = os.path.join(out_path,'rev_map.dict')
+    # rev_map_dict_path = os.path.join(out_path,'rev_map_nltk_tokenize.dict')
 
     for cat in kaldi_segment_map:
         map_dict[cat], rev_map_dict[cat] = read_map_file(cat, kaldi_segment_map[cat], map_loc)

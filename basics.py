@@ -54,3 +54,5 @@ OPT_SGD = 1
 RNN_GRU = 0
 RNN_LSTM = 1
 RNN_SRU = 2
+
+
