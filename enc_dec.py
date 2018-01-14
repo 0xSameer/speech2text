@@ -40,6 +40,12 @@ class SpeechEncoderDecoder(Chain):
             self.v_size_es = 0
         self.v_size_en = len(vocab_dict[self.m_cfg['dec_key']]['w2i'])
         #----------------------------------------------------------------------
+        # sim dict
+        #----------------------------------------------------------------------
+        sim_dict_path = os.path.join(self.m_cfg['data_path'], 'sim.dict')
+        if os.path.exists(sim_dict_path):
+            self.sim_dict = pickle.load(open(sim_dict_path, "rb"))
+        #----------------------------------------------------------------------
 
     def add_rnn_layers(self, layer_names, in_units, out_units):
         w = chainer.initializers.HeNormal()
@@ -264,6 +270,11 @@ class SpeechEncoderDecoder(Chain):
                 ln_name = "{0:s}_ln".format(rnn_layer)
                 hs = self[ln_name](hs)
             # -----------------------------------------------------------------
+            # RELU activation
+            # -----------------------------------------------------------------
+            if 'rnn_relu' in self.m_cfg and self.m_cfg['rnn_relu'] == True:
+                hs = F.relu(hs)
+            # -----------------------------------------------------------------
         return hs
 
     def encode(self, data_in, rnn_layers):
@@ -335,8 +346,17 @@ class SpeechEncoderDecoder(Chain):
             # -----------------------------------------------------------------
             # compute loss
             # -----------------------------------------------------------------
-            loss_arr = F.softmax_cross_entropy(predicted_out, next_word,
-                                               class_weight=self.mask_pad_id)
+            if "smooth_out" in self.m_cfg and self.m_cfg["smooth_out"] == True:
+                t = xp.zeros(shape=predicted_out.shape, dtype='i')
+                for i, w in enumerate(next_word.data.tolist()):
+                    if w == PAD_ID:
+                        t[i,:] = -1
+                    else:
+                        t[i,self.sim_dict['i'][w]] = 1
+                loss_arr = F.sigmoid_cross_entropy(predicted_out, t, normalize=True)
+            else:
+                loss_arr = F.softmax_cross_entropy(predicted_out, next_word,
+                                                   class_weight=self.mask_pad_id)
             loss += loss_arr
             # -----------------------------------------------------------------
         return loss

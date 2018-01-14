@@ -68,7 +68,7 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key,
         total_matching_len += 1
         t_str = join_str.join([v_dict['i2w'][i].decode() for i in p])
         t_str = t_str[:t_str.find('_EOS')]
-        en_hyp.append(t_str.split())
+        en_hyp.append(t_str.strip().split())
 
     smooth_fun = nltk.translate.bleu_score.SmoothingFunction()
 
