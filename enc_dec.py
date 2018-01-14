@@ -354,6 +354,12 @@ class SpeechEncoderDecoder(Chain):
                     else:
                         t[i,self.sim_dict['i'][w]] = 1
                 loss_arr = F.sigmoid_cross_entropy(predicted_out, t, normalize=True)
+            elif "sample_out" in self.m_cfg and self.m_cfg["sample_out"] == True:
+                t_alt = xp.copy(next_word.data)
+                for i in range(len(t_alt)):
+                    t_alt[i] = xp.random.choice(self.sim_dict['i'][int(t_alt[i])],1)
+                loss_arr = F.softmax_cross_entropy(predicted_out, t_alt,
+                                                   class_weight=self.mask_pad_id)
             else:
                 loss_arr = F.softmax_cross_entropy(predicted_out, next_word,
                                                    class_weight=self.mask_pad_id)
