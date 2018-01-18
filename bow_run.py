@@ -5,7 +5,7 @@ from prettytable import PrettyTable
 import argparse
 import textwrap
 import nltk
-from nltk.translate.bleu_score import sentence_bleu, corpus_bleu
+from nltk.translate.bleu_score import sentence_bleu, corpus_bleu, modified_precision
 from nltk.translate.chrf_score import sentence_chrf, corpus_chrf
 import copy
 import nltk.translate.bleu_score
@@ -41,85 +41,6 @@ def get_en_words_from_list(l):
     return [w.decode() for w in l]
 
 
-def calc_bleu(m_dict, v_dict, preds, utts, dec_key,
-              weights=(0.25, 0.25, 0.25, 0.25),
-              ref_index=-1):
-    en_hyp = []
-    en_ref = []
-    ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
-    src_key = 'es_w'
-    for u in tqdm(utts, ncols=80):
-        if type(m_dict[u][ref_key]) == list:
-            en_ref.append([get_en_words_from_list(m_dict[u][ref_key])])
-        else:
-            if ref_index == -1:
-                en_r_list = []
-                for r in m_dict[u][ref_key]:
-                    en_r_list.append(get_en_words_from_list(r))
-                en_ref.append(en_r_list)
-            else:
-                en_ref.append([get_en_words_from_list(m_dict[u][ref_key][ref_index])])
-
-    join_str = ' ' if dec_key.endswith('_w') else ''
-
-    total_matching_len = 0
-
-    for u, p in zip(utts, preds):
-        total_matching_len += 1
-        if type(p) == list:
-            t_str = join_str.join([v_dict['i2w'][i].decode() for i in p])
-            t_str = t_str[:t_str.find('_EOS')]
-            en_hyp.append(t_str.strip().split())
-        else:
-            en_hyp.append("")
-
-    smooth_fun = nltk.translate.bleu_score.SmoothingFunction()
-
-    b_score_value = corpus_bleu(en_ref,
-                          en_hyp,
-                          weights=weights,
-                          smoothing_function=smooth_fun.method2)
-
-    try:
-        chrf_index = max(0, ref_index)
-        chrf_score_value = corpus_chrf([r[chrf_index] for r in en_ref], en_hyp)
-    except:
-        chrf_score_value = 0
-
-    return b_score_value, chrf_score_value, en_hyp, en_ref
-
-
-def corpus_precision_recall(r, h):
-    p_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
-    p_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
-    r_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
-    r_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
-
-    print("total utts={0:d}".format(len(r)))
-
-    for references, hypothesis in zip(r, h):
-        # For each order of ngram, calculate the numerator and
-        # denominator for the corpus-level modified precision.
-        for i, _ in enumerate((0.25,.25,.25,.25), start=1):
-            p_i, r_i = modified_precision_recall(references, hypothesis, i)
-            p_numerators[i] += p_i.numerator
-            p_denominators[i] += p_i.denominator
-
-            r_numerators[i] += r_i.numerator
-            r_denominators[i] += r_i.denominator
-
-
-    p = [(n / d) * 100 for n,d in zip(p_numerators.values(), p_denominators.values())]
-    r = [(n / d) * 100 for n,d in zip(r_numerators.values(), r_denominators.values())]
-
-    print("{0:10s} | {1:>8s} | {2:>8s}| {3:>8s} | {4:>8s}".format("metric", "1-gram","2-gram","3-gram","4-gram"))
-    print("-"*54)
-    print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("precision", *p))
-    print("{0:10s} | {1:8.2f} | {2:8.2f}| {3:8.2f} | {4:8.2f}".format("recall", *r))
-
-
-    return p, r
-
 def count_match(list1, list2):
     # each list can have repeated elements. The count should account for this.
     count1 = Counter(list1)
@@ -128,6 +49,42 @@ def count_match(list1, list2):
     common_w = set(count1.keys()) & set(count2_keys)
     matches = sum([min(count1[w], count2[w]) for w in common_w])
     return matches
+
+def basic_precision_recall(r, h, display=False):
+    p_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
+    p_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
+    r_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
+    r_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
+
+    print("total utts={0:d}".format(len(r)))
+
+    i=1
+
+    for references, hypothesis in zip(r, h):
+        p_i = modified_precision(references, hypothesis, i)
+        p_numerators[i] += p_i.numerator
+        p_denominators[i] += p_i.denominator
+
+        tot_match = 0
+        tot_count = 0
+        for curr_ref in references:
+            tot_match += count_match(curr_ref, hypothesis)
+            tot_count += len(curr_ref)
+
+        r_numerators[i] += (tot_match / len(references))
+        r_denominators[i] += (tot_count / len(references))
+
+    prec = [(n / d) * 100 for n,d in zip(p_numerators.values(), p_denominators.values())]
+    rec = [(n / d) * 100 for n,d in zip(r_numerators.values(), r_denominators.values())]
+
+    if display:
+        print("{0:10s} | {1:>8s}".format("metric", "1-gram"))
+        print("-"*54)
+        print("{0:10s} | {1:8.2f}".format("precision", *prec))
+        print("{0:10s} | {1:8.2f}".format("recall", *rec))
+
+    return prec[0], rec[0]
+
 
 def modified_precision_recall(references, hypothesis, n):
     # Extracts all ngrams in hypothesis
@@ -166,7 +123,7 @@ def modified_precision_recall(references, hypothesis, n):
 def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
                   max_enc, max_dec, input_path=''):
     batch_data = {'X':[], 't':[]}
-    batch_data['y'] = xp.zeros(shape=(len(utt_list), len(bow_dict['w2i'])))
+    batch_data['y'] = xp.zeros(shape=(len(utt_list), len(bow_dict['w2i'])), dtype="i")
     # -------------------------------------------------------------------------
     # loop through each utterance in utt list
     # -------------------------------------------------------------------------
@@ -208,13 +165,20 @@ def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
         # ---------------------------------------------------------------------
         if type(m_dict[u][y_key]) == list:
             en_ids = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]])-set(range(4)))
+            y_ids = en_ids[:max_dec]
+            batch_data['t'].append(y_ids)
         else:
             # dev and test data have multiple translations
             # choose the first one for computing perplexity
+            ref_list = []
             en_ids = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]])-set(range(4)))
-        y_ids = en_ids[:max_dec]
-        batch_data['t'].append(y_ids)
-        # batch_data['y'].append(y_ids)
+            y_ids = en_ids[:max_dec]
+            for curr_ref in m_dict[u][y_key]:
+                ref_list.append(list(set([bow_dict['w2i'].get(w, UNK_ID) for w in curr_ref])-set(range(4)))[:max_dec])
+            batch_data['t'].append(ref_list)
+        # ---------------------------------------------------------------------
+        # set labels to 1
+        # ---------------------------------------------------------------------
         batch_data['y'][i,y_ids] = 1
         batch_data['y'][i,list(range(4))] = -1
         # ---------------------------------------------------------------------
@@ -225,65 +189,6 @@ def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
         batch_data['X'] = F.pad_sequence(batch_data['X'], padding=PAD_ID)
     return batch_data
 
-
-def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
-              max_enc, max_dec, input_path=''):
-    batch_data = {'X':[], 'y':[]}
-    # -------------------------------------------------------------------------
-    # loop through each utterance in utt list
-    # -------------------------------------------------------------------------
-    for u in utt_list:
-        # ---------------------------------------------------------------------
-        #  add X data
-        # ---------------------------------------------------------------------
-        if x_key == 'sp':
-            # -----------------------------------------------------------------
-            # for speech data
-            # -----------------------------------------------------------------
-            # get path to speech file
-            utt_sp_path = os.path.join(input_path, "{0:s}.npy".format(u))
-            if not os.path.exists(utt_sp_path):
-                # for training data, there are sub-folders
-                utt_sp_path = os.path.join(input_path,
-                                           u.split('_',1)[0],
-                                           "{0:s}.npy".format(u))
-            if os.path.exists(utt_sp_path):
-                x_data = xp.load(utt_sp_path)
-                # truncate max length
-                batch_data['X'].append(x_data[:max_enc])
-            else:
-                # -------------------------------------------------------------
-                # exception if file not found
-                # -------------------------------------------------------------
-                raise FileNotFoundError("ERROR!! file not found: {0:s}".format(utt_sp_path))
-                # -------------------------------------------------------------
-        else:
-            # -----------------------------------------------------------------
-            # for text data
-            # -----------------------------------------------------------------
-            x_ids = [vocab_dict[x_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][x_key]]
-            x_ids = xp.asarray(x_ids, dtype=xp.int32)
-            batch_data['X'].append(x_ids[:max_enc])
-            # -----------------------------------------------------------------
-        # ---------------------------------------------------------------------
-        #  add labels
-        # ---------------------------------------------------------------------
-        if type(m_dict[u][y_key]) == list:
-            en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]]
-        else:
-            # dev and test data have multiple translations
-            # choose the first one for computing perplexity
-            en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]]
-        y_ids = [GO_ID] + en_ids[:max_dec-2] + [EOS_ID]
-        batch_data['y'].append(xp.asarray(y_ids, dtype=xp.int32))
-        # ---------------------------------------------------------------------
-    # -------------------------------------------------------------------------
-    # end for all utterances in batch
-    # -------------------------------------------------------------------------
-    if len(batch_data['X']) > 0 and len(batch_data['y']) > 0:
-        batch_data['X'] = F.pad_sequence(batch_data['X'], padding=PAD_ID)
-        batch_data['y'] = F.pad_sequence(batch_data['y'], padding=PAD_ID)
-    return batch_data
 
 def create_batches(b_dict, batch_size):
     num_b = b_dict['num_b']
@@ -324,13 +229,14 @@ def create_batches(b_dict, batch_size):
     return utt_list_batches, total_utts
 
 def feed_model(model, optimizer, m_dict, b_dict,
-               batch_size, vocab_dict, x_key, y_key,
+               batch_size, vocab_dict, bow_dict, x_key, y_key,
                train, input_path, max_dec, t_cfg, use_y=True):
     # number of buckets
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
     pred_sents = []
     utts = []
+    refs = []
     total_loss = 0
     loss_per_epoch = 0
     total_loss_updates= 0
@@ -346,10 +252,11 @@ def feed_model(model, optimizer, m_dict, b_dict,
             # -----------------------------------------------------------------
             # get batch_data
             # -----------------------------------------------------------------
-            batch_data = get_batch(m_dict,
+            batch_data = get_bow_batch(m_dict,
                                    x_key, y_key,
                                    utt_list,
                                    vocab_dict,
+                                   bow_dict,
                                    ((b+1) * width_b),
                                    max_dec,
                                    input_path=input_path)
@@ -362,18 +269,17 @@ def feed_model(model, optimizer, m_dict, b_dict,
                     # ---------------------------------------------------------
                     with chainer.using_config('train', train):
                         cuda.get_device(t_cfg['gpuid']).use()
-                        p, loss = model.forward(X=batch_data['X'],
+                        p, loss = model.forward_bow(X=batch_data['X'],
                                     y=batch_data['y'],
-                                    add_noise=t_cfg['speech_noise'],
-                                    teacher_ratio = t_cfg['teach_ratio'])
-                        loss_val = float(loss.data) / batch_data['y'].shape[1]
+                                    add_noise=t_cfg['speech_noise'])
+                        loss_val = float(loss.data)
                 else:
                     # ---------------------------------------------------------
                     # prediction only
                     # ---------------------------------------------------------
                     with chainer.using_config('train', False):
                         cuda.get_device(t_cfg['gpuid']).use()
-                        p, _ = model.forward(X=batch_data['X'])
+                        p, _ = model.forward_bow(X=batch_data['X'])
                         loss_val = 0.0
                 # -------------------------------------------------------------
                 # add list of utterances used
@@ -381,7 +287,8 @@ def feed_model(model, optimizer, m_dict, b_dict,
                 utts.extend(utt_list)
                 # -------------------------------------------------------------
                 if len(p) > 0:
-                    pred_sents.extend(p.tolist())
+                    pred_sents.extend(p)
+                    refs.extend(batch_data['t'])
 
                 total_loss += loss_val
                 total_loss_updates += 1
@@ -392,22 +299,11 @@ def feed_model(model, optimizer, m_dict, b_dict,
                 # train mode logic
                 # -------------------------------------------------------------
                 if train:
-                    # if SGD, apply linear scaling for learning rate:
-                    # https://arxiv.org/pdf/1706.02677.pdf
-                    if 'lr_scale' in t_cfg and t_cfg['lr_scale'] == True and t_cfg['optimizer'] == OPT_SGD:
-                        if len(utt_list) > batch_size['min']:
-                            lr_scaled = t_cfg['lr'] * (len(utt_list) / batch_size['min'])
-                            optimizer.hyperparam.lr = lr_scaled
-                        else:
-                            optimizer.hyperparam.lr = t_cfg['lr']
-
-                        out_str = "b={0:d},l={1:.2f},avg={2:.2f},lr={3:.7f}".format((b+1),loss_val,loss_per_epoch, optimizer.hyperparam.lr)
                     # ---------------------------------------------------------
                     model.cleargrads()
                     loss.backward()
                     optimizer.update()
                     # ---------------------------------------------------------
-
                 pbar.set_description('{0:s}'.format(out_str))
             else:
                 print("no data in batch")
@@ -416,7 +312,7 @@ def feed_model(model, optimizer, m_dict, b_dict,
             pbar.update(len(utt_list))
         # end for batches
     # end tqdm
-    return pred_sents, utts, loss_per_epoch
+    return pred_sents, utts, refs, loss_per_epoch
 # end feed_model
 
 # map_dict, vocab_dict, bucket_dict = get_data_dicts(model_cfg)
@@ -458,6 +354,14 @@ def get_data_dicts(m_cfg):
     bucket_dict = pickle.load(open(buckets_path, "rb"))
     print("-"*50)
     # -------------------------------------------------------------------------
+    # bag-of-words
+    # -------------------------------------------------------------------------
+    bow_dict_path = os.path.join(m_cfg['data_path'],
+                                     'train_top_K_enw.dict')
+    print("loading dict: {0:s}".format(bow_dict_path))
+    bow_dict = pickle.load(open(bow_dict_path, "rb"))
+    print("-"*50)
+    # -------------------------------------------------------------------------
     # INFORMATION
     # -------------------------------------------------------------------------
     for cat in map_dict:
@@ -473,7 +377,7 @@ def get_data_dicts(m_cfg):
     print('vocab size for {0:s} = {1:d}'.format(m_cfg['dec_key'],
                                                 vocab_size_en))
     # -------------------------------------------------------------------------
-    return map_dict, vocab_dict, bucket_dict
+    return map_dict, vocab_dict, bucket_dict, bow_dict
 
 def check_model(cfg_path):
     # -------------------------------------------------------------------------
@@ -579,7 +483,7 @@ def train_loop(cfg_path, epochs):
     # -------------------------------------------------------------------------
     # get data dictionaries
     # -------------------------------------------------------------------------
-    map_dict, vocab_dict, bucket_dict = get_data_dicts(m_cfg)
+    map_dict, vocab_dict, bucket_dict, bow_dict = get_data_dicts(m_cfg)
     # -------------------------------------------------------------------------
     # start train loop
     # -------------------------------------------------------------------------
@@ -602,11 +506,12 @@ def train_loop(cfg_path, epochs):
             # -----------------------------------------------------------------
             input_path = os.path.join(m_cfg['data_path'],
                                       m_cfg['train_set'])
-            pred_sents, utts, train_loss = feed_model(model,
+            pred_sents, utts, refs, train_loss = feed_model(model,
                                               optimizer=optimizer,
                                               m_dict=map_dict[train_key],
                                               b_dict=bucket_dict[train_key],
                                               vocab_dict=vocab_dict,
+                                              bow_dict=bow_dict,
                                               batch_size=batch_size,
                                               x_key=enc_key,
                                               y_key=dec_key,
@@ -626,32 +531,30 @@ def train_loop(cfg_path, epochs):
             # -----------------------------------------------------------------
             input_path = os.path.join(m_cfg['data_path'],
                                       m_cfg['dev_set'])
-            pred_sents, utts, dev_loss = feed_model(model,
-                                              optimizer=optimizer,
-                                              m_dict=map_dict[dev_key],
-                                              b_dict=bucket_dict[dev_key],
-                                              vocab_dict=vocab_dict,
-                                              batch_size=batch_size,
-                                              x_key=enc_key,
-                                              y_key=dec_key,
-                                              train=False,
-                                              input_path=input_path,
-                                              max_dec=m_cfg['max_en_pred'],
-                                              t_cfg=t_cfg,
-                                              use_y=True)
+            pred_sents, utts, refs, dev_loss = feed_model(model,
+                                                  optimizer=optimizer,
+                                                  m_dict=map_dict[dev_key],
+                                                  b_dict=bucket_dict[dev_key],
+                                                  vocab_dict=vocab_dict,
+                                                  bow_dict=bow_dict,
+                                                  batch_size=batch_size,
+                                                  x_key=enc_key,
+                                                  y_key=dec_key,
+                                                  train=False,
+                                                  input_path=input_path,
+                                                  max_dec=m_cfg['max_en_pred'],
+                                                  t_cfg=t_cfg,
+                                                  use_y=True)
 
-            dev_b_score, chr_f_score, _, _ = calc_bleu(map_dict[dev_key],
-                                                       vocab_dict[dec_key],
-                                                       pred_sents, utts,
-                                                       dec_key)
+            prec, rec = basic_precision_recall(refs, pred_sents)
 
             # log dev loss
-            dev_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1, dev_loss, dev_b_score, chr_f_score))
+            dev_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1, dev_loss, prec, rec))
             dev_log.flush()
             os.fsync(dev_log.fileno())
 
             print("^"*80)
-            print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}, dev bleu={3:.4f}".format("*" * 10, train_loss, dev_loss, dev_b_score))
+            print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}, dev prec={3:.3f}, dev recall={4:.3f}".format("*" * 10, train_loss, dev_loss, prec, rec))
             print("^"*80)
             # -----------------------------------------------------------------
             # save model
