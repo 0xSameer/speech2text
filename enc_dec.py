@@ -59,6 +59,8 @@ class SpeechEncoderDecoder(Chain):
         if os.path.exists(bow_dict_path):
             self.bow_dict = pickle.load(open(bow_dict_path, "rb"))
             self.bag_size_en = len(self.bow_dict['w2i'])
+        else:
+            print("bag-of-words data not found")
         #----------------------------------------------------------------------
 
     def add_rnn_layers(self, layer_names, in_units, out_units):
@@ -391,20 +393,18 @@ class SpeechEncoderDecoder(Chain):
                         t[i,self.sim_dict['i'][w]] = 1
                 loss_arr = F.sigmoid_cross_entropy(predicted_out, t, normalize=True)
             elif "sample_out" in self.m_cfg and self.m_cfg["sample_out"] == True:
-                use_sample = True if random.random() > self.m_cfg["sample_out_prob"] else False
-                if use_sample:
-                    decoder_input = curr_word
-                    t_alt = xp.copy(next_word.data)
-                    for i in range(len(t_alt)):
+                t_alt = xp.copy(next_word.data)
+                # sample and replace each element in the batch
+                for i in range(len(t_alt)):
+                    # use_sample = True if random.random() > self.m_cfg["sample_out_prob"] else False
+                    if random.random() > self.m_cfg["sample_out_prob"]:
                         t_alt[i] = xp.random.choice(self.sim_dict['i'][int(t_alt[i])],1)
-                    loss_arr = F.softmax_cross_entropy(predicted_out, t_alt,
-                                                       class_weight=self.mask_pad_id)
-                else:
-                    loss_arr = F.softmax_cross_entropy(predicted_out, next_word,
-                                                   class_weight=self.mask_pad_id)
+
+                loss_arr = F.softmax_cross_entropy(predicted_out, t_alt,
+                                               class_weight=self.mask_pad_id)
             else:
                 loss_arr = F.softmax_cross_entropy(predicted_out, next_word,
-                                                   class_weight=self.mask_pad_id)
+                                               class_weight=self.mask_pad_id)
             loss += loss_arr
             # -----------------------------------------------------------------
         return loss
@@ -471,10 +471,13 @@ class SpeechEncoderDecoder(Chain):
     def decode_bow_batch(self, decoder_batch):
         xp = cuda.cupy if self.gpuid >= 0 else np
 
-        # get final rnn state
-        final_rnn_state = self.enc_states[:,-1,:]
+        # use final rnn state for both fwd and rev (if configured) rnns
+        if self.m_cfg['out_dropout'] > 0:
+            out_h = F.dropout(self.out_1(self.h_final_rnn),
+                                      ratio=self.m_cfg['out_dropout'])
+        else:
+            out_h = self.out_1(self.h_final_rnn)
 
-        out_h = self.out_1(final_rnn_state)
         predicted_out = self.out_2(F.sigmoid(out_h))
 
         loss = F.sigmoid_cross_entropy(predicted_out, decoder_batch, normalize=True)
@@ -483,10 +486,6 @@ class SpeechEncoderDecoder(Chain):
 
     def predict_bow_batch(self, batch_size, pred_limit, y=None, display=False):
         xp = cuda.cupy if self.gpuid >= 0 else np
-
-        # get final rnn state
-        final_rnn_state = self.enc_states[:,-1,:]
-
         # to store loss
         loss = 0
         # if labels are provided, use them for computing loss
@@ -494,7 +493,7 @@ class SpeechEncoderDecoder(Chain):
         pred_words = []
         # ---------------------------------------------------------------------
         # decode and predict
-        out_h = self.out_1(final_rnn_state)
+        out_h = self.out_1(self.h_final_rnn)
         predicted_out = self.out_2(F.sigmoid(out_h))
 
         for row in predicted_out.data:
@@ -559,21 +558,16 @@ class SpeechEncoderDecoder(Chain):
         # ---------------------------------------------------------------------
         in_size, batch_size, in_dim = X.shape
         for i in range(in_size):
-            if "bagofwords" not in self.m_cfg or self.m_cfg['bagofwords'] == False:
-                if i > 0:
-                    h_fwd = F.concat((h_fwd,
-                                      F.expand_dims(self.encode(X[i],
-                                        self.rnn_enc), 0)),
+            if i > 0:
+                h_fwd = F.concat((h_fwd,
+                                  F.expand_dims(self.encode(X[i],
+                                    self.rnn_enc), 0)),
+                                  axis=0)
+                if self.m_cfg['bi_rnn']:
+                    h_rev = F.concat((h_rev,
+                                      F.expand_dims(self.encode(X[-i],
+                                        self.rnn_rev_enc), 0)),
                                       axis=0)
-                    if self.m_cfg['bi_rnn']:
-                        h_rev = F.concat((h_rev,
-                                          F.expand_dims(self.encode(X[-i],
-                                            self.rnn_rev_enc), 0)),
-                                          axis=0)
-                else:
-                    h_fwd = F.expand_dims(self.encode(X[i], self.rnn_enc), 0)
-                    if self.m_cfg['bi_rnn']:
-                        h_rev = F.expand_dims(self.encode(X[-i], self.rnn_rev_enc), 0)
             else:
                 h_fwd = F.expand_dims(self.encode(X[i], self.rnn_enc), 0)
                 if self.m_cfg['bi_rnn']:
@@ -587,6 +581,23 @@ class SpeechEncoderDecoder(Chain):
         # ---------------------------------------------------------------------
         self.enc_states = F.swapaxes(self.enc_states, 0, 1)
         # ---------------------------------------------------------------------
+
+    def forward_bow_rnn(self, X):
+        # ---------------------------------------------------------------------
+        # reset rnn state
+        # ---------------------------------------------------------------------
+        self.reset_state()
+        # ---------------------------------------------------------------------
+        in_size, batch_size, in_dim = X.shape
+        for i in range(in_size):
+            h_fwd = F.expand_dims(self.encode(X[i], self.rnn_enc), 0)
+            if self.m_cfg['bi_rnn']:
+                h_rev = F.expand_dims(self.encode(X[-i], self.rnn_rev_enc), 0)
+        # ---------------------------------------------------------------------
+        self.h_final_rnn = self[self.rnn_enc[-1]].h.data
+        if self.m_cfg['bi_rnn']:
+            h_rev = self[self.rnn_rev_enc[-1]].h.data
+            self.h_final_rnn = F.concat((self.h_final_rnn, h_rev), axis=1)
 
     def forward_enc(self, X):
         if self.m_cfg['enc_key'] != 'sp':
@@ -605,7 +616,10 @@ class SpeechEncoderDecoder(Chain):
         # ---------------------------------------------------------------------
         # call rnn logic
         # ---------------------------------------------------------------------
-        self.forward_rnn(h)
+        if "bagofwords" not in self.m_cfg or self.m_cfg['bagofwords'] == False:
+            self.forward_rnn(h)
+        else:
+            self.forward_bow_rnn(h)
         # ---------------------------------------------------------------------
 
     def forward(self, X, add_noise=0, teacher_ratio=0, y=None):
@@ -701,6 +715,7 @@ class SpeechEncoderDecoder(Chain):
         xp = cuda.cupy if self.gpuid >= 0 else np
         # W_shape = self[rnn_layer].W.W.shape
         # b_shape = self[rnn_layer].W.b.shape
+
         rnn_params = ["W", "W_r", "W_z", "U", "U_r", "U_z"]
         for p in rnn_params:
             # add noise to W
@@ -715,11 +730,42 @@ class SpeechEncoderDecoder(Chain):
             self[rnn_layer][p].W.data = self[rnn_layer][p].W.data + s_w
             self[rnn_layer][p].b.data = self[rnn_layer][p].b.data + s_b
 
+
+    def add_lstm_weight_noise(self, rnn_layer, mu, sigma):
+        xp = cuda.cupy if self.gpuid >= 0 else np
+        # W_shape = self[rnn_layer].W.W.shape
+        # b_shape = self[rnn_layer].W.b.shape
+        rnn_params = ["upward", "lateral"]
+        for p in rnn_params:
+            # add noise to W
+            s_w = xp.random.normal(mu,
+                                   sigma,
+                                   self[rnn_layer][p].W.shape,
+                                   dtype=xp.float32)
+
+            self[rnn_layer][p].W.data = self[rnn_layer][p].W.data + s_w
+
+            if p == "upward":
+                s_b = xp.random.normal(mu,
+                                       sigma,
+                                       self[rnn_layer][p].b.shape,
+                                       dtype=xp.float32)
+                self[rnn_layer][p].b.data = self[rnn_layer][p].b.data + s_b
+
     def add_weight_noise(self, mu, sigma):
         xp = cuda.cupy if self.gpuid >= 0 else np
         # add noise to rnn weights
-        for rnn_layer in self.rnn_enc + self.rnn_dec:
-            self.add_gru_weight_noise(rnn_layer, mu, sigma)
+        if self.m_cfg['bi_rnn']:
+            rnn_layers = self.rnn_enc + self.rnn_rev_enc + self.rnn_dec
+        else:
+            rnn_layers = self.rnn_enc + self.rnn_dec
+
+        for rnn_layer in rnn_layers:
+            if self.m_cfg['rnn_unit'] == RNN_GRU:
+                self.add_gru_weight_noise(rnn_layer, mu, sigma)
+            else:
+                self.add_lstm_weight_noise(rnn_layer, mu, sigma)
+
         # add noise to decoder embeddings
         self.embed_dec.W.data = (self.embed_dec.W.data +
                                    xp.random.normal(mu,
