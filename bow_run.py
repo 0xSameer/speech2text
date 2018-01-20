@@ -122,8 +122,7 @@ def modified_precision_recall(references, hypothesis, n):
 
 def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
                   max_enc, max_dec, input_path=''):
-    batch_data = {'X':[], 't':[]}
-    batch_data['y'] = xp.zeros(shape=(len(utt_list), len(bow_dict['w2i'])), dtype="i")
+    batch_data = {'X':[], 't':[], 'y':[]}
     # -------------------------------------------------------------------------
     # loop through each utterance in utt list
     # -------------------------------------------------------------------------
@@ -143,9 +142,7 @@ def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
                                            u.split('_',1)[0],
                                            "{0:s}.npy".format(u))
             if os.path.exists(utt_sp_path):
-                x_data = xp.load(utt_sp_path)
-                # truncate max length
-                batch_data['X'].append(x_data[:max_enc])
+                x_data = xp.load(utt_sp_path)[:max_enc]
             else:
                 # -------------------------------------------------------------
                 # exception if file not found
@@ -165,28 +162,26 @@ def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
         # ---------------------------------------------------------------------
         if type(m_dict[u][y_key]) == list:
             en_ids = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]])-set(range(4)))
-            y_ids = en_ids[:max_dec]
-            batch_data['t'].append(y_ids)
         else:
             # dev and test data have multiple translations
             # choose the first one for computing perplexity
-            ref_list = []
             en_ids = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]])-set(range(4)))
-            y_ids = en_ids[:max_dec]
-            for curr_ref in m_dict[u][y_key]:
-                ref_list.append(list(set([bow_dict['w2i'].get(w, UNK_ID) for w in curr_ref])-set(range(4)))[:max_dec])
-            batch_data['t'].append(ref_list)
+        y_ids = en_ids[:max_dec]
         # ---------------------------------------------------------------------
-        # set labels to 1
-        # ---------------------------------------------------------------------
-        batch_data['y'][i,y_ids] = 1
-        batch_data['y'][i,list(range(4))] = -1
-        # ---------------------------------------------------------------------
+        if len(x_data) > 0 and len(y_ids) > 0:
+            batch_data['X'].append(x_data)
+            batch_data['t'].append(y_ids)
+            y_data = xp.zeros(len(bow_dict['w2i']), dtype=xp.int32)
+            y_data[y_ids] = 1
+            y_data[list(range(4))] = -1
+            batch_data['y'].append(y_data)
+
     # -------------------------------------------------------------------------
     # end for all utterances in batch
     # -------------------------------------------------------------------------
     if len(batch_data['X']) > 0 and len(batch_data['y']) > 0:
         batch_data['X'] = F.pad_sequence(batch_data['X'], padding=PAD_ID)
+        batch_data['y'] = F.pad_sequence(batch_data['y'], padding=PAD_ID)
     return batch_data
 
 

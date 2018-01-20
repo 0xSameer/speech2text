@@ -501,7 +501,7 @@ class SpeechEncoderDecoder(Chain):
             if len(pred_inds) > pred_limit:
                 pred_inds = xp.argsort(row)[-pred_limit:][::-1]
             #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
-            pred_words.append(pred_inds.tolist())
+            pred_words.append([i for i in pred_inds.tolist() if i > 3])
 
         # -----------------------------------------------------------------
         if compute_loss:
