@@ -154,8 +154,7 @@ def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
             # for text data
             # -----------------------------------------------------------------
             x_ids = [vocab_dict[x_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][x_key]]
-            x_ids = xp.asarray(x_ids, dtype=xp.int32)
-            batch_data['X'].append(x_ids[:max_enc])
+            x_data = xp.asarray(x_ids, dtype=xp.int32)[:max_enc]
             # -----------------------------------------------------------------
         # ---------------------------------------------------------------------
         #  add labels
@@ -170,7 +169,7 @@ def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
         # ---------------------------------------------------------------------
         if len(x_data) > 0 and len(y_ids) > 0:
             batch_data['X'].append(x_data)
-            batch_data['t'].append(y_ids)
+            batch_data['t'].append([y_ids])
             y_data = xp.zeros(len(bow_dict['w2i']), dtype=xp.int32)
             y_data[y_ids] = 1
             y_data[list(range(4))] = -1
@@ -515,8 +514,12 @@ def train_loop(cfg_path, epochs):
                                               max_dec=m_cfg['max_en_pred'],
                                               t_cfg=t_cfg,
                                               use_y=True)
+            train_prec, train_rec = basic_precision_recall(refs, pred_sents)
             # log train loss
-            train_log.write("{0:d}, {1:.4f}\n".format(last_epoch+i+1, train_loss))
+            train_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1,
+                                                                 train_loss,
+                                                                 train_prec,
+                                                                 train_rec))
             train_log.flush()
             os.fsync(train_log.fileno())
             # -----------------------------------------------------------------
@@ -549,7 +552,9 @@ def train_loop(cfg_path, epochs):
             os.fsync(dev_log.fileno())
 
             print("^"*80)
-            print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}, dev prec={3:.3f}, dev recall={4:.3f}".format("*" * 10, train_loss, dev_loss, prec, rec))
+            print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}".format("*" * 10, train_loss, dev_loss))
+            print("^"*80)
+            print("{0:s} train: prec={1:.3f}, recall={2:.3f} ----- dev: prec={3:.3f}, recall={4:.3f}".format("*" * 10, train_prec, train_rec, prec, rec))
             print("^"*80)
             # -----------------------------------------------------------------
             # save model

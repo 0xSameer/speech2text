@@ -142,11 +142,25 @@ def main():
     print("-"*50)
     train_top_K_enw = get_top_K_vocab_units(map_dict["fisher_train"],
                                              "en_w",
-                                             K=1000)
+                                             K=100)
     train_top_K_enw_path = os.path.join(out_path,'train_top_K_enw.dict')
     print("-"*50)
     print("saving vocab dict in: {0:s}".format(train_top_K_enw_path))
     pickle.dump(train_top_K_enw, open(train_top_K_enw_path, "wb"))
+
+    print("-"*50)
+    train_lim_vocab_enw = {
+                    "es_w" : get_top_K_vocab_units(map_dict["fisher_train"],
+                                                                     "es_w",
+                                                                     K=5000),
+                    "en_w" : get_top_K_vocab_units(map_dict["fisher_train"],
+                                                                     "en_w",
+                                                                     K=5000)
+                          }
+    train_lim_vocab_enw_path = os.path.join(out_path,'train_reduced_vocab_enw.dict')
+    print("-"*50)
+    print("saving vocab dict in: {0:s}".format(train_lim_vocab_enw_path))
+    pickle.dump(train_lim_vocab_enw, open(train_lim_vocab_enw_path, "wb"))
 
     # train_stemmed_vocab_dict = create_vocab(map_dict["fisher_train"],
     #                                         stemmify=True)

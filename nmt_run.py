@@ -5,7 +5,7 @@ from prettytable import PrettyTable
 import argparse
 import textwrap
 import nltk
-from nltk.translate.bleu_score import sentence_bleu, corpus_bleu
+from nltk.translate.bleu_score import sentence_bleu, corpus_bleu, modified_precision
 from nltk.translate.chrf_score import sentence_chrf, corpus_chrf
 import copy
 import nltk.translate.bleu_score
@@ -39,7 +39,6 @@ xp = cuda.cupy
 # -----------------------------------------------------------------------------
 def get_en_words_from_list(l):
     return [w.decode() for w in l]
-
 
 def calc_bleu(m_dict, v_dict, preds, utts, dec_key,
               weights=(0.25, 0.25, 0.25, 0.25),
@@ -163,68 +162,6 @@ def modified_precision_recall(references, hypothesis, n):
 
     return prec, rec
 
-def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
-                  max_enc, max_dec, input_path=''):
-    batch_data = {'X':[], 't':[]}
-    batch_data['y'] = xp.zeros(shape=(len(utt_list), len(bow_dict['w2i'])))
-    # -------------------------------------------------------------------------
-    # loop through each utterance in utt list
-    # -------------------------------------------------------------------------
-    for i, u in enumerate(utt_list):
-        # ---------------------------------------------------------------------
-        #  add X data
-        # ---------------------------------------------------------------------
-        if x_key == 'sp':
-            # -----------------------------------------------------------------
-            # for speech data
-            # -----------------------------------------------------------------
-            # get path to speech file
-            utt_sp_path = os.path.join(input_path, "{0:s}.npy".format(u))
-            if not os.path.exists(utt_sp_path):
-                # for training data, there are sub-folders
-                utt_sp_path = os.path.join(input_path,
-                                           u.split('_',1)[0],
-                                           "{0:s}.npy".format(u))
-            if os.path.exists(utt_sp_path):
-                x_data = xp.load(utt_sp_path)
-                # truncate max length
-                batch_data['X'].append(x_data[:max_enc])
-            else:
-                # -------------------------------------------------------------
-                # exception if file not found
-                # -------------------------------------------------------------
-                raise FileNotFoundError("ERROR!! file not found: {0:s}".format(utt_sp_path))
-                # -------------------------------------------------------------
-        else:
-            # -----------------------------------------------------------------
-            # for text data
-            # -----------------------------------------------------------------
-            x_ids = [vocab_dict[x_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][x_key]]
-            x_ids = xp.asarray(x_ids, dtype=xp.int32)
-            batch_data['X'].append(x_ids[:max_enc])
-            # -----------------------------------------------------------------
-        # ---------------------------------------------------------------------
-        #  add labels
-        # ---------------------------------------------------------------------
-        if type(m_dict[u][y_key]) == list:
-            en_ids = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]])-set(range(4)))
-        else:
-            # dev and test data have multiple translations
-            # choose the first one for computing perplexity
-            en_ids = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]])-set(range(4)))
-        y_ids = en_ids[:max_dec]
-        batch_data['t'].append(y_ids)
-        # batch_data['y'].append(y_ids)
-        batch_data['y'][i,y_ids] = 1
-        batch_data['y'][i,list(range(4))] = -1
-        # ---------------------------------------------------------------------
-    # -------------------------------------------------------------------------
-    # end for all utterances in batch
-    # -------------------------------------------------------------------------
-    if len(batch_data['X']) > 0 and len(batch_data['y']) > 0:
-        batch_data['X'] = F.pad_sequence(batch_data['X'], padding=PAD_ID)
-    return batch_data
-
 
 def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
               max_enc, max_dec, input_path=''):
@@ -248,9 +185,7 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
                                            u.split('_',1)[0],
                                            "{0:s}.npy".format(u))
             if os.path.exists(utt_sp_path):
-                x_data = xp.load(utt_sp_path)
-                # truncate max length
-                batch_data['X'].append(x_data[:max_enc])
+                x_data = xp.load(utt_sp_path)[:max_enc]
             else:
                 # -------------------------------------------------------------
                 # exception if file not found
@@ -262,8 +197,7 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
             # for text data
             # -----------------------------------------------------------------
             x_ids = [vocab_dict[x_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][x_key]]
-            x_ids = xp.asarray(x_ids, dtype=xp.int32)
-            batch_data['X'].append(x_ids[:max_enc])
+            x_data = xp.asarray(x_ids, dtype=xp.int32)[:max_enc]
             # -----------------------------------------------------------------
         # ---------------------------------------------------------------------
         #  add labels
@@ -275,8 +209,10 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
             # choose the first one for computing perplexity
             en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]]
         y_ids = [GO_ID] + en_ids[:max_dec-2] + [EOS_ID]
-        batch_data['y'].append(xp.asarray(y_ids, dtype=xp.int32))
         # ---------------------------------------------------------------------
+        if len(x_data) > 0 and len(y_ids) > 0:
+            batch_data['X'].append(x_data)
+            batch_data['y'].append(xp.asarray(y_ids, dtype=xp.int32))
     # -------------------------------------------------------------------------
     # end for all utterances in batch
     # -------------------------------------------------------------------------

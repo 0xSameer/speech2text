@@ -217,13 +217,19 @@ class SpeechEncoderDecoder(Chain):
             # -----------------------------------------------------------------
             # add bag-of-words output layer
             # -----------------------------------------------------------------
-            h_units = self.m_cfg['hidden_units']
             if self.m_cfg['bi_rnn']:
-                self.add_link("out_1", L.Linear(2*h_units, 2*h_units))
-                self.add_link("out_2", L.Linear(2*h_units, self.bag_size_en))
+                h_units = self.m_cfg['hidden_units'] * 2
             else:
-                self.add_link("out_1", L.Linear(h_units, h_units))
-                self.add_link("out_2", L.Linear(h_units, self.bag_size_en))
+                h_units = self.m_cfg['hidden_units']
+
+            # Add highway layers for classification
+            self.highway = []
+            for i in range(self.m_cfg["highway_layers"]):
+                lname = "HIGHWAY_{0:d}".format(i)
+                self.highway.append(lname)
+                self.add_link(lname, L.Highway(h_units))
+            # Add final prediction layer
+            self.add_link("out", L.Linear(h_units, self.bag_size_en))
             # -----------------------------------------------------------------
 
 
@@ -316,11 +322,7 @@ class SpeechEncoderDecoder(Chain):
         return hs
 
     def encode(self, data_in, rnn_layers):
-        if self.m_cfg['highway_layers'] > 0:
-            h = self.forward_highway(data_in)
-            h = self.feed_rnn(h, rnn_layers)
-        else:
-            h = self.feed_rnn(data_in, rnn_layers)
+        h = self.feed_rnn(data_in, rnn_layers)
         return h
 
     def decode(self, word, ht):
@@ -468,21 +470,34 @@ class SpeechEncoderDecoder(Chain):
             # -----------------------------------------------------------------
         return pred_sents.T, loss
 
-    def decode_bow_batch(self, decoder_batch):
+    def decode_bow_batch(self, y):
         xp = cuda.cupy if self.gpuid >= 0 else np
-
         # use final rnn state for both fwd and rev (if configured) rnns
-        if self.m_cfg['out_dropout'] > 0:
-            out_h = F.dropout(self.out_1(self.h_final_rnn),
-                                      ratio=self.m_cfg['out_dropout'])
-        else:
-            out_h = self.out_1(self.h_final_rnn)
 
-        predicted_out = self.out_2(F.sigmoid(out_h))
+        if self.m_cfg['highway_layers'] > 0:
+            highway_h = self.forward_highway(self.h_final_rnn)
 
-        loss = F.sigmoid_cross_entropy(predicted_out, decoder_batch, normalize=True)
+        predicted_out = self.out(highway_h)
+
+        loss = F.sigmoid_cross_entropy(predicted_out, y, reduce="no")
+
+        loss_weights = xp.ones(shape=y.data.shape, dtype="f")
+        loss_weights[y.data < 0] = 0
+        loss_weights[y.data == 0] = self.m_cfg["negative_weight"]
+        loss_weights[y.data > 0] = self.m_cfg["positive_weight"]
+        #loss_avg = F.average(F.sigmoid_cross_entropy(predicted_out, y, normalize=True, reduce='no'), weights=loss_weights)
+        loss_avg = F.mean(loss_weights * loss)
         # ---------------------------------------------------------------------
-        return loss
+        pred_words = []
+        pred_limit = self.m_cfg['max_en_pred']
+        for row in predicted_out.data:
+            pred_inds = xp.where(row >= self.m_cfg["pred_thresh"])[0]
+            if len(pred_inds) > pred_limit:
+                pred_inds = xp.argsort(row)[-pred_limit:][::-1]
+            #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
+            pred_words.append([i for i in pred_inds.tolist() if i > 3])
+
+        return pred_words, loss_avg
 
     def predict_bow_batch(self, batch_size, pred_limit, y=None, display=False):
         xp = cuda.cupy if self.gpuid >= 0 else np
@@ -493,11 +508,13 @@ class SpeechEncoderDecoder(Chain):
         pred_words = []
         # ---------------------------------------------------------------------
         # decode and predict
-        out_h = self.out_1(self.h_final_rnn)
-        predicted_out = self.out_2(F.sigmoid(out_h))
+        if self.m_cfg['highway_layers'] > 0:
+            highway_h = self.forward_highway(self.h_final_rnn)
+
+        predicted_out = self.out(highway_h)
 
         for row in predicted_out.data:
-            pred_inds = xp.where(row >= 0)[0]
+            pred_inds = xp.where(row >= self.m_cfg["pred_thresh"])[0]
             if len(pred_inds) > pred_limit:
                 pred_inds = xp.argsort(row)[-pred_limit:][::-1]
             #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
@@ -506,9 +523,16 @@ class SpeechEncoderDecoder(Chain):
         # -----------------------------------------------------------------
         if compute_loss:
             # compute loss
-            loss = F.sigmoid_cross_entropy(predicted_out, y, normalize=True)
+            loss = F.sigmoid_cross_entropy(predicted_out, y, reduce="no")
+
+            loss_weights = xp.ones(shape=y.data.shape, dtype="f")
+            loss_weights[y.data < 0] = 0
+            loss_weights[y.data == 0] = self.m_cfg["negative_weight"]
+            loss_weights[y.data > 0] = self.m_cfg["positive_weight"]
+            #loss_avg = F.average(F.sigmoid_cross_entropy(predicted_out, y, normalize=True, reduce='no'), weights=loss_weights)
+            loss_avg = F.mean(loss_weights * loss)
         # -----------------------------------------------------------------
-        return pred_words, loss
+        return pred_words, loss_avg
 
     def forward_deep_cnn(self, h):
         # ---------------------------------------------------------------------
@@ -544,8 +568,8 @@ class SpeechEncoderDecoder(Chain):
 
     def forward_highway(self, X):
         for i in range(len(self.highway)):
-            if self.m_cfg['rnn_dropout'] > 0:
-                h = F.dropout(self[self.highway[i]](X), ratio=self.m_cfg['rnn_dropout'])
+            if self.m_cfg['highway_dropout'] > 0:
+                h = F.dropout(self[self.highway[i]](X), ratio=self.m_cfg['highway_dropout'])
             else:
                 h = self[self.highway[i]](X)
         return h
@@ -697,10 +721,11 @@ class SpeechEncoderDecoder(Chain):
             # -------------------------------------------------------------
             # decode
             # -------------------------------------------------------------
-            self.loss = self.decode_bow_batch(y)
+            # self.loss = self.decode_bow_batch(y)
             # -------------------------------------------------------------
             # make return statements consistent
-            return [], self.loss
+            # return [], self.loss
+            return(self.decode_bow_batch(y))
         else:
             # -------------------------------------------------------------
             # predict
