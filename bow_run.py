@@ -45,7 +45,8 @@ def count_match(list1, list2):
     # each list can have repeated elements. The count should account for this.
     count1 = Counter(list1)
     count2 = Counter(list2)
-    count2_keys = count2.keys()-set([UNK_ID, EOS_ID])
+    # count2_keys = count2.keys()-set([UNK_ID, EOS_ID])
+    count2_keys = count2.keys()
     common_w = set(count1.keys()) & set(count2_keys)
     matches = sum([min(count1[w], count2[w]) for w in common_w])
     return matches
@@ -67,15 +68,27 @@ def basic_precision_recall(r, h, display=False):
 
         tot_match = 0
         tot_count = 0
+
+        max_recall_match = 0
+        max_recall_count = 0
+        max_recall = 0
+
         for curr_ref in references:
-            tot_match += count_match(curr_ref, hypothesis)
-            tot_count += len(curr_ref)
+            curr_match = count_match(curr_ref, hypothesis)
 
-        r_numerators[i] += (tot_match / len(references))
-        r_denominators[i] += (tot_count / len(references))
+            curr_count = len(curr_ref)
+            curr_recall = curr_match / curr_count if curr_count > 0 else 0
 
-    prec = [(n / d) * 100 for n,d in zip(p_numerators.values(), p_denominators.values())]
-    rec = [(n / d) * 100 for n,d in zip(r_numerators.values(), r_denominators.values())]
+            if curr_recall > max_recall:
+                max_recall_match = curr_match
+                max_recall_count = curr_count
+                max_recall = curr_recall
+
+        r_numerators[i] += max_recall_match
+        r_denominators[i] += max_recall_count
+
+    prec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(p_numerators.values(), p_denominators.values())]
+    rec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(r_numerators.values(), r_denominators.values())]
 
     if display:
         print("{0:10s} | {1:>8s}".format("metric", "1-gram"))
@@ -120,9 +133,19 @@ def modified_precision_recall(references, hypothesis, n):
 
     return prec, rec
 
+
+def get_pred_words_from_probs(probs, thresh_vals, pred_limit):
+    pred_words = []
+    for row in F.sigmoid(probs).data:
+        pred_inds = xp.where(row >= thresh_vals)[0]
+        if len(pred_inds) > pred_limit:
+            pred_inds = xp.argsort(row)[-pred_limit:][::-1]
+        pred_words.append([i for i in pred_inds.tolist() if i > 3])
+    return pred_words
+
 def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
                   max_enc, max_dec, input_path=''):
-    batch_data = {'X':[], 't':[], 'y':[]}
+    batch_data = {'X':[], 't':[], 'y':[], 'r':[]}
     # -------------------------------------------------------------------------
     # loop through each utterance in utt list
     # -------------------------------------------------------------------------
@@ -161,19 +184,28 @@ def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
         # ---------------------------------------------------------------------
         if type(m_dict[u][y_key]) == list:
             en_ids = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]])-set(range(4)))
+            r_data = [en_ids[:max_dec]]
+
         else:
             # dev and test data have multiple translations
             # choose the first one for computing perplexity
             en_ids = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]])-set(range(4)))
+            r_data = []
+            for r in m_dict[u][y_key]:
+                r_list = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in r])-set(range(4)))
+                r_data.append(r_list[:max_dec])
+
         y_ids = en_ids[:max_dec]
         # ---------------------------------------------------------------------
-        if len(x_data) > 0 and len(y_ids) > 0:
+        if len(x_data) > 0:
+            #  and len(y_ids) > 0
             batch_data['X'].append(x_data)
             batch_data['t'].append([y_ids])
             y_data = xp.zeros(len(bow_dict['w2i']), dtype=xp.int32)
             y_data[y_ids] = 1
             y_data[list(range(4))] = -1
             batch_data['y'].append(y_data)
+            batch_data['r'].append(r_data)
 
     # -------------------------------------------------------------------------
     # end for all utterances in batch
@@ -228,9 +260,8 @@ def feed_model(model, optimizer, m_dict, b_dict,
     # number of buckets
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
-    pred_sents = []
-    utts = []
-    refs = []
+    utts = {"ids": [], "preds": [], "probs": [], "refs": []}
+
     total_loss = 0
     loss_per_epoch = 0
     total_loss_updates= 0
@@ -263,7 +294,7 @@ def feed_model(model, optimizer, m_dict, b_dict,
                     # ---------------------------------------------------------
                     with chainer.using_config('train', train):
                         cuda.get_device(t_cfg['gpuid']).use()
-                        p, loss = model.forward_bow(X=batch_data['X'],
+                        p_words, loss, p_probs = model.forward_bow(X=batch_data['X'],
                                     y=batch_data['y'],
                                     add_noise=t_cfg['speech_noise'])
                         loss_val = float(loss.data)
@@ -273,16 +304,21 @@ def feed_model(model, optimizer, m_dict, b_dict,
                     # ---------------------------------------------------------
                     with chainer.using_config('train', False):
                         cuda.get_device(t_cfg['gpuid']).use()
-                        p, _ = model.forward_bow(X=batch_data['X'])
+                        p_words, _, p_probs = model.forward_bow(X=batch_data['X'])
                         loss_val = 0.0
                 # -------------------------------------------------------------
                 # add list of utterances used
                 # -------------------------------------------------------------
-                utts.extend(utt_list)
+                for u, pred, prob, ref in zip(utt_list, p_words, p_probs, batch_data['r']):
+                    utts['ids'].append(u)
+                    utts["preds"].append(pred)
+                    utts["probs"].append(prob)
+                    utts["refs"].append(ref)
+                # utts.extend(utt_list)
                 # -------------------------------------------------------------
-                if len(p) > 0:
-                    pred_sents.extend(p)
-                    refs.extend(batch_data['t'])
+                # if len(p) > 0:
+                #     pred_sents.extend(p)
+                #     refs.extend(batch_data['t'])
 
                 total_loss += loss_val
                 total_loss_updates += 1
@@ -306,7 +342,9 @@ def feed_model(model, optimizer, m_dict, b_dict,
             pbar.update(len(utt_list))
         # end for batches
     # end tqdm
-    return pred_sents, utts, refs, loss_per_epoch
+    # return pred_sents, utts, refs, loss_per_epoch
+    utts["probs"] = F.pad_sequence(utts["probs"]).data
+    return utts, loss_per_epoch
 # end feed_model
 
 # map_dict, vocab_dict, bucket_dict = get_data_dicts(model_cfg)
@@ -500,21 +538,38 @@ def train_loop(cfg_path, epochs):
             # -----------------------------------------------------------------
             input_path = os.path.join(m_cfg['data_path'],
                                       m_cfg['train_set'])
-            pred_sents, utts, refs, train_loss = feed_model(model,
-                                              optimizer=optimizer,
-                                              m_dict=map_dict[train_key],
-                                              b_dict=bucket_dict[train_key],
-                                              vocab_dict=vocab_dict,
-                                              bow_dict=bow_dict,
-                                              batch_size=batch_size,
-                                              x_key=enc_key,
-                                              y_key=dec_key,
-                                              train=True,
-                                              input_path=input_path,
-                                              max_dec=m_cfg['max_en_pred'],
-                                              t_cfg=t_cfg,
-                                              use_y=True)
-            train_prec, train_rec = basic_precision_recall(refs, pred_sents)
+            train_utts, train_loss = feed_model(model,
+                                          optimizer=optimizer,
+                                          m_dict=map_dict[train_key],
+                                          b_dict=bucket_dict[train_key],
+                                          vocab_dict=vocab_dict,
+                                          bow_dict=bow_dict,
+                                          batch_size=batch_size,
+                                          x_key=enc_key,
+                                          y_key=dec_key,
+                                          train=True,
+                                          input_path=input_path,
+                                          max_dec=m_cfg['max_en_pred'],
+                                          t_cfg=t_cfg,
+                                          use_y=True)
+
+            mean_pos_scores = xp.array([0.0 for i in bow_dict["i2w"]], dtype="f")
+            mean_neg_scores = xp.array([0.0 for i in bow_dict["i2w"]], dtype="f")
+
+
+            for i in range(4, len(bow_dict["i2w"])):
+                this_word = bow_dict["i2w"][i]
+                pos_indx = [i in r[0] for r in train_utts["refs"]]
+                neg_indx = [i not in r[0] for r in train_utts["refs"]]
+                mean_pos_scores[i] = np.mean(F.sigmoid(train_utts["probs"][:,i][pos_indx]).data)
+                mean_neg_scores[i] = np.mean(F.sigmoid(train_utts["probs"][:,i][neg_indx]).data)
+
+
+            train_pred_words = get_pred_words_from_probs(train_utts["probs"],
+                                                       mean_pos_scores,
+                                                       m_cfg['max_en_pred'])
+
+            train_prec, train_rec = basic_precision_recall(train_utts["refs"], train_pred_words)
             # log train loss
             train_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1,
                                                                  train_loss,
@@ -529,22 +584,26 @@ def train_loop(cfg_path, epochs):
             # -----------------------------------------------------------------
             input_path = os.path.join(m_cfg['data_path'],
                                       m_cfg['dev_set'])
-            pred_sents, utts, refs, dev_loss = feed_model(model,
-                                                  optimizer=optimizer,
-                                                  m_dict=map_dict[dev_key],
-                                                  b_dict=bucket_dict[dev_key],
-                                                  vocab_dict=vocab_dict,
-                                                  bow_dict=bow_dict,
-                                                  batch_size=batch_size,
-                                                  x_key=enc_key,
-                                                  y_key=dec_key,
-                                                  train=False,
-                                                  input_path=input_path,
-                                                  max_dec=m_cfg['max_en_pred'],
-                                                  t_cfg=t_cfg,
-                                                  use_y=True)
+            dev_utts, dev_loss = feed_model(model,
+                                        optimizer=optimizer,
+                                        m_dict=map_dict[dev_key],
+                                        b_dict=bucket_dict[dev_key],
+                                        vocab_dict=vocab_dict,
+                                        bow_dict=bow_dict,
+                                        batch_size=batch_size,
+                                        x_key=enc_key,
+                                        y_key=dec_key,
+                                        train=False,
+                                        input_path=input_path,
+                                        max_dec=m_cfg['max_en_pred'],
+                                        t_cfg=t_cfg,
+                                        use_y=True)
 
-            prec, rec = basic_precision_recall(refs, pred_sents)
+            dev_pred_words = get_pred_words_from_probs(dev_utts["probs"],
+                                                       mean_pos_scores,
+                                                       m_cfg['max_en_pred'])
+
+            prec, rec = basic_precision_recall(dev_utts["refs"], dev_pred_words)
 
             # log dev loss
             dev_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1, dev_loss, prec, rec))
@@ -567,6 +626,17 @@ def train_loop(cfg_path, epochs):
                 print("Saving optimizer")
                 serializers.save_npz(m_cfg['opt_fname'], optimizer)
                 print("Finished saving optimizer")
+                print("Saving utterance predictions")
+            # else:
+            #     print("Saving model")
+            #     serializers.save_npz(model_fil.replace(".model", "_last.model", model))
+            #     print("Finished saving model")
+            pickle.dump(dev_utts, open(os.path.join(m_cfg['model_dir'], "model_s2t_dev_out.dict"), "wb"))
+            pickle.dump(mean_pos_scores, open(os.path.join(m_cfg['model_dir'], "mean_pos_scores.dict"), "wb"))
+            pickle.dump(mean_neg_scores, open(os.path.join(m_cfg['model_dir'], "mean_neg_scores.dict"), "wb"))
+
+            print("Finished saving utterance predictions")
+
             # end if save model
             # -----------------------------------------------------------------
         # end for epochs

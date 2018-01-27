@@ -88,6 +88,53 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key,
     return b_score_value, chrf_score_value, en_hyp, en_ref
 
 
+def basic_precision_recall(r, h, display=False):
+    p_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
+    p_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
+    r_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
+    r_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
+
+    print("total utts={0:d}".format(len(r)))
+
+    i=1
+
+    for references, hypothesis in zip(r, h):
+        p_i = modified_precision(references, hypothesis, i)
+        p_numerators[i] += p_i.numerator
+        p_denominators[i] += p_i.denominator
+
+        tot_match = 0
+        tot_count = 0
+
+        max_recall_match = 0
+        max_recall_count = 0
+        max_recall = 0
+
+        for curr_ref in references:
+            curr_match = count_match(curr_ref, hypothesis)
+
+            curr_count = len(curr_ref)
+            curr_recall = curr_match / curr_count if curr_count > 0 else 0
+
+            if curr_recall > max_recall:
+                max_recall_match = curr_match
+                max_recall_count = curr_count
+                max_recall = curr_recall
+
+        r_numerators[i] += max_recall_match
+        r_denominators[i] += max_recall_count
+
+    prec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(p_numerators.values(), p_denominators.values())]
+    rec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(r_numerators.values(), r_denominators.values())]
+
+    if display:
+        print("{0:10s} | {1:>8s}".format("metric", "1-gram"))
+        print("-"*54)
+        print("{0:10s} | {1:8.2f}".format("precision", *prec))
+        print("{0:10s} | {1:8.2f}".format("recall", *rec))
+
+    return prec[0], rec[0]
+
 def corpus_precision_recall(r, h):
     p_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
     p_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.

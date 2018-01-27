@@ -82,10 +82,10 @@ def buckets_main(out_path, num_b, width_b, key, scale=1, seed='haha'):
         print("creating buckets for: {0:s}".format(cat))
         # scale is only applicable for train
         scale_val = scale if "train" in cat else 1
-        bucket_dict[cat] = create_buckets(info_dict[cat], 
-                                          num_b, 
-                                          width_b, 
-                                          key, 
+        bucket_dict[cat] = create_buckets(info_dict[cat],
+                                          num_b,
+                                          width_b,
+                                          key,
                                           scale_val,
                                           seed)
     # end for category: dev, dev2, test, train

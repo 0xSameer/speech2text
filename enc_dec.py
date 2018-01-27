@@ -489,6 +489,7 @@ class SpeechEncoderDecoder(Chain):
         loss_avg = F.mean(loss_weights * loss)
         # ---------------------------------------------------------------------
         pred_words = []
+        pred_probs = []
         pred_limit = self.m_cfg['max_en_pred']
         for row in predicted_out.data:
             pred_inds = xp.where(row >= self.m_cfg["pred_thresh"])[0]
@@ -496,16 +497,19 @@ class SpeechEncoderDecoder(Chain):
                 pred_inds = xp.argsort(row)[-pred_limit:][::-1]
             #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
             pred_words.append([i for i in pred_inds.tolist() if i > 3])
+            pred_probs.append(row)
 
-        return pred_words, loss_avg
+        return pred_words, loss_avg, pred_probs
 
     def predict_bow_batch(self, batch_size, pred_limit, y=None, display=False):
         xp = cuda.cupy if self.gpuid >= 0 else np
         # to store loss
         loss = 0
+        loss_avg = 0
         # if labels are provided, use them for computing loss
         compute_loss = True if y is not None else False
         pred_words = []
+        pred_probs = []
         # ---------------------------------------------------------------------
         # decode and predict
         if self.m_cfg['highway_layers'] > 0:
@@ -519,6 +523,7 @@ class SpeechEncoderDecoder(Chain):
                 pred_inds = xp.argsort(row)[-pred_limit:][::-1]
             #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
             pred_words.append([i for i in pred_inds.tolist() if i > 3])
+            pred_probs.append(row)
 
         # -----------------------------------------------------------------
         if compute_loss:
@@ -532,7 +537,7 @@ class SpeechEncoderDecoder(Chain):
             #loss_avg = F.average(F.sigmoid_cross_entropy(predicted_out, y, normalize=True, reduce='no'), weights=loss_weights)
             loss_avg = F.mean(loss_weights * loss)
         # -----------------------------------------------------------------
-        return pred_words, loss_avg
+        return pred_words, loss_avg, pred_probs
 
     def forward_deep_cnn(self, h):
         # ---------------------------------------------------------------------
