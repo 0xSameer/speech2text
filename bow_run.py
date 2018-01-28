@@ -145,7 +145,7 @@ def get_pred_words_from_probs(probs, thresh_vals, pred_limit):
 
 def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
                   max_enc, max_dec, input_path=''):
-    batch_data = {'X':[], 't':[], 'y':[], 'r':[]}
+    batch_data = {'X':[], 't':[], 'y':[], 'r':[], 'l': []}
     # -------------------------------------------------------------------------
     # loop through each utterance in utt list
     # -------------------------------------------------------------------------
@@ -206,6 +206,7 @@ def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
             y_data[list(range(4))] = -1
             batch_data['y'].append(y_data)
             batch_data['r'].append(r_data)
+            batch_data['l'].append(len(x_data))
 
     # -------------------------------------------------------------------------
     # end for all utterances in batch
@@ -295,8 +296,9 @@ def feed_model(model, optimizer, m_dict, b_dict,
                     with chainer.using_config('train', train):
                         cuda.get_device(t_cfg['gpuid']).use()
                         p_words, loss, p_probs = model.forward_bow(X=batch_data['X'],
-                                    y=batch_data['y'],
-                                    add_noise=t_cfg['speech_noise'])
+                                                                   y=batch_data['y'],
+                                                                   add_noise=t_cfg['speech_noise'],
+                                                                   l=batch_data['l'])
                         loss_val = float(loss.data)
                 else:
                     # ---------------------------------------------------------
@@ -304,7 +306,7 @@ def feed_model(model, optimizer, m_dict, b_dict,
                     # ---------------------------------------------------------
                     with chainer.using_config('train', False):
                         cuda.get_device(t_cfg['gpuid']).use()
-                        p_words, _, p_probs = model.forward_bow(X=batch_data['X'])
+                        p_words, _, p_probs = model.forward_bow(X=batch_data['X'], l=batch_data['l'])
                         loss_val = 0.0
                 # -------------------------------------------------------------
                 # add list of utterances used
@@ -553,16 +555,16 @@ def train_loop(cfg_path, epochs):
                                           t_cfg=t_cfg,
                                           use_y=True)
 
-            mean_pos_scores = xp.array([0.0 for i in bow_dict["i2w"]], dtype="f")
-            mean_neg_scores = xp.array([0.0 for i in bow_dict["i2w"]], dtype="f")
+            mean_pos_scores = xp.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
+            mean_neg_scores = xp.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
 
 
-            for i in range(4, len(bow_dict["i2w"])):
-                this_word = bow_dict["i2w"][i]
-                pos_indx = [i in r[0] for r in train_utts["refs"]]
-                neg_indx = [i not in r[0] for r in train_utts["refs"]]
-                mean_pos_scores[i] = np.mean(F.sigmoid(train_utts["probs"][:,i][pos_indx]).data)
-                mean_neg_scores[i] = np.mean(F.sigmoid(train_utts["probs"][:,i][neg_indx]).data)
+            for i_w in range(4, len(bow_dict["i2w"])):
+                this_word = bow_dict["i2w"][i_w]
+                pos_indx = [i_w in r[0] for r in train_utts["refs"]]
+                neg_indx = [i_w not in r[0] for r in train_utts["refs"]]
+                mean_pos_scores[i_w] = np.mean(F.sigmoid(train_utts["probs"][:,i_w][pos_indx]).data)
+                mean_neg_scores[i_w] = np.mean(F.sigmoid(train_utts["probs"][:,i_w][neg_indx]).data)
 
 
             train_pred_words = get_pred_words_from_probs(train_utts["probs"],

@@ -145,6 +145,7 @@ class SpeechEncoderDecoder(Chain):
             w = chainer.initializers.HeNormal()
             # add CNN layers
             cnn_out_dim = 0
+            self.reduce_dim_len = 1
             reduce_dim = CNN_IN_DIM
             for i, l in enumerate(self.m_cfg['cnn_layers']):
                 lname = "CNN_{0:d}".format(i)
@@ -152,6 +153,7 @@ class SpeechEncoderDecoder(Chain):
                 self.cnns.append(lname)
                 self.add_link(lname, L.Convolution2D(**l, initialW=w))
                 reduce_dim = math.ceil(reduce_dim / l["stride"][1])
+                self.reduce_dim_len *= l["stride"][0]
                 if self.m_cfg['bn']:
                     # ---------------------------------------------------------
                     # add batch normalization
@@ -611,24 +613,44 @@ class SpeechEncoderDecoder(Chain):
         self.enc_states = F.swapaxes(self.enc_states, 0, 1)
         # ---------------------------------------------------------------------
 
-    def forward_bow_rnn(self, X):
+    def forward_bow_rnn(self, X, l):
+        xp = cuda.cupy if self.gpuid >= 0 else np
         # ---------------------------------------------------------------------
         # reset rnn state
         # ---------------------------------------------------------------------
         self.reset_state()
         # ---------------------------------------------------------------------
         in_size, batch_size, in_dim = X.shape
+        len_check = xp.floor(xp.array(l, dtype='i') / self.reduce_dim_len)
+        #print(X.shape)
+        #print(len_check)
         for i in range(in_size):
-            h_fwd = F.expand_dims(self.encode(X[i], self.rnn_enc), 0)
+            curr_fwd_h = self.encode(X[i], self.rnn_enc)
+            if i == 0:
+                h_fwd = curr_fwd_h
+            else:
+                h_fwd = (h_fwd * (i >= len_check)[:, xp.newaxis]) + (curr_fwd_h * (i < len_check)[:, xp.newaxis])
+            #print(h_fwd.shape)
+            #print("h_fwd", h_fwd[:2, :5])
+            #print("curr_fwd_h", curr_fwd_h[:2, :5])
+
             if self.m_cfg['bi_rnn']:
-                h_rev = F.expand_dims(self.encode(X[-i], self.rnn_rev_enc), 0)
+                curr_rev_h = self.encode(X[-i], self.rnn_rev_enc)
+                if i == 0:
+                    h_rev = curr_rev_h
+                else:
+                    h_rev = (h_rev * (i >= len_check)[:, xp.newaxis]) + (curr_rev_h * (i < len_check)[:, xp.newaxis])
+                #print(h_rev.shape)
         # ---------------------------------------------------------------------
-        self.h_final_rnn = self[self.rnn_enc[-1]].h.data
+#         self.h_final_rnn = self[self.rnn_enc[-1]].h.data
+#         if self.m_cfg['bi_rnn']:
+#             h_rev = self[self.rnn_rev_enc[-1]].h.data
+#             self.h_final_rnn = F.concat((self.h_final_rnn, h_rev), axis=1)
+        self.h_final_rnn = h_fwd
         if self.m_cfg['bi_rnn']:
-            h_rev = self[self.rnn_rev_enc[-1]].h.data
             self.h_final_rnn = F.concat((self.h_final_rnn, h_rev), axis=1)
 
-    def forward_enc(self, X):
+    def forward_enc(self, X, l=None):
         if self.m_cfg['enc_key'] != 'sp':
             # -----------------------------------------------------------------
             # get encoder embedding for text input
@@ -648,7 +670,7 @@ class SpeechEncoderDecoder(Chain):
         if "bagofwords" not in self.m_cfg or self.m_cfg['bagofwords'] == False:
             self.forward_rnn(h)
         else:
-            self.forward_bow_rnn(h)
+            self.forward_bow_rnn(h, l)
         # ---------------------------------------------------------------------
 
     def forward(self, X, add_noise=0, teacher_ratio=0, y=None):
@@ -700,7 +722,7 @@ class SpeechEncoderDecoder(Chain):
         # -----------------------------------------------------------------
 
 
-    def forward_bow(self, X, add_noise=0, y=None):
+    def forward_bow(self, X, add_noise=0, y=None, l=None):
         # get shape
         batch_size = X.shape[0]
         # check whether to add noi, start=1se
@@ -718,7 +740,7 @@ class SpeechEncoderDecoder(Chain):
             X = X * noise
         # ---------------------------------------------------------------------
         # encode input
-        self.forward_enc(X)
+        self.forward_enc(X, l)
         # -----------------------------------------------------------------
         # check if train or test
         # -----------------------------------------------------------------
