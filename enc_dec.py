@@ -54,8 +54,7 @@ class SpeechEncoderDecoder(Chain):
         #----------------------------------------------------------------------
         # bag-of-words dict
         #----------------------------------------------------------------------
-        bow_dict_path = os.path.join(self.m_cfg['data_path'],
-                                     'train_top_K_enw.dict')
+        bow_dict_path = os.path.join(self.m_cfg['data_path'], self.m_cfg['bagofwords_vocab'])
         if os.path.exists(bow_dict_path):
             self.bow_dict = pickle.load(open(bow_dict_path, "rb"))
             self.bag_size_en = len(self.bow_dict['w2i'])

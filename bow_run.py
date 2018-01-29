@@ -390,8 +390,7 @@ def get_data_dicts(m_cfg):
     # -------------------------------------------------------------------------
     # bag-of-words
     # -------------------------------------------------------------------------
-    bow_dict_path = os.path.join(m_cfg['data_path'],
-                                     'train_top_K_enw.dict')
+    bow_dict_path = os.path.join(m_cfg['data_path'], m_cfg['bagofwords_vocab'])
     print("loading dict: {0:s}".format(bow_dict_path))
     bow_dict = pickle.load(open(bow_dict_path, "rb"))
     print("-"*50)
