@@ -56,36 +56,54 @@ def basic_precision_recall(r, h, display=False):
     p_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
     r_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
     r_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
+    metrics = {"rc": 0, "rt": 0, "tp": 0, "tc": 0}
 
-    print("total utts={0:d}".format(len(r)))
+    if display:
+        print("total utts={0:d}".format(len(r)))
 
     i=1
 
     for references, hypothesis in zip(r, h):
-        p_i = modified_precision(references, hypothesis, i)
-        p_numerators[i] += p_i.numerator
-        p_denominators[i] += p_i.denominator
+        if min([len(any_ref) for any_ref in references]) > 0:
+            if len(hypothesis) > 0:
+                p_i = modified_precision(references, hypothesis, i)
+                p_numerators[i] += p_i.numerator
+                p_denominators[i] += p_i.denominator
 
-        tot_match = 0
-        tot_count = 0
+                metrics["tc"] += p_i.numerator
+                metrics["tp"] += p_i.denominator
+            else:
+                p_numerators[i] += 0
+                p_denominators[i] += 0
 
-        max_recall_match = 0
-        max_recall_count = 0
-        max_recall = 0
+                metrics["tc"] += 0
+                metrics["tp"] += 0
 
-        for curr_ref in references:
-            curr_match = count_match(curr_ref, hypothesis)
+            #print(p_i.numerator, p_i.denominator)
 
-            curr_count = len(curr_ref)
-            curr_recall = curr_match / curr_count if curr_count > 0 else 0
+            tot_match = 0
+            tot_count = 0
 
-            if curr_recall > max_recall:
-                max_recall_match = curr_match
-                max_recall_count = curr_count
-                max_recall = curr_recall
 
-        r_numerators[i] += max_recall_match
-        r_denominators[i] += max_recall_count
+            max_recall_match = count_match(references[0], hypothesis)
+            max_recall_count = len(references[0])
+            max_recall = max_recall_match / max_recall_count if max_recall_count > 0 else 0
+
+            for curr_ref in references:
+                curr_match = count_match(curr_ref, hypothesis)
+
+                curr_count = len(curr_ref)
+                curr_recall = curr_match / curr_count if curr_count > 0 else 0
+
+                if curr_recall > max_recall:
+                    max_recall_match = curr_match
+                    max_recall_count = curr_count
+                    max_recall = curr_recall
+
+            r_numerators[i] += max_recall_match
+            r_denominators[i] += max_recall_count
+            metrics["rc"] += max_recall_match
+            metrics["rt"] += max_recall_count
 
     prec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(p_numerators.values(), p_denominators.values())]
     rec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(r_numerators.values(), r_denominators.values())]
@@ -96,7 +114,7 @@ def basic_precision_recall(r, h, display=False):
         print("{0:10s} | {1:8.2f}".format("precision", *prec))
         print("{0:10s} | {1:8.2f}".format("recall", *rec))
 
-    return prec[0], rec[0]
+    return prec[0], rec[0], metrics
 
 
 def modified_precision_recall(references, hypothesis, n):

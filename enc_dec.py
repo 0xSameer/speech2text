@@ -54,12 +54,13 @@ class SpeechEncoderDecoder(Chain):
         #----------------------------------------------------------------------
         # bag-of-words dict
         #----------------------------------------------------------------------
-        bow_dict_path = os.path.join(self.m_cfg['data_path'], self.m_cfg['bagofwords_vocab'])
-        if os.path.exists(bow_dict_path):
-            self.bow_dict = pickle.load(open(bow_dict_path, "rb"))
-            self.bag_size_en = len(self.bow_dict['w2i'])
-        else:
-            print("bag-of-words data not found")
+        if "bagofwords" in self.m_cfg:
+            bow_dict_path = os.path.join(self.m_cfg['data_path'], self.m_cfg['bagofwords_vocab'])
+            if os.path.exists(bow_dict_path):
+                self.bow_dict = pickle.load(open(bow_dict_path, "rb"))
+                self.bag_size_en = len(self.bow_dict['w2i'])
+            else:
+                print("bag-of-words data not found")
         #----------------------------------------------------------------------
 
     def add_rnn_layers(self, layer_names, in_units, out_units):
