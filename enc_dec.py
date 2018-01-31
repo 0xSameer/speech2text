@@ -499,7 +499,8 @@ class SpeechEncoderDecoder(Chain):
                 pred_inds = xp.argsort(row)[-pred_limit:][::-1]
             #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
             pred_words.append([i for i in pred_inds.tolist() if i > 3])
-            pred_probs.append(row)
+            np_row = xp.asnumpy(row)
+            pred_probs.append(np_row)
 
         return pred_words, loss_avg, pred_probs
 
@@ -525,7 +526,8 @@ class SpeechEncoderDecoder(Chain):
                 pred_inds = xp.argsort(row)[-pred_limit:][::-1]
             #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
             pred_words.append([i for i in pred_inds.tolist() if i > 3])
-            pred_probs.append(row)
+            np_row = xp.asnumpy(row)
+            pred_probs.append(np_row)
 
         # -----------------------------------------------------------------
         if compute_loss:

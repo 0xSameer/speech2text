@@ -154,10 +154,10 @@ def modified_precision_recall(references, hypothesis, n):
 
 def get_pred_words_from_probs(probs, thresh_vals, pred_limit):
     pred_words = []
-    for row in F.sigmoid(probs).data:
-        pred_inds = xp.where(row >= thresh_vals)[0]
+    for row in probs:
+        pred_inds = np.where(row >= thresh_vals)[0]
         if len(pred_inds) > pred_limit:
-            pred_inds = xp.argsort(row)[-pred_limit:][::-1]
+            pred_inds = np.argsort(row)[-pred_limit:][::-1]
         pred_words.append([i for i in pred_inds.tolist() if i > 3])
     return pred_words
 
@@ -363,7 +363,10 @@ def feed_model(model, optimizer, m_dict, b_dict,
         # end for batches
     # end tqdm
     # return pred_sents, utts, refs, loss_per_epoch
-    utts["probs"] = F.pad_sequence(utts["probs"]).data
+    utts["probs"] = F.sigmoid(F.pad_sequence(utts["probs"]))
+    utts["probs"].to_cpu()
+    utts["probs"] = utts["probs"].data
+
     return utts, loss_per_epoch
 # end feed_model
 
@@ -572,8 +575,8 @@ def train_loop(cfg_path, epochs):
                                           t_cfg=t_cfg,
                                           use_y=True)
 
-            mean_pos_scores = xp.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
-            mean_neg_scores = xp.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
+            mean_pos_scores = np.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
+            mean_neg_scores = np.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
 
 
             for i_w in range(4, len(bow_dict["i2w"])):
@@ -583,9 +586,8 @@ def train_loop(cfg_path, epochs):
                 mean_pos_scores[i_w] = np.mean(F.sigmoid(train_utts["probs"][:,i_w][pos_indx]).data)
                 mean_neg_scores[i_w] = np.mean(F.sigmoid(train_utts["probs"][:,i_w][neg_indx]).data)
 
-
             train_pred_words = get_pred_words_from_probs(train_utts["probs"],
-                                                       mean_pos_scores,
+                                                       m_cfg["pred_thresh"],
                                                        m_cfg['max_en_pred'])
 
             train_prec, train_rec, _ = basic_precision_recall(train_utts["refs"], train_pred_words)
@@ -619,7 +621,7 @@ def train_loop(cfg_path, epochs):
                                         use_y=True)
 
             dev_pred_words = get_pred_words_from_probs(dev_utts["probs"],
-                                                       mean_pos_scores,
+                                                       m_cfg["pred_thresh"],
                                                        m_cfg['max_en_pred'])
 
             prec, rec, _ = basic_precision_recall(dev_utts["refs"], dev_pred_words)
