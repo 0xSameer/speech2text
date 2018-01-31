@@ -588,7 +588,7 @@ def train_loop(cfg_path, epochs):
                                                        mean_pos_scores,
                                                        m_cfg['max_en_pred'])
 
-            train_prec, train_rec = basic_precision_recall(train_utts["refs"], train_pred_words)
+            train_prec, train_rec, _ = basic_precision_recall(train_utts["refs"], train_pred_words)
             # log train loss
             train_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1,
                                                                  train_loss,
@@ -622,7 +622,7 @@ def train_loop(cfg_path, epochs):
                                                        mean_pos_scores,
                                                        m_cfg['max_en_pred'])
 
-            prec, rec = basic_precision_recall(dev_utts["refs"], dev_pred_words)
+            prec, rec, _ = basic_precision_recall(dev_utts["refs"], dev_pred_words)
 
             # log dev loss
             dev_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1, dev_loss, prec, rec))
