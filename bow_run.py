@@ -49,14 +49,19 @@ def count_match(list1, list2):
     count2_keys = count2.keys()
     common_w = set(count1.keys()) & set(count2_keys)
     matches = sum([min(count1[w], count2[w]) for w in common_w])
-    return matches
+    metrics = {}
+    metrics["tc"] = {w: min(count1[w], count2[w]) for w in common_w}
+    metrics["t"] = dict(count1)
+    metrics["tp"] = dict(count2)
+
+    return matches, metrics
 
 def basic_precision_recall(r, h, display=False):
     p_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
     p_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
     r_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
     r_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
-    metrics = {"rc": 0, "rt": 0, "tp": 0, "tc": 0}
+    metrics = {"rc": 0, "rt": 0, "tp": 0, "tc": 0, "word": {}}
 
     if display:
         print("total utts={0:d}".format(len(r)))
@@ -85,12 +90,12 @@ def basic_precision_recall(r, h, display=False):
             tot_count = 0
 
 
-            max_recall_match = count_match(references[0], hypothesis)
+            max_recall_match, max_word_level_details = count_match(references[0], hypothesis)
             max_recall_count = len(references[0])
             max_recall = max_recall_match / max_recall_count if max_recall_count > 0 else 0
 
             for curr_ref in references:
-                curr_match = count_match(curr_ref, hypothesis)
+                curr_match, curr_word_level_details = count_match(curr_ref, hypothesis)
 
                 curr_count = len(curr_ref)
                 curr_recall = curr_match / curr_count if curr_count > 0 else 0
@@ -99,11 +104,17 @@ def basic_precision_recall(r, h, display=False):
                     max_recall_match = curr_match
                     max_recall_count = curr_count
                     max_recall = curr_recall
+                    max_word_level_details = curr_word_level_details
 
             r_numerators[i] += max_recall_match
             r_denominators[i] += max_recall_count
             metrics["rc"] += max_recall_match
             metrics["rt"] += max_recall_count
+            for key in {"t","tp","tc"}:
+                for w in max_word_level_details[key]:
+                    if w not in metrics["word"]:
+                        metrics["word"][w] = {"t": 0, "tp": 0, "tc": 0}
+                    metrics["word"][w][key] += max_word_level_details[key][w]
 
     prec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(p_numerators.values(), p_denominators.values())]
     rec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(r_numerators.values(), r_denominators.values())]
@@ -583,8 +594,8 @@ def train_loop(cfg_path, epochs):
                 this_word = bow_dict["i2w"][i_w]
                 pos_indx = [i_w in r[0] for r in train_utts["refs"]]
                 neg_indx = [i_w not in r[0] for r in train_utts["refs"]]
-                mean_pos_scores[i_w] = np.mean(F.sigmoid(train_utts["probs"][:,i_w][pos_indx]).data)
-                mean_neg_scores[i_w] = np.mean(F.sigmoid(train_utts["probs"][:,i_w][neg_indx]).data)
+                mean_pos_scores[i_w] = np.mean(train_utts["probs"][:,i_w][pos_indx])
+                mean_neg_scores[i_w] = np.mean(train_utts["probs"][:,i_w][neg_indx])
 
             train_pred_words = get_pred_words_from_probs(train_utts["probs"],
                                                        m_cfg["pred_thresh"],
