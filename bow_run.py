@@ -286,7 +286,7 @@ def create_batches(b_dict, batch_size):
 
 def feed_model(model, optimizer, m_dict, b_dict,
                batch_size, vocab_dict, bow_dict, x_key, y_key,
-               train, input_path, max_dec, t_cfg, use_y=True):
+               train, input_path, max_dec, t_cfg, use_y=True, get_probs=False):
     # number of buckets
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
@@ -340,11 +340,12 @@ def feed_model(model, optimizer, m_dict, b_dict,
                 # -------------------------------------------------------------
                 # add list of utterances used
                 # -------------------------------------------------------------
-                for u, pred, prob, ref in zip(utt_list, p_words, p_probs, batch_data['r']):
-                    utts['ids'].append(u)
-                    utts["preds"].append(pred)
-                    utts["probs"].append(prob)
-                    utts["refs"].append(ref)
+                if get_probs:
+                    for u, pred, prob, ref in zip(utt_list, p_words, p_probs, batch_data['r']):
+                        utts['ids'].append(u)
+                        utts["preds"].append(pred)
+                        utts["probs"].append(prob)
+                        utts["refs"].append(ref)
                 # utts.extend(utt_list)
                 # -------------------------------------------------------------
                 # if len(p) > 0:
@@ -374,9 +375,10 @@ def feed_model(model, optimizer, m_dict, b_dict,
         # end for batches
     # end tqdm
     # return pred_sents, utts, refs, loss_per_epoch
-    utts["probs"] = F.sigmoid(F.pad_sequence(utts["probs"]))
-    utts["probs"].to_cpu()
-    utts["probs"] = utts["probs"].data
+    if get_probs:
+        utts["probs"] = F.sigmoid(F.pad_sequence(utts["probs"]))
+        utts["probs"].to_cpu()
+        utts["probs"] = utts["probs"].data
 
     return utts, loss_per_epoch
 # end feed_model
@@ -584,29 +586,35 @@ def train_loop(cfg_path, epochs):
                                           input_path=input_path,
                                           max_dec=m_cfg['max_en_pred'],
                                           t_cfg=t_cfg,
-                                          use_y=True)
+                                          use_y=True,
+                                          get_probs=False)
 
-            mean_pos_scores = np.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
-            mean_neg_scores = np.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
+            # mean_pos_scores = np.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
+            # mean_neg_scores = np.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
 
 
-            for i_w in range(4, len(bow_dict["i2w"])):
-                this_word = bow_dict["i2w"][i_w]
-                pos_indx = [i_w in r[0] for r in train_utts["refs"]]
-                neg_indx = [i_w not in r[0] for r in train_utts["refs"]]
-                mean_pos_scores[i_w] = np.mean(train_utts["probs"][:,i_w][pos_indx])
-                mean_neg_scores[i_w] = np.mean(train_utts["probs"][:,i_w][neg_indx])
+            # for i_w in range(4, len(bow_dict["i2w"])):
+            #     this_word = bow_dict["i2w"][i_w]
+            #     pos_indx = [i_w in r[0] for r in train_utts["refs"]]
+            #     neg_indx = [i_w not in r[0] for r in train_utts["refs"]]
+            #     mean_pos_scores[i_w] = np.mean(train_utts["probs"][:,i_w][pos_indx])
+            #     mean_neg_scores[i_w] = np.mean(train_utts["probs"][:,i_w][neg_indx])
 
-            train_pred_words = get_pred_words_from_probs(train_utts["probs"],
-                                                       m_cfg["pred_thresh"],
-                                                       m_cfg['max_en_pred'])
+            # train_pred_words = get_pred_words_from_probs(train_utts["probs"],
+            #                                            m_cfg["pred_thresh"],
+            #                                            m_cfg['max_en_pred'])
 
-            train_prec, train_rec, _ = basic_precision_recall(train_utts["refs"], train_pred_words)
+            # train_prec, train_rec, _ = basic_precision_recall(train_utts["refs"], train_pred_words)
+
             # log train loss
-            train_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1,
-                                                                 train_loss,
-                                                                 train_prec,
-                                                                 train_rec))
+            # train_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1,
+            #                                                      train_loss,
+            #                                                      train_prec,
+            #                                                      train_rec))
+
+            train_log.write("{0:d}, {1:.4f}\n".format(last_epoch+i+1,
+                                                                 train_loss))
+
             train_log.flush()
             os.fsync(train_log.fileno())
             # -----------------------------------------------------------------
@@ -629,7 +637,8 @@ def train_loop(cfg_path, epochs):
                                         input_path=input_path,
                                         max_dec=m_cfg['max_en_pred'],
                                         t_cfg=t_cfg,
-                                        use_y=True)
+                                        use_y=True,
+                                        get_probs=True)
 
             dev_pred_words = get_pred_words_from_probs(dev_utts["probs"],
                                                        m_cfg["pred_thresh"],
@@ -645,7 +654,8 @@ def train_loop(cfg_path, epochs):
             print("^"*80)
             print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}".format("*" * 10, train_loss, dev_loss))
             print("^"*80)
-            print("{0:s} train: prec={1:.3f}, recall={2:.3f} ----- dev: prec={3:.3f}, recall={4:.3f}".format("*" * 10, train_prec, train_rec, prec, rec))
+            # print("{0:s} train: prec={1:.3f}, recall={2:.3f} ----- dev: prec={3:.3f}, recall={4:.3f}".format("*" * 10, train_prec, train_rec, prec, rec))
+            print("{0:s} dev: prec={1:.3f}, recall={2:.3f}".format("*" * 10, prec, rec))
             print("^"*80)
             # -----------------------------------------------------------------
             # save model
@@ -664,8 +674,8 @@ def train_loop(cfg_path, epochs):
             #     serializers.save_npz(model_fil.replace(".model", "_last.model", model))
             #     print("Finished saving model")
             pickle.dump(dev_utts, open(os.path.join(m_cfg['model_dir'], "model_s2t_dev_out.dict"), "wb"))
-            pickle.dump(mean_pos_scores, open(os.path.join(m_cfg['model_dir'], "mean_pos_scores.dict"), "wb"))
-            pickle.dump(mean_neg_scores, open(os.path.join(m_cfg['model_dir'], "mean_neg_scores.dict"), "wb"))
+            # pickle.dump(mean_pos_scores, open(os.path.join(m_cfg['model_dir'], "mean_pos_scores.dict"), "wb"))
+            # pickle.dump(mean_neg_scores, open(os.path.join(m_cfg['model_dir'], "mean_neg_scores.dict"), "wb"))
 
             print("Finished saving utterance predictions")
 
