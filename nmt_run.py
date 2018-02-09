@@ -40,6 +40,34 @@ xp = cuda.cupy
 def get_en_words_from_list(l):
     return [w.decode() for w in l]
 
+def basic_bleu(r, preds, dec_key, weights=(0.25, 0.25, 0.25, 0.25)):
+    en_hyp = []
+    en_ref = []
+    ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
+
+    join_str = ' ' if dec_key.endswith('_w') else ''
+
+    total_matching_len = 0
+
+    for p in preds:
+        curr_p = []
+        if type(p) == list:
+            for i in p:
+                if i == EOS_ID:
+                    break
+                else:
+                    curr_p.append(i)
+        en_hyp.append(curr_p)
+
+    smooth_fun = nltk.translate.bleu_score.SmoothingFunction()
+
+    b_score_value = corpus_bleu(r,
+                          en_hyp,
+                          weights=weights,
+                          smoothing_function=smooth_fun.method2)
+
+    return b_score_value, en_hyp
+
 def calc_bleu(m_dict, v_dict, preds, utts, dec_key,
               weights=(0.25, 0.25, 0.25, 0.25),
               ref_index=-1):
@@ -88,41 +116,80 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key,
     return b_score_value, chrf_score_value, en_hyp, en_ref
 
 
+def count_match(list1, list2):
+    # each list can have repeated elements. The count should account for this.
+    count1 = Counter(list1)
+    count2 = Counter(list2)
+    count1_keys = count1.keys()-set([UNK_ID, EOS_ID])
+    count2_keys = count2.keys()-set([UNK_ID, EOS_ID])
+    # count2_keys = count2.keys()
+    common_w = set(count1_keys) & set(count2_keys)
+    matches = sum([min(count1[w], count2[w]) for w in common_w])
+    metrics = {}
+    metrics["tc"] = {w: min(count1[w], count2[w]) for w in common_w}
+    metrics["t"] = {w: count1[w] for w in count1_keys}
+    metrics["tp"] = {w: count2[w] for w in count2_keys}
+
+    tp = sum(metrics["tp"].values())
+    t = sum(metrics["t"].values())
+
+    return matches, tp, t, metrics
+
 def basic_precision_recall(r, h, display=False):
     p_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
     p_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
     r_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
     r_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
+    metrics = {"rc": 0, "rt": 0, "tp": 0, "tc": 0, "word": {}}
 
-    print("total utts={0:d}".format(len(r)))
+    if display:
+        print("total utts={0:d}".format(len(r)))
 
     i=1
 
     for references, hypothesis in zip(r, h):
-        p_i = modified_precision(references, hypothesis, i)
-        p_numerators[i] += p_i.numerator
-        p_denominators[i] += p_i.denominator
+        if min([len(any_ref) for any_ref in references]) > 0:
+            if len(hypothesis) > 0:
+                p_i = modified_precision(references, hypothesis, i)
+                p_numerators[i] += p_i.numerator
+                p_denominators[i] += p_i.denominator
 
-        tot_match = 0
-        tot_count = 0
+                metrics["tc"] += p_i.numerator
+                metrics["tp"] += p_i.denominator
+            else:
+                p_numerators[i] += 0
+                p_denominators[i] += 0
 
-        max_recall_match = 0
-        max_recall_count = 0
-        max_recall = 0
+                metrics["tc"] += 0
+                metrics["tp"] += 0
 
-        for curr_ref in references:
-            curr_match = count_match(curr_ref, hypothesis)
+            #print(p_i.numerator, p_i.denominator)
 
-            curr_count = len(curr_ref)
-            curr_recall = curr_match / curr_count if curr_count > 0 else 0
+            tot_match = 0
+            tot_count = 0
 
-            if curr_recall > max_recall:
-                max_recall_match = curr_match
-                max_recall_count = curr_count
-                max_recall = curr_recall
+            max_recall_match, max_tp, max_t, max_word_level_details = count_match(references[0], hypothesis)
+            max_recall = max_recall_match / max_t if max_t > 0 else 0
 
-        r_numerators[i] += max_recall_match
-        r_denominators[i] += max_recall_count
+            for curr_ref in references:
+                curr_match, curr_tp, curr_t, curr_word_level_details = count_match(curr_ref, hypothesis)
+                curr_recall = curr_match / curr_t if curr_t > 0 else 0
+
+                if curr_recall > max_recall:
+                    max_recall_match = curr_match
+                    max_t = curr_t
+                    max_recall = curr_recall
+                    max_word_level_details = curr_word_level_details
+
+            r_numerators[i] += max_recall_match
+            r_denominators[i] += max_t
+            metrics["rc"] += max_recall_match
+            metrics["rt"] += max_t
+            for key in {"t","tp","tc"}:
+                for w in max_word_level_details[key]:
+                    if w not in metrics["word"]:
+                        metrics["word"][w] = {"t": 0, "tp": 0, "tc": 0}
+                    metrics["word"][w][key] += max_word_level_details[key][w]
 
     prec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(p_numerators.values(), p_denominators.values())]
     rec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(r_numerators.values(), r_denominators.values())]
@@ -133,7 +200,7 @@ def basic_precision_recall(r, h, display=False):
         print("{0:10s} | {1:8.2f}".format("precision", *prec))
         print("{0:10s} | {1:8.2f}".format("recall", *rec))
 
-    return prec[0], rec[0]
+    return prec[0], rec[0], metrics
 
 def corpus_precision_recall(r, h):
     p_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
@@ -166,14 +233,14 @@ def corpus_precision_recall(r, h):
 
     return p, r
 
-def count_match(list1, list2):
-    # each list can have repeated elements. The count should account for this.
-    count1 = Counter(list1)
-    count2 = Counter(list2)
-    count2_keys = count2.keys()-set([UNK_ID, EOS_ID])
-    common_w = set(count1.keys()) & set(count2_keys)
-    matches = sum([min(count1[w], count2[w]) for w in common_w])
-    return matches
+# def count_match(list1, list2):
+#     # each list can have repeated elements. The count should account for this.
+#     count1 = Counter(list1)
+#     count2 = Counter(list2)
+#     count2_keys = count2.keys()-set([UNK_ID, EOS_ID])
+#     common_w = set(count1.keys()) & set(count2_keys)
+#     matches = sum([min(count1[w], count2[w]) for w in common_w])
+#     return matches
 
 def modified_precision_recall(references, hypothesis, n):
     # Extracts all ngrams in hypothesis
@@ -211,8 +278,8 @@ def modified_precision_recall(references, hypothesis, n):
 
 
 def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
-              max_enc, max_dec, input_path=''):
-    batch_data = {'X':[], 'y':[]}
+              max_enc, max_dec, input_path='', limit_vocab=False, add_unk=False):
+    batch_data = {'X':[], 'y':[], 'r':[], "utts": []}
     # -------------------------------------------------------------------------
     # loop through each utterance in utt list
     # -------------------------------------------------------------------------
@@ -249,17 +316,62 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
         # ---------------------------------------------------------------------
         #  add labels
         # ---------------------------------------------------------------------
-        if type(m_dict[u][y_key]) == list:
-            en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]]
+        if limit_vocab == False:
+            if type(m_dict[u][y_key]) == list:
+                en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]]
+                r_data = [en_ids[:max_dec]]
+            else:
+                # dev and test data have multiple translations
+                # choose the first one for computing perplexity
+                en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]]
+                r_data = []
+                for r in m_dict[u][y_key]:
+                    r_list = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in r]
+                    r_data.append(r_list[:max_dec])
         else:
-            # dev and test data have multiple translations
-            # choose the first one for computing perplexity
-            en_ids = [vocab_dict[y_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]]
+            if type(m_dict[u][y_key]) == list:
+                en_ids = []
+                for w in m_dict[u][y_key]:
+                    if w in vocab_dict['w2i']:
+                        en_ids.append(vocab_dict['w2i'][w])
+                    # end if
+                # end for
+                # Don't add unk for r_data
+                r_data = [en_ids[:max_dec]]
+                if len(en_ids) == 0 and add_unk:
+                    en_ids = [UNK_ID]
+            else:
+                # dev and test data have multiple translations
+                # choose the first one for computing perplexity
+                en_ids = []
+                for w in m_dict[u][y_key][0]:
+                    if w in vocab_dict['w2i']:
+                        en_ids.append(vocab_dict['w2i'][w])
+                    # end if
+                # end for
+                if len(en_ids) == 0 and add_unk:
+                    en_ids = [UNK_ID]
+
+                r_data = []
+                for r in m_dict[u][y_key]:
+                    r_list = []
+                    for w in r:
+                        if w in vocab_dict['w2i']:
+                            r_list.append(vocab_dict['w2i'][w])
+                        # end if
+                    # end for
+                    # if len(r_list) == 0 and add_unk:
+                    #     r_list = [UNK_ID]
+                    r_data.append(r_list[:max_dec])
+                # end for
+            # end else
         y_ids = [GO_ID] + en_ids[:max_dec-2] + [EOS_ID]
         # ---------------------------------------------------------------------
-        if len(x_data) > 0 and len(y_ids) > 0:
+        if len(x_data) > 0 and len(en_ids) > 0:
             batch_data['X'].append(x_data)
             batch_data['y'].append(xp.asarray(y_ids, dtype=xp.int32))
+            batch_data['r'].append(r_data)
+            batch_data['utts'].append(u)
     # -------------------------------------------------------------------------
     # end for all utterances in batch
     # -------------------------------------------------------------------------
@@ -308,11 +420,13 @@ def create_batches(b_dict, batch_size):
 
 def feed_model(model, optimizer, m_dict, b_dict,
                batch_size, vocab_dict, x_key, y_key,
-               train, input_path, max_dec, t_cfg, use_y=True):
+               train, input_path, max_dec, t_cfg,
+               use_y=True, limit_vocab=False, add_unk=False):
     # number of buckets
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
     pred_sents = []
+    ref_sents = []
     utts = []
     total_loss = 0
     loss_per_epoch = 0
@@ -335,7 +449,9 @@ def feed_model(model, optimizer, m_dict, b_dict,
                                    vocab_dict,
                                    ((b+1) * width_b),
                                    max_dec,
-                                   input_path=input_path)
+                                   input_path=input_path,
+                                   limit_vocab=limit_vocab,
+                                   add_unk=add_unk)
             # -----------------------------------------------------------------
             if (len(batch_data['X']) > 0 and len(batch_data['y']) > 0):
                 if use_y:
@@ -361,10 +477,13 @@ def feed_model(model, optimizer, m_dict, b_dict,
                 # -------------------------------------------------------------
                 # add list of utterances used
                 # -------------------------------------------------------------
-                utts.extend(utt_list)
+                #utts.extend(utt_list)
+                utts.extend(batch_data['utts'])
                 # -------------------------------------------------------------
                 if len(p) > 0:
-                    pred_sents.extend(p.tolist())
+                    p_list = p.tolist()
+                    pred_sents.extend(p_list)
+                    ref_sents.extend(batch_data['r'])
 
                 total_loss += loss_val
                 total_loss_updates += 1
@@ -396,10 +515,11 @@ def feed_model(model, optimizer, m_dict, b_dict,
                 print("no data in batch")
                 print(utt_list)
             # update progress bar
-            pbar.update(len(utt_list))
+            #pbar.update(len(utt_list))
+            pbar.update(len(batch_data['utts']))
         # end for batches
     # end tqdm
-    return pred_sents, utts, loss_per_epoch
+    return pred_sents, ref_sents, utts, loss_per_epoch
 # end feed_model
 
 # map_dict, vocab_dict, bucket_dict = get_data_dicts(model_cfg)
@@ -415,13 +535,16 @@ def get_data_dicts(m_cfg):
     # -------------------------------------------------------------------------
     # VOCAB
     # -------------------------------------------------------------------------
-    if 'fisher' in m_cfg['train_set']:
-        if m_cfg['stemmify'] == False:
-            vocab_path = os.path.join(m_cfg['data_path'], 'train_vocab.dict')
-        else:
-            vocab_path = os.path.join(m_cfg['data_path'], 'train_stemmed_vocab.dict')
+    if 'limit_vocab' in m_cfg and m_cfg["limit_vocab"] == True:
+        vocab_path = os.path.join(m_cfg['data_path'], m_cfg["vocab_path"])
     else:
-        vocab_path = os.path.join(m_cfg['data_path'], 'ch_train_vocab.dict')
+        if 'fisher' in m_cfg['train_set']:
+            if m_cfg['stemmify'] == False:
+                vocab_path = os.path.join(m_cfg['data_path'], 'train_vocab.dict')
+            else:
+                vocab_path = os.path.join(m_cfg['data_path'], 'train_stemmed_vocab.dict')
+        else:
+            vocab_path = os.path.join(m_cfg['data_path'], 'ch_train_vocab.dict')
     print("loading dict: {0:s}".format(vocab_path))
     vocab_dict = pickle.load(open(vocab_path, "rb"))
     print("-"*50)
@@ -450,7 +573,11 @@ def get_data_dicts(m_cfg):
         vocab_size_es = len(vocab_dict[m_cfg['enc_key']]['w2i'])
     else:
         vocab_size_es = 0
-    vocab_size_en = len(vocab_dict[m_cfg['dec_key']]['w2i'])
+
+    if 'limit_vocab' in m_cfg and m_cfg["limit_vocab"] == True:
+        vocab_size_en = len(vocab_dict['w2i'])
+    else:
+        vocab_size_en = len(vocab_dict[m_cfg['dec_key']]['w2i'])
     print('vocab size for {0:s} = {1:d}'.format(m_cfg['enc_key'],
                                                 vocab_size_es))
     print('vocab size for {0:s} = {1:d}'.format(m_cfg['dec_key'],
@@ -559,6 +686,8 @@ def train_loop(cfg_path, epochs):
     batch_size=t_cfg['batch_size']
     enc_key=m_cfg['enc_key']
     dec_key=m_cfg['dec_key']
+    limit_vocab = False if 'limit_vocab' not in m_cfg else m_cfg['limit_vocab']
+    add_unk = False if 'add_unk' not in m_cfg else m_cfg['add_unk']
     # -------------------------------------------------------------------------
     # get data dictionaries
     # -------------------------------------------------------------------------
@@ -585,7 +714,7 @@ def train_loop(cfg_path, epochs):
             # -----------------------------------------------------------------
             input_path = os.path.join(m_cfg['data_path'],
                                       m_cfg['train_set'])
-            pred_sents, utts, train_loss = feed_model(model,
+            pred_sents, ref_sents, utts, train_loss = feed_model(model,
                                               optimizer=optimizer,
                                               m_dict=map_dict[train_key],
                                               b_dict=bucket_dict[train_key],
@@ -597,7 +726,9 @@ def train_loop(cfg_path, epochs):
                                               input_path=input_path,
                                               max_dec=m_cfg['max_en_pred'],
                                               t_cfg=t_cfg,
-                                              use_y=True)
+                                              use_y=True,
+                                              limit_vocab=limit_vocab,
+                                              add_unk=add_unk)
             # log train loss
             train_log.write("{0:d}, {1:.4f}\n".format(last_epoch+i+1, train_loss))
             train_log.flush()
@@ -609,7 +740,7 @@ def train_loop(cfg_path, epochs):
             # -----------------------------------------------------------------
             input_path = os.path.join(m_cfg['data_path'],
                                       m_cfg['dev_set'])
-            pred_sents, utts, dev_loss = feed_model(model,
+            pred_sents, ref_sents, utts, dev_loss = feed_model(model,
                                               optimizer=optimizer,
                                               m_dict=map_dict[dev_key],
                                               b_dict=bucket_dict[dev_key],
@@ -621,20 +752,32 @@ def train_loop(cfg_path, epochs):
                                               input_path=input_path,
                                               max_dec=m_cfg['max_en_pred'],
                                               t_cfg=t_cfg,
-                                              use_y=True)
+                                              use_y=True,
+                                              limit_vocab=limit_vocab,
+                                              add_unk=add_unk)
 
-            dev_b_score, chr_f_score, _, _ = calc_bleu(map_dict[dev_key],
-                                                       vocab_dict[dec_key],
-                                                       pred_sents, utts,
-                                                       dec_key)
+            smooth_fun = nltk.translate.bleu_score.SmoothingFunction()
+
+            dev_b_score, dev_preds = basic_bleu(ref_sents, pred_sents, dec_key)
+            # dev_b_score = corpus_bleu(ref_sents,
+            #                           pred_sents,
+            #                           weights=[0.25, 0.25, 0.25, 0.25],
+            #                           smoothing_function=smooth_fun.method2)
+            # dev_b_score, _, _, _ = calc_bleu(map_dict[dev_key],
+            #                                            vocab_dict[dec_key],
+            #                                            pred_sents, utts,
+            #                                            dec_key)
+
+            dev_prec, dev_rec, _ = basic_precision_recall(ref_sents, dev_preds)
 
             # log dev loss
-            dev_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1, dev_loss, dev_b_score, chr_f_score))
+            dev_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}, {4:.4f}\n".format(last_epoch+i+1, dev_loss, dev_b_score, dev_prec, dev_rec))
             dev_log.flush()
             os.fsync(dev_log.fileno())
 
             print("^"*80)
             print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}, dev bleu={3:.4f}".format("*" * 10, train_loss, dev_loss, dev_b_score))
+            print("{0:s} dev: prec={1:.3f}, recall={2:.3f}".format("*" * 10, dev_prec, dev_rec))
             print("^"*80)
             # -----------------------------------------------------------------
             # save model

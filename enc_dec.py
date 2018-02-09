@@ -450,7 +450,7 @@ class SpeechEncoderDecoder(Chain):
             # save prediction at this time step
             # -----------------------------------------------------------------
             if npred == 0:
-                pred_sents = pred_word.data
+                pred_sents = xp.expand_dims(pred_word.data, 0)
             else:
                 pred_sents = xp.vstack((pred_sents, pred_word.data))
             # -----------------------------------------------------------------
@@ -498,7 +498,7 @@ class SpeechEncoderDecoder(Chain):
             if len(pred_inds) > pred_limit:
                 pred_inds = xp.argsort(row)[-pred_limit:][::-1]
             #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
-            pred_words.append([i for i in pred_inds.tolist() if i > 3])
+            pred_words.append([i for i in pred_inds.tolist() if i > 2])
             np_row = xp.asnumpy(row)
             pred_probs.append(np_row)
 
@@ -525,7 +525,7 @@ class SpeechEncoderDecoder(Chain):
             if len(pred_inds) > pred_limit:
                 pred_inds = xp.argsort(row)[-pred_limit:][::-1]
             #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
-            pred_words.append([i for i in pred_inds.tolist() if i > 3])
+            pred_words.append([i for i in pred_inds.tolist() if i > 2])
             np_row = xp.asnumpy(row)
             pred_probs.append(np_row)
 

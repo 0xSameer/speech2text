@@ -41,6 +41,20 @@ def get_en_words_from_list(l):
     return [w.decode() for w in l]
 
 
+def compute_avg_precision(probs, min_prob, max_prob, num_points, max_words, refs):
+    p_r_thresh = {}
+    for thresh in tqdm(np.linspace(min_prob, max_prob, num=num_points, endpoint=True), ncols=80):
+        p_r_thresh[thresh] = {}
+        words_at_thresh = get_pred_words_from_probs(probs, thresh, max_words)
+        p_r_thresh[thresh]['p'], p_r_thresh[thresh]['r'], _ = basic_precision_recall(refs, words_at_thresh)
+
+    precision_array = np.array([p_r_thresh[i]['p']/100 for i in p_r_thresh], dtype="f")
+    recall_array = np.array([p_r_thresh[i]['r']/100 for i in p_r_thresh], dtype="f")
+    avg_p = np.trapz(precision_array[::-1], recall_array[::-1])
+    return avg_p, p_r_thresh
+
+
+
 def count_match(list1, list2):
     # each list can have repeated elements. The count should account for this.
     count1 = Counter(list1)
@@ -211,28 +225,37 @@ def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
         # ---------------------------------------------------------------------
         #  add labels
         # ---------------------------------------------------------------------
+        data_found = True
         if type(m_dict[u][y_key]) == list:
             en_ids = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]])-set(range(4)))
+            if len(en_ids) == 0:
+                data_found = False
+                en_ids = [UNK_ID]
             r_data = [en_ids[:max_dec]]
 
         else:
             # dev and test data have multiple translations
             # choose the first one for computing perplexity
             en_ids = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]])-set(range(4)))
+            if len(en_ids) == 0:
+                data_found = False
+                en_ids = [UNK_ID]
             r_data = []
             for r in m_dict[u][y_key]:
                 r_list = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in r])-set(range(4)))
+                if len(r_list) == 0:
+                    r_list = [UNK_ID]
                 r_data.append(r_list[:max_dec])
 
         y_ids = en_ids[:max_dec]
         # ---------------------------------------------------------------------
-        if len(x_data) > 0:
-            #  and len(y_ids) > 0
+        if (len(x_data) > 0):
+            #  and len(y_ids) > 0,  and (data_found == True)
             batch_data['X'].append(x_data)
             batch_data['t'].append([y_ids])
             y_data = xp.zeros(len(bow_dict['w2i']), dtype=xp.int32)
             y_data[y_ids] = 1
-            y_data[list(range(4))] = -1
+            y_data[list(range(3))] = -1
             batch_data['y'].append(y_data)
             batch_data['r'].append(r_data)
             batch_data['l'].append(len(x_data))
@@ -612,7 +635,7 @@ def train_loop(cfg_path, epochs):
             #                                                      train_prec,
             #                                                      train_rec))
 
-            train_log.write("{0:d}, {1:.4f}\n".format(last_epoch+i+1,
+            train_log.write("{0:d}, {1:.6f}\n".format(last_epoch+i+1,
                                                                  train_loss))
 
             train_log.flush()
@@ -646,16 +669,21 @@ def train_loop(cfg_path, epochs):
 
             prec, rec, _ = basic_precision_recall(dev_utts["refs"], dev_pred_words)
 
+            avg_p, _ = compute_avg_precision(dev_utts["probs"],
+                                             0.0, 1.0, 50,
+                                             m_cfg['max_en_pred'],
+                                             dev_utts["refs"])
+
             # log dev loss
-            dev_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1, dev_loss, prec, rec))
+            dev_log.write("{0:d}, {1:.6f}, {2:.4f}, {3:.4f}, {4:.3f}\n".format(last_epoch+i+1, dev_loss, prec, rec, avg_p))
             dev_log.flush()
             os.fsync(dev_log.fileno())
 
             print("^"*80)
-            print("{0:s} train avg loss={1:.4f}, dev avg loss={2:.4f}".format("*" * 10, train_loss, dev_loss))
+            print("{0:s} train avg loss={1:.6f}, dev avg loss={2:.6f}".format("*" * 10, train_loss, dev_loss))
             print("^"*80)
             # print("{0:s} train: prec={1:.3f}, recall={2:.3f} ----- dev: prec={3:.3f}, recall={4:.3f}".format("*" * 10, train_prec, train_rec, prec, rec))
-            print("{0:s} dev: prec={1:.3f}, recall={2:.3f}".format("*" * 10, prec, rec))
+            print("{0:s} dev: prec={1:.3f}, recall={2:.3f}, avg prec={3:.3f}".format("*" * 10, prec, rec, avg_p))
             print("^"*80)
             # -----------------------------------------------------------------
             # save model
