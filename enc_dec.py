@@ -230,6 +230,7 @@ class SpeechEncoderDecoder(Chain):
                 lname = "HIGHWAY_{0:d}".format(i)
                 self.highway.append(lname)
                 self.add_link(lname, L.Highway(h_units))
+                # self.add_link(lname, L.Linear(h_units, h_units))
             # Add final prediction layer
             self.add_link("out", L.Linear(h_units, self.bag_size_en))
             # -----------------------------------------------------------------
@@ -579,8 +580,10 @@ class SpeechEncoderDecoder(Chain):
         for i in range(len(self.highway)):
             if self.m_cfg['highway_dropout'] > 0:
                 h = F.dropout(self[self.highway[i]](X), ratio=self.m_cfg['highway_dropout'])
+                # h = F.dropout(F.relu(self[self.highway[i]](X)), ratio=self.m_cfg['highway_dropout'])
             else:
                 h = self[self.highway[i]](X)
+                # h = F.relu(self[self.highway[i]](X))
         return h
 
     def forward_rnn(self, X):

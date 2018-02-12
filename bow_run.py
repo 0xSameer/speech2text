@@ -54,21 +54,39 @@ def compute_avg_precision(probs, min_prob, max_prob, num_points, max_words, refs
     return avg_p, p_r_thresh
 
 
-
 def count_match(list1, list2):
     # each list can have repeated elements. The count should account for this.
     count1 = Counter(list1)
     count2 = Counter(list2)
-    # count2_keys = count2.keys()-set([UNK_ID, EOS_ID])
-    count2_keys = count2.keys()
-    common_w = set(count1.keys()) & set(count2_keys)
+    count1_keys = count1.keys()-set([UNK_ID, EOS_ID])
+    count2_keys = count2.keys()-set([UNK_ID, EOS_ID])
+    # count2_keys = count2.keys()
+    common_w = set(count1_keys) & set(count2_keys)
     matches = sum([min(count1[w], count2[w]) for w in common_w])
     metrics = {}
     metrics["tc"] = {w: min(count1[w], count2[w]) for w in common_w}
-    metrics["t"] = dict(count1)
-    metrics["tp"] = dict(count2)
+    metrics["t"] = {w: count1[w] for w in count1_keys}
+    metrics["tp"] = {w: count2[w] for w in count2_keys}
 
-    return matches, metrics
+    tp = sum(metrics["tp"].values())
+    t = sum(metrics["t"].values())
+
+    return matches, tp, t, metrics
+
+# def count_match(list1, list2):
+#     # each list can have repeated elements. The count should account for this.
+#     count1 = Counter(list1)
+#     count2 = Counter(list2)
+#     # count2_keys = count2.keys()-set([UNK_ID, EOS_ID])
+#     count2_keys = count2.keys()
+#     common_w = set(count1.keys()) & set(count2_keys)
+#     matches = sum([min(count1[w], count2[w]) for w in common_w])
+#     metrics = {}
+#     metrics["tc"] = {w: min(count1[w], count2[w]) for w in common_w}
+#     metrics["t"] = dict(count1)
+#     metrics["tp"] = dict(count2)
+
+#     return matches, metrics
 
 def basic_precision_recall(r, h, display=False):
     p_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
@@ -103,27 +121,23 @@ def basic_precision_recall(r, h, display=False):
             tot_match = 0
             tot_count = 0
 
-
-            max_recall_match, max_word_level_details = count_match(references[0], hypothesis)
-            max_recall_count = len(references[0])
-            max_recall = max_recall_match / max_recall_count if max_recall_count > 0 else 0
+            max_recall_match, max_tp, max_t, max_word_level_details = count_match(references[0], hypothesis)
+            max_recall = max_recall_match / max_t if max_t > 0 else 0
 
             for curr_ref in references:
-                curr_match, curr_word_level_details = count_match(curr_ref, hypothesis)
-
-                curr_count = len(curr_ref)
-                curr_recall = curr_match / curr_count if curr_count > 0 else 0
+                curr_match, curr_tp, curr_t, curr_word_level_details = count_match(curr_ref, hypothesis)
+                curr_recall = curr_match / curr_t if curr_t > 0 else 0
 
                 if curr_recall > max_recall:
                     max_recall_match = curr_match
-                    max_recall_count = curr_count
+                    max_t = curr_t
                     max_recall = curr_recall
                     max_word_level_details = curr_word_level_details
 
             r_numerators[i] += max_recall_match
-            r_denominators[i] += max_recall_count
+            r_denominators[i] += max_t
             metrics["rc"] += max_recall_match
-            metrics["rt"] += max_recall_count
+            metrics["rt"] += max_t
             for key in {"t","tp","tc"}:
                 for w in max_word_level_details[key]:
                     if w not in metrics["word"]:
@@ -140,6 +154,77 @@ def basic_precision_recall(r, h, display=False):
         print("{0:10s} | {1:8.2f}".format("recall", *rec))
 
     return prec[0], rec[0], metrics
+
+# def basic_precision_recall(r, h, display=False):
+#     p_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
+#     p_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
+#     r_numerators = Counter() # Key = ngram order, and value = no. of ngram matches.
+#     r_denominators = Counter() # Key = ngram order, and value = no. of ngram in ref.
+#     metrics = {"rc": 0, "rt": 0, "tp": 0, "tc": 0, "word": {}}
+
+#     if display:
+#         print("total utts={0:d}".format(len(r)))
+
+#     i=1
+
+#     for references, hypothesis in zip(r, h):
+#         if min([len(any_ref) for any_ref in references]) > 0:
+#             if len(hypothesis) > 0:
+#                 p_i = modified_precision(references, hypothesis, i)
+#                 p_numerators[i] += p_i.numerator
+#                 p_denominators[i] += p_i.denominator
+
+#                 metrics["tc"] += p_i.numerator
+#                 metrics["tp"] += p_i.denominator
+#             else:
+#                 p_numerators[i] += 0
+#                 p_denominators[i] += 0
+
+#                 metrics["tc"] += 0
+#                 metrics["tp"] += 0
+
+#             #print(p_i.numerator, p_i.denominator)
+
+#             tot_match = 0
+#             tot_count = 0
+
+
+#             max_recall_match, max_word_level_details = count_match(references[0], hypothesis)
+#             max_recall_count = len(references[0])
+#             max_recall = max_recall_match / max_recall_count if max_recall_count > 0 else 0
+
+#             for curr_ref in references:
+#                 curr_match, curr_word_level_details = count_match(curr_ref, hypothesis)
+
+#                 curr_count = len(curr_ref)
+#                 curr_recall = curr_match / curr_count if curr_count > 0 else 0
+
+#                 if curr_recall > max_recall:
+#                     max_recall_match = curr_match
+#                     max_recall_count = curr_count
+#                     max_recall = curr_recall
+#                     max_word_level_details = curr_word_level_details
+
+#             r_numerators[i] += max_recall_match
+#             r_denominators[i] += max_recall_count
+#             metrics["rc"] += max_recall_match
+#             metrics["rt"] += max_recall_count
+#             for key in {"t","tp","tc"}:
+#                 for w in max_word_level_details[key]:
+#                     if w not in metrics["word"]:
+#                         metrics["word"][w] = {"t": 0, "tp": 0, "tc": 0}
+#                     metrics["word"][w][key] += max_word_level_details[key][w]
+
+#     prec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(p_numerators.values(), p_denominators.values())]
+#     rec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(r_numerators.values(), r_denominators.values())]
+
+#     if display:
+#         print("{0:10s} | {1:>8s}".format("metric", "1-gram"))
+#         print("-"*54)
+#         print("{0:10s} | {1:8.2f}".format("precision", *prec))
+#         print("{0:10s} | {1:8.2f}".format("recall", *rec))
+
+#     return prec[0], rec[0], metrics
 
 
 def modified_precision_recall(references, hypothesis, n):
@@ -610,7 +695,7 @@ def train_loop(cfg_path, epochs):
                                           max_dec=m_cfg['max_en_pred'],
                                           t_cfg=t_cfg,
                                           use_y=True,
-                                          get_probs=False)
+                                          get_probs=True)
 
             # mean_pos_scores = np.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
             # mean_neg_scores = np.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
@@ -623,20 +708,27 @@ def train_loop(cfg_path, epochs):
             #     mean_pos_scores[i_w] = np.mean(train_utts["probs"][:,i_w][pos_indx])
             #     mean_neg_scores[i_w] = np.mean(train_utts["probs"][:,i_w][neg_indx])
 
-            # train_pred_words = get_pred_words_from_probs(train_utts["probs"],
-            #                                            m_cfg["pred_thresh"],
-            #                                            m_cfg['max_en_pred'])
+            train_pred_words = get_pred_words_from_probs(train_utts["probs"],
+                                                       m_cfg["pred_thresh"],
+                                                       m_cfg['max_en_pred'])
 
-            # train_prec, train_rec, _ = basic_precision_recall(train_utts["refs"], train_pred_words)
+            train_prec, train_rec, _ = basic_precision_recall(train_utts["refs"], train_pred_words)
+
+
+            train_avg_p, _ = compute_avg_precision(train_utts["probs"],
+                                                     0.0, 1.0, 50,
+                                                     m_cfg['max_en_pred'],
+                                                     train_utts["refs"])
 
             # log train loss
-            # train_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}\n".format(last_epoch+i+1,
-            #                                                      train_loss,
-            #                                                      train_prec,
-            #                                                      train_rec))
+            train_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}, {4:.4f}\n".format(last_epoch+i+1,
+                                                                 train_loss,
+                                                                 train_prec,
+                                                                 train_rec,
+                                                                 train_avg_p))
 
-            train_log.write("{0:d}, {1:.6f}\n".format(last_epoch+i+1,
-                                                                 train_loss))
+            # train_log.write("{0:d}, {1:.6f}\n".format(last_epoch+i+1,
+                                                                 # train_loss))
 
             train_log.flush()
             os.fsync(train_log.fileno())
@@ -682,7 +774,7 @@ def train_loop(cfg_path, epochs):
             print("^"*80)
             print("{0:s} train avg loss={1:.6f}, dev avg loss={2:.6f}".format("*" * 10, train_loss, dev_loss))
             print("^"*80)
-            # print("{0:s} train: prec={1:.3f}, recall={2:.3f} ----- dev: prec={3:.3f}, recall={4:.3f}".format("*" * 10, train_prec, train_rec, prec, rec))
+            print("{0:s} train: prec={1:.3f}, recall={2:.3f}, avg prec={3:.3f}".format("*" * 10, train_prec, train_rec, train_avg_p))
             print("{0:s} dev: prec={1:.3f}, recall={2:.3f}, avg prec={3:.3f}".format("*" * 10, prec, rec, avg_p))
             print("^"*80)
             # -----------------------------------------------------------------
