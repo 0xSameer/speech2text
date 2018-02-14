@@ -58,8 +58,8 @@ def count_match(list1, list2):
     # each list can have repeated elements. The count should account for this.
     count1 = Counter(list1)
     count2 = Counter(list2)
-    count1_keys = count1.keys()-set([UNK_ID, EOS_ID])
-    count2_keys = count2.keys()-set([UNK_ID, EOS_ID])
+    count1_keys = count1.keys()-set([UNK_ID, EOS_ID, EOS, UNK, EOS.decode(), UNK.decode()])
+    count2_keys = count2.keys()-set([UNK_ID, EOS_ID, EOS, UNK, EOS.decode(), UNK.decode()])
     # count2_keys = count2.keys()
     common_w = set(count1_keys) & set(count2_keys)
     matches = sum([min(count1[w], count2[w]) for w in common_w])
@@ -716,7 +716,7 @@ def train_loop(cfg_path, epochs):
 
 
             train_avg_p, _ = compute_avg_precision(train_utts["probs"],
-                                                     0.0, 1.0, 50,
+                                                     0.0, 1.0, 10,
                                                      m_cfg['max_en_pred'],
                                                      train_utts["refs"])
 
@@ -793,6 +793,7 @@ def train_loop(cfg_path, epochs):
             #     print("Saving model")
             #     serializers.save_npz(model_fil.replace(".model", "_last.model", model))
             #     print("Finished saving model")
+            pickle.dump(train_utts, open(os.path.join(m_cfg['model_dir'], "model_s2t_train_out.dict"), "wb"))
             pickle.dump(dev_utts, open(os.path.join(m_cfg['model_dir'], "model_s2t_dev_out.dict"), "wb"))
             # pickle.dump(mean_pos_scores, open(os.path.join(m_cfg['model_dir'], "mean_pos_scores.dict"), "wb"))
             # pickle.dump(mean_neg_scores, open(os.path.join(m_cfg['model_dir'], "mean_neg_scores.dict"), "wb"))

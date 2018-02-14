@@ -219,17 +219,23 @@ class SpeechEncoderDecoder(Chain):
             # -----------------------------------------------------------------
             # add bag-of-words output layer
             # -----------------------------------------------------------------
-            if self.m_cfg['bi_rnn']:
-                h_units = self.m_cfg['hidden_units'] * 2
+            if self.m_cfg["enc_layers"] > 0:
+                if self.m_cfg['bi_rnn']:
+                    h_units_0, h_units = self.m_cfg['hidden_units'] * 2, self.m_cfg['hidden_units']
+                else:
+                    h_units_0, h_units = self.m_cfg['hidden_units'], self.m_cfg['hidden_units']
             else:
-                h_units = self.m_cfg['hidden_units']
+                h_units_0, h_units = rnn_in_units, rnn_in_units
 
             # Add highway layers for classification
             self.highway = []
             for i in range(self.m_cfg["highway_layers"]):
                 lname = "HIGHWAY_{0:d}".format(i)
                 self.highway.append(lname)
-                self.add_link(lname, L.Highway(h_units))
+                if i == 0:
+                    self.add_link(lname, L.Linear(h_units_0, h_units))
+                else:
+                    self.add_link(lname, L.Highway(h_units, h_units))
                 # self.add_link(lname, L.Linear(h_units, h_units))
             # Add final prediction layer
             self.add_link("out", L.Linear(h_units, self.bag_size_en))
@@ -556,6 +562,20 @@ class SpeechEncoderDecoder(Chain):
             # apply cnn
             # -----------------------------------------------------------------
             h = self[cnn_layer](h)
+            if "cnn_pool" in self.m_cfg:
+                time_pool = self.m_cfg['cnn_pool'][i][0]
+                if time_pool == -1:
+                    time_pool = h.shape[-2]
+
+                freq_pool = self.m_cfg['cnn_pool'][i][1]
+                if freq_pool == -1:
+                    freq_pool = h.shape[-1]
+
+                #print(time_pool, freq_pool)
+                #print("before", h.shape)
+
+                h = F.max_pooling_nd(h, (time_pool, freq_pool))
+                #print("after", h.shape)
             # -----------------------------------------------------------------
             # batch normalization before non-linearity
             # -----------------------------------------------------------------
@@ -568,22 +588,41 @@ class SpeechEncoderDecoder(Chain):
 
         # ---------------------------------------------------------------------
         # prepare return
-        # batch size * num time frames after pooling * cnn out dim
+        # if RNN
+        #   batch size * num time frames after pooling * cnn out dim
+        # else
+        #
         # ---------------------------------------------------------------------
-        h = F.swapaxes(h,1,2)
-        h = F.reshape(h, h.shape[:2] + tuple([-1]))
-        h = F.rollaxis(h,1)
+        if self.m_cfg["enc_layers"] > 0:
+            h = F.swapaxes(h,1,2)
+            h = F.reshape(h, h.shape[:2] + tuple([-1]))
+            h = F.rollaxis(h,1)
+        else:
+            h = F.swapaxes(h,1,2)
+            h = F.reshape(h, h.shape[:2] + tuple([-1]))
+            # max-pool across all time
+            h = F.max_pooling_nd(F.expand_dims(h,1), (h.shape[-2],1))
+            h = F.reshape(h, (h.data.shape[0],h.data.shape[-1]))
+
+        #print("final cnn h shape:", h.shape)
+
+
         # ---------------------------------------------------------------------
         return h
 
     def forward_highway(self, X):
+        h = X
         for i in range(len(self.highway)):
             if self.m_cfg['highway_dropout'] > 0:
-                h = F.dropout(self[self.highway[i]](X), ratio=self.m_cfg['highway_dropout'])
+                h = F.dropout(self[self.highway[i]](h), ratio=self.m_cfg['highway_dropout'])
                 # h = F.dropout(F.relu(self[self.highway[i]](X)), ratio=self.m_cfg['highway_dropout'])
             else:
-                h = self[self.highway[i]](X)
+                h = self[self.highway[i]](h)
                 # h = F.relu(self[self.highway[i]](X))
+
+            # first layer is linear, apply RELU
+            if i == 0:
+                h = F.relu(h)
         return h
 
     def forward_rnn(self, X):
@@ -675,7 +714,11 @@ class SpeechEncoderDecoder(Chain):
         if "bagofwords" not in self.m_cfg or self.m_cfg['bagofwords'] == False:
             self.forward_rnn(h)
         else:
-            self.forward_bow_rnn(h, l)
+            if self.m_cfg["enc_layers"] > 0:
+                self.forward_bow_rnn(h, l)
+            else:
+                # cnn only
+                self.h_final_rnn = h
         # ---------------------------------------------------------------------
 
     def forward(self, X, add_noise=0, teacher_ratio=0, y=None):
