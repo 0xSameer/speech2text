@@ -758,17 +758,19 @@ def train_loop(cfg_path, epochs):
 
             smooth_fun = nltk.translate.bleu_score.SmoothingFunction()
 
-            dev_b_score, dev_preds = basic_bleu(ref_sents, pred_sents, dec_key)
-            # dev_b_score = corpus_bleu(ref_sents,
-            #                           pred_sents,
-            #                           weights=[0.25, 0.25, 0.25, 0.25],
-            #                           smoothing_function=smooth_fun.method2)
-            # dev_b_score, _, _, _ = calc_bleu(map_dict[dev_key],
-            #                                            vocab_dict[dec_key],
-            #                                            pred_sents, utts,
-            #                                            dec_key)
-
-            dev_prec, dev_rec, _ = basic_precision_recall(ref_sents, dev_preds)
+            if dec_key.endswith("_w"):
+                dev_b_score, dev_preds = basic_bleu(ref_sents, pred_sents, dec_key)
+                dev_prec, dev_rec, _ = basic_precision_recall(ref_sents, dev_preds)
+            else:
+                # dev_b_score = corpus_bleu(ref_sents,
+                #                           pred_sents,
+                #                           weights=[0.25, 0.25, 0.25, 0.25],
+                #                           smoothing_function=smooth_fun.method2)
+                dev_b_score, _, char_h, char_r = calc_bleu(map_dict[dev_key],
+                                                           vocab_dict[dec_key],
+                                                           pred_sents, utts,
+                                                           dec_key)
+                dev_prec, dev_rec, _ = basic_precision_recall(char_r, char_h)
 
             # log dev loss
             dev_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}, {4:.4f}\n".format(last_epoch+i+1, dev_loss, dev_b_score, dev_prec, dev_rec))

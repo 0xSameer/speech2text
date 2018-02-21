@@ -121,18 +121,25 @@ def basic_precision_recall(r, h, display=False):
             tot_match = 0
             tot_count = 0
 
-            max_recall_match, max_tp, max_t, max_word_level_details = count_match(references[0], hypothesis)
+            common_ref_words = set()
+            for curr_ref in references:
+                common_ref_words |= set(curr_ref)
+
+            max_recall_match, max_tp, max_t, max_word_level_details = count_match(list(common_ref_words), hypothesis)
             max_recall = max_recall_match / max_t if max_t > 0 else 0
 
-            for curr_ref in references:
-                curr_match, curr_tp, curr_t, curr_word_level_details = count_match(curr_ref, hypothesis)
-                curr_recall = curr_match / curr_t if curr_t > 0 else 0
+            # max_recall_match, max_tp, max_t, max_word_level_details = count_match(references[0], hypothesis)
+            # max_recall = max_recall_match / max_t if max_t > 0 else 0
 
-                if curr_recall > max_recall:
-                    max_recall_match = curr_match
-                    max_t = curr_t
-                    max_recall = curr_recall
-                    max_word_level_details = curr_word_level_details
+            # for curr_ref in references:
+            #     curr_match, curr_tp, curr_t, curr_word_level_details = count_match(curr_ref, hypothesis)
+            #     curr_recall = curr_match / curr_t if curr_t > 0 else 0
+
+            #     if curr_recall > max_recall:
+            #         max_recall_match = curr_match
+            #         max_t = curr_t
+            #         max_recall = curr_recall
+            #         max_word_level_details = curr_word_level_details
 
             r_numerators[i] += max_recall_match
             r_denominators[i] += max_t
