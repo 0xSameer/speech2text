@@ -413,6 +413,16 @@ class SpeechEncoderDecoder(Chain):
 
                 loss_arr = F.softmax_cross_entropy(predicted_out, t_alt,
                                                class_weight=self.mask_pad_id)
+            elif "random_out" in self.m_cfg and self.m_cfg["random_out"] == True:
+                t_alt = xp.copy(next_word.data)
+                # sample and replace each element in the batch
+                for i in range(len(t_alt)):
+                    # use_sample = True if random.random() > self.m_cfg["sample_out_prob"] else False
+                    if int(t_alt[i]) >= 4 and random.random() > self.m_cfg["random_out_prob"]:
+                        t_alt[i] = xp.random.randint(4, self.v_size_en+1)
+
+                loss_arr = F.softmax_cross_entropy(predicted_out, t_alt,
+                                               class_weight=self.mask_pad_id)
             else:
                 loss_arr = F.softmax_cross_entropy(predicted_out, next_word,
                                                class_weight=self.mask_pad_id)
