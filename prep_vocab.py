@@ -115,7 +115,7 @@ def main():
         return 0
 
     # load map dictionary
-    map_dict_path = os.path.join(out_path,'map.dict')
+    map_dict_path = os.path.join(out_path,'new_map.dict')
 
     if not os.path.exists(map_dict_path):
         print("{0:s} does not exist. Exiting".format(map_dict_path))
@@ -127,14 +127,14 @@ def main():
 
     print("-"*50)
     train_vocab_dict = create_vocab(map_dict["fisher_train"])
-    train_vocab_dict_path = os.path.join(out_path,'train_vocab.dict')
+    train_vocab_dict_path = os.path.join(out_path,'new_train_vocab.dict')
     print("-"*50)
     print("saving vocab dict in: {0:s}".format(train_vocab_dict_path))
     pickle.dump(train_vocab_dict, open(train_vocab_dict_path, "wb"))
 
     print("-"*50)
     ch_train_vocab_dict = create_vocab(map_dict["callhome_train"])
-    ch_train_vocab_dict_path = os.path.join(out_path,'ch_train_vocab.dict')
+    ch_train_vocab_dict_path = os.path.join(out_path,'new_ch_train_vocab.dict')
     print("-"*50)
     print("saving vocab dict in: {0:s}".format(ch_train_vocab_dict_path))
     pickle.dump(ch_train_vocab_dict, open(ch_train_vocab_dict_path, "wb"))

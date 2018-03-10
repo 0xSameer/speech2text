@@ -49,7 +49,18 @@ def basic_tokenizer(sentence):
         # words.extend(_WORD_SUB.sub(b"", w) for w in _WORD_SPLIT.split(space_separated_fragment))
         words.extend([_WORD_SUB.sub(b"", w.encode()) for w in word_tokenize(space_separated_fragment.decode())])
     # return b" ".join([w.lower() for w in words if w])
-    return [w.lower() for w in words if w]
+
+    # new code
+    ret_words = " ".join([w.lower().decode() for w in words if w])
+
+    ret_words = ret_words.replace("`", "")
+    ret_words = ret_words.replace('"', '')
+    ret_words = ret_words.replace('¿', '')
+    ret_words = ret_words.replace("''", "")
+    ret_words = ret_words.strip()
+    ret_words = [w.encode() for w in ret_words.split()]
+
+    return ret_words
 
 # UGLY FUNCTION
 # ಠ_ಠ
@@ -62,7 +73,17 @@ def char_tokenizer(sentence):
     for space_separated_fragment in sentence_remove_angle.split():
         words.extend(_CHAR_SUB.sub(b"", w) for w in _CHAR_SPLIT.split(space_separated_fragment))
 
-    words = [w for w in words if w]
+    # words = [w for w in words if w]
+
+    # new code
+    words = " ".join([w.lower().decode() for w in words if w])
+
+    words = words.replace("`", "")
+    words = words.replace('"', '')
+    words = words.replace('¿', '')
+    words = words.replace("''", "")
+    words = words.strip()
+    words = [w.encode() for w in words.split()]
 
     i = 0
     while i < len(words):
@@ -203,11 +224,11 @@ def main():
 
     # prepare map dictionary
     map_dict = {}
-    map_dict_path = os.path.join(out_path,'map.dict')
+    map_dict_path = os.path.join(out_path,'new_map.dict')
     # map_dict_path = os.path.join(out_path,'map_nltk_tokenize.dict')
 
     rev_map_dict = {}
-    rev_map_dict_path = os.path.join(out_path,'rev_map.dict')
+    rev_map_dict_path = os.path.join(out_path,'new_rev_map.dict')
     # rev_map_dict_path = os.path.join(out_path,'rev_map_nltk_tokenize.dict')
 
     for cat in kaldi_segment_map:

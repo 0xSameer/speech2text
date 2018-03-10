@@ -29,13 +29,13 @@ class SpeechEncoderDecoder(Chain):
         if 'fisher' in self.m_cfg['train_set']:
             if self.m_cfg['stemmify'] == False:
                 v_path = os.path.join(self.m_cfg['data_path'],
-                                                'train_vocab.dict')
+                                                'new_train_vocab.dict')
             else:
                 v_path = os.path.join(self.m_cfg['data_path'],
-                                                'train_stemmed_vocab.dict')
+                                                'new_train_stemmed_vocab.dict')
         else:
             v_path = os.path.join(self.m_cfg['data_path'],
-                                            'ch_train_vocab.dict')
+                                            'new_ch_train_vocab.dict')
         vocab_dict = pickle.load(open(v_path, "rb"))
         if self.m_cfg['enc_key'] != 'sp':
             self.v_size_es = len(vocab_dict[self.m_cfg['enc_key']]['w2i'])
