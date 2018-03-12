@@ -501,11 +501,12 @@ def feed_model(model, optimizer, m_dict, b_dict,
 # map_dict, vocab_dict, bucket_dict = get_data_dicts(model_cfg)
 def get_data_dicts(m_cfg):
     print("-"*50)
+    v_pre = m_cfg['vocab_pre']
     # load dictionaries
     # -------------------------------------------------------------------------
     # MAP dict
     # -------------------------------------------------------------------------
-    map_dict_path = os.path.join(m_cfg['data_path'],'new_map.dict')
+    map_dict_path = os.path.join(m_cfg['data_path'],v_pre+'map.dict')
     print("loading dict: {0:s}".format(map_dict_path))
     map_dict = pickle.load(open(map_dict_path, "rb"))
     # -------------------------------------------------------------------------
@@ -513,11 +514,11 @@ def get_data_dicts(m_cfg):
     # -------------------------------------------------------------------------
     if 'fisher' in m_cfg['train_set']:
         if m_cfg['stemmify'] == False:
-            vocab_path = os.path.join(m_cfg['data_path'], 'new_train_vocab.dict')
+            vocab_path = os.path.join(m_cfg['data_path'], v_pre+'train_vocab.dict')
         else:
-            vocab_path = os.path.join(m_cfg['data_path'], 'new_train_stemmed_vocab.dict')
+            vocab_path = os.path.join(m_cfg['data_path'], v_pre+'train_stemmed_vocab.dict')
     else:
-        vocab_path = os.path.join(m_cfg['data_path'], 'new_ch_train_vocab.dict')
+        vocab_path = os.path.join(m_cfg['data_path'], v_pre+'ch_train_vocab.dict')
     print("loading dict: {0:s}".format(vocab_path))
     vocab_dict = pickle.load(open(vocab_path, "rb"))
     print("-"*50)
