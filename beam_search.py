@@ -18,8 +18,17 @@ parser = argparse.ArgumentParser(description=program_descrp)
 parser.add_argument('-o','--nmt_path', help='model path',
                     required=True)
 
+parser.add_argument('-n','--N', help='number of hyps',
+                    required=True)
+
+parser.add_argument('-k','--K', help='softmax selection',
+                    required=True)
+
 args = vars(parser.parse_args())
 cfg_path = args['nmt_path']
+
+N = int(args['N'])
+K = int(args['K'])
 
 # cfg_path = "interspeech/sp_20hrs"
 
@@ -199,6 +208,12 @@ def decode_beam_step(decode_entry, beam_width=3):
 
         curr_dec_state = get_decoder_states()
 
+        # # check top prob EOS:
+        # pruned_top_probs = []
+        # for pi in top_n_probs:
+        #     if top_n_probs[0] == EOS_ID:
+        #         if pred_probs[EOS_ID] >= 3*pred_probs[top_n_probs[1]]:
+
         for pi in top_n_probs[::-1]:
             #print("{0:10s} = {1:5.4f}".format(v_dict['i2w'][pi].decode(), pred_probs[pi]))
             new_entry = {}
@@ -256,12 +271,14 @@ all_valid_utts = [u for b in bucket_dict["fisher_dev"]["buckets"] for u in b]
 utt_hyps = {}
 for u in tqdm(all_valid_utts, ncols=80):
     with chainer.using_config('train', False):
-        n_best = decode_beam(u, "fisher_dev", stop_limit=20, max_n=8, beam_width=3)
+        n_best = decode_beam(u, "fisher_dev", stop_limit=200, max_n=N, beam_width=K)
         utt_hyps[u] = [(e["hyp"], e["score"]) for e in n_best]
 
 
 print("saving hyps")
-pickle.dump(utt_hyps, open(os.path.join(m_cfg["model_dir"], "n_best_hyps.dict"), "wb"))
+pickle.dump(utt_hyps, open(os.path.join(m_cfg["model_dir"],
+                            "n_best_hyps_N-{0:d}_K-{1:d}.dict".format(N,K)),
+                            "wb"))
 
 
 def clean_out_str(out_str):
@@ -305,7 +322,11 @@ def write_to_file_len_filtered_preds(utts_beam, min_len, max_len):
     filt_utts = sorted(filt_utts)
     print("Utts matching len filter={0:d}".format(len(filt_utts)))
 
-    hyp_path = os.path.join(m_cfg["model_dir"], "beam_min-{0:d}_max-{1:d}.en".format(min_len, max_len))
+    hyp_path = os.path.join(m_cfg["model_dir"],
+                "beam_min-{0:d}_max-{1:d}_N-{2:d}_K-{3:d}.en".format(min_len,
+                                                                     max_len,
+                                                                     N,
+                                                                     K))
     print("writing hyps to: {0:s}".format(hyp_path))
     with open(hyp_path, "w") as out_f:
         for u in filt_utts:
