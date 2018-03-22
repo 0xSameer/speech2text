@@ -24,11 +24,16 @@ parser.add_argument('-n','--N', help='number of hyps',
 parser.add_argument('-k','--K', help='softmax selection',
                     required=True)
 
+parser.add_argument('-s','--S', help='dev/dev2/test',
+                    required=True)
+
 args = vars(parser.parse_args())
 cfg_path = args['nmt_path']
 
 N = int(args['N'])
 K = int(args['K'])
+
+set_key = args['S']
 
 # cfg_path = "interspeech/sp_20hrs"
 
@@ -62,11 +67,12 @@ def get_utt_data(eg_utt, curr_set):
 last_epoch, model, optimizer, m_cfg, t_cfg = check_model(cfg_path)
 
 train_key = m_cfg['train_set']
-dev_key = m_cfg['dev_set']
+# dev_key = m_cfg['dev_set']
+dev_key = set_key
 batch_size=t_cfg['batch_size']
 enc_key=m_cfg['enc_key']
 dec_key=m_cfg['dec_key']
-input_path = os.path.join(m_cfg['data_path'], m_cfg['dev_set'])
+input_path = os.path.join(m_cfg['data_path'], dev_key)
 # -------------------------------------------------------------------------
 # get data dictionaries
 # -------------------------------------------------------------------------
@@ -88,7 +94,7 @@ m_dict=map_dict[dev_key]
 # wavs_path = os.path.join(m_cfg['data_path'], "wavs")
 wavs_path = os.path.join("../chainer2/speech2text/both_fbank_out/", "wavs")
 v_dict = vocab_dict['en_w']
-key = m_cfg['dev_set']
+# key = m_cfg['dev_set']
 
 
 
@@ -264,20 +270,20 @@ def decode_beam(utt, curr_set, stop_limit=10, max_n=5, beam_width=3):
 
 
 
-all_valid_utts = [u for b in bucket_dict["fisher_dev"]["buckets"] for u in b]
+all_valid_utts = [u for b in bucket_dict[set_key]["buckets"] for u in b]
 
 
 
 utt_hyps = {}
 for u in tqdm(all_valid_utts, ncols=80):
     with chainer.using_config('train', False):
-        n_best = decode_beam(u, "fisher_dev", stop_limit=200, max_n=N, beam_width=K)
+        n_best = decode_beam(u, set_key, stop_limit=200, max_n=N, beam_width=K)
         utt_hyps[u] = [(e["hyp"], e["score"]) for e in n_best]
 
 
 print("saving hyps")
 pickle.dump(utt_hyps, open(os.path.join(m_cfg["model_dir"],
-                            "n_best_hyps_N-{0:d}_K-{1:d}.dict".format(N,K)),
+                            "{0:s}_n_best_hyps_N-{1:d}_K-{2:d}.dict".format(set_key,N,K)),
                             "wb"))
 
 
@@ -315,15 +321,16 @@ MAX_LEN=300
 def write_to_file_len_filtered_preds(utts_beam, min_len, max_len):
     filt_utts = []
     for u in utts_beam:
-        if (len(map_dict["fisher_dev"][u]["es_w"]) >= min_len and
-           len(map_dict["fisher_dev"][u]["es_w"]) <= max_len):
+        if (len(map_dict[set_key][u]["es_w"]) >= min_len and
+           len(map_dict[set_key][u]["es_w"]) <= max_len):
             filt_utts.append(u)
 
     filt_utts = sorted(filt_utts)
     print("Utts matching len filter={0:d}".format(len(filt_utts)))
 
     hyp_path = os.path.join(m_cfg["model_dir"],
-                "beam_min-{0:d}_max-{1:d}_N-{2:d}_K-{3:d}.en".format(min_len,
+                "{0:s}_beam_min-{1:d}_max-{2:d}_N-{3:d}_K-{4:d}.en".format(set_key,
+                                                                     min_len,
                                                                      max_len,
                                                                      N,
                                                                      K))
