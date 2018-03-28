@@ -37,13 +37,18 @@ xp = cuda.cupy
 # -----------------------------------------------------------------------------
 # helper functions for metrics
 # -----------------------------------------------------------------------------
-def get_en_words_from_list(l):
-    return [w.decode() for w in l]
+def get_en_words_from_list(l, join_str):
+    ret_str = join_str.join([w.decode() for w in l])
+    return ret_str.strip().split()
 
 def basic_bleu(r, preds, dec_key, weights=(0.25, 0.25, 0.25, 0.25)):
     en_hyp = []
     en_ref = []
-    ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
+
+    if "bpe_w" == dec_key:
+        ref_key = dec_key
+    else:
+        ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
 
     join_str = ' ' if dec_key.endswith('_w') else ''
 
@@ -73,19 +78,27 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key,
               ref_index=-1):
     en_hyp = []
     en_ref = []
-    ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
+
+    if "bpe_w" == dec_key:
+        ref_key = "en_c"
+        join_str_ref = ""
+    else:
+        ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
+        join_str_ref = " "
+
     src_key = 'es_w'
+
     for u in tqdm(utts, ncols=80):
         if type(m_dict[u][ref_key]) == list:
-            en_ref.append([get_en_words_from_list(m_dict[u][ref_key])])
+            en_ref.append([get_en_words_from_list(m_dict[u][ref_key], join_str_ref)])
         else:
             if ref_index == -1:
                 en_r_list = []
                 for r in m_dict[u][ref_key]:
-                    en_r_list.append(get_en_words_from_list(r))
+                    en_r_list.append(get_en_words_from_list(r, join_str_ref))
                 en_ref.append(en_r_list)
             else:
-                en_ref.append([get_en_words_from_list(m_dict[u][ref_key][ref_index])])
+                en_ref.append([get_en_words_from_list(m_dict[u][ref_key][ref_index], join_str_ref)])
 
     join_str = ' ' if dec_key.endswith('_w') else ''
 
@@ -95,6 +108,8 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key,
         total_matching_len += 1
         if type(p) == list:
             t_str = join_str.join([v_dict['i2w'][i].decode() for i in p])
+            if dec_key == "bpe_w":
+                t_str = t_str.replace("@@ ", "")
             t_str = t_str[:t_str.find('_EOS')]
             en_hyp.append(t_str.strip().split())
         else:
@@ -760,8 +775,14 @@ def train_loop(cfg_path, epochs):
             smooth_fun = nltk.translate.bleu_score.SmoothingFunction()
 
             if dec_key.endswith("_w"):
-                dev_b_score, dev_preds = basic_bleu(ref_sents, pred_sents, dec_key)
-                dev_prec, dev_rec, _ = basic_precision_recall(ref_sents, dev_preds)
+                # dev_b_score, dev_preds = basic_bleu(ref_sents, pred_sents, dec_key)
+                # dev_prec, dev_rec, _ = basic_precision_recall(ref_sents, dev_preds)
+
+                dev_b_score, _, char_h, char_r = calc_bleu(map_dict[dev_key],
+                                                           vocab_dict[dec_key],
+                                                           pred_sents, utts,
+                                                           dec_key)
+                dev_prec, dev_rec, _ = basic_precision_recall(char_r, char_h)
             else:
                 # dev_b_score = corpus_bleu(ref_sents,
                 #                           pred_sents,
