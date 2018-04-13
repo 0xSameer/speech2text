@@ -58,7 +58,15 @@ def create_buckets(cat_dict, num_b, width_b, key, scale, seed):
     print("done...")
 # end def
 
-def buckets_main(out_path, num_b, width_b, key, scale=1, seed='haha'):
+def buckets_main(out_path, 
+                 num_b, 
+                 width_b, 
+                 key, 
+                 scale=1, 
+                 seed='haha',
+                 save_path=""):
+    if save_path == "":
+        save_path = out_path
     # create output file directory:
     if not os.path.exists(out_path):
         print("{0:s} does not exist. Exiting".format(out_path))
@@ -91,7 +99,7 @@ def buckets_main(out_path, num_b, width_b, key, scale=1, seed='haha'):
     # end for category: dev, dev2, test, train
 
     # save buckets info
-    bucket_dict_path = os.path.join(out_path,'buckets_{0:s}.dict'.format(key))
+    bucket_dict_path = os.path.join(save_path,'buckets_{0:s}.dict'.format(key))
     print("-"*50)
     print("saving info dict in: {0:s}".format(bucket_dict_path))
     pickle.dump(bucket_dict, open(bucket_dict_path, "wb"))

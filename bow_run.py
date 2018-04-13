@@ -320,23 +320,23 @@ def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
         data_found = True
         if type(m_dict[u][y_key]) == list:
             en_ids = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key]])-set(range(4)))
-            if len(en_ids) == 0:
-                data_found = False
-                en_ids = [UNK_ID]
+            # if len(en_ids) == 0:
+            #     data_found = False
+            #     en_ids = [UNK_ID]
             r_data = [en_ids[:max_dec]]
 
         else:
             # dev and test data have multiple translations
             # choose the first one for computing perplexity
             en_ids = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in m_dict[u][y_key][0]])-set(range(4)))
-            if len(en_ids) == 0:
-                data_found = False
-                en_ids = [UNK_ID]
+            # if len(en_ids) == 0:
+            #     data_found = False
+            #     en_ids = [UNK_ID]
             r_data = []
             for r in m_dict[u][y_key]:
                 r_list = list(set([bow_dict['w2i'].get(w, UNK_ID) for w in r])-set(range(4)))
-                if len(r_list) == 0:
-                    r_list = [UNK_ID]
+                # if len(r_list) == 0:
+                #     r_list = [UNK_ID]
                 r_data.append(r_list[:max_dec])
 
         y_ids = en_ids[:max_dec]
@@ -347,7 +347,7 @@ def get_bow_batch(m_dict, x_key, y_key, utt_list, vocab_dict, bow_dict,
             batch_data['t'].append([y_ids])
             y_data = xp.zeros(len(bow_dict['w2i']), dtype=xp.int32)
             y_data[y_ids] = 1
-            y_data[list(range(3))] = -1
+            y_data[list(range(4))] = -1
             batch_data['y'].append(y_data)
             batch_data['r'].append(r_data)
             batch_data['l'].append(len(x_data))
@@ -530,9 +530,10 @@ def get_data_dicts(m_cfg):
                               m_cfg['buckets_width'],
                               m_cfg['enc_key'],
                               scale=m_cfg['train_scale'],
-                              seed=m_cfg['seed'])
+                              seed=m_cfg['seed'],
+                              save_path=m_cfg['model_dir'])
 
-    buckets_path = os.path.join(m_cfg['data_path'],
+    buckets_path = os.path.join(m_cfg['model_dir'],
                                 'buckets_{0:s}.dict'.format(m_cfg['enc_key']))
     print("loading dict: {0:s}".format(buckets_path))
     bucket_dict = pickle.load(open(buckets_path, "rb"))
@@ -543,6 +544,7 @@ def get_data_dicts(m_cfg):
     bow_dict_path = os.path.join(m_cfg['data_path'], m_cfg['bagofwords_vocab'])
     print("loading dict: {0:s}".format(bow_dict_path))
     bow_dict = pickle.load(open(bow_dict_path, "rb"))
+    bow_vocab_size = len(bow_dict['w2i'])
     print("-"*50)
     # -------------------------------------------------------------------------
     # INFORMATION
@@ -559,6 +561,8 @@ def get_data_dicts(m_cfg):
                                                 vocab_size_es))
     print('vocab size for {0:s} = {1:d}'.format(m_cfg['dec_key'],
                                                 vocab_size_en))
+    print('vocab size for {0:s} = {1:d}'.format(m_cfg['bagofwords_vocab'],
+                                                bow_vocab_size))
     # -------------------------------------------------------------------------
     return map_dict, vocab_dict, bucket_dict, bow_dict
 

@@ -26,23 +26,33 @@ class SpeechEncoderDecoder(Chain):
         #----------------------------------------------------------------------
         # get vocab size
         #----------------------------------------------------------------------
-        v_pre = self.m_cfg['vocab_pre']
-        if 'fisher' in self.m_cfg['train_set']:
-            if self.m_cfg['stemmify'] == False:
-                v_path = os.path.join(self.m_cfg['data_path'],
-                                                v_pre+'train_vocab.dict')
+        if "bagofwords" not in self.m_cfg or self.m_cfg["bagofwords"] == False:
+            v_pre = self.m_cfg['vocab_pre']
+            if 'fisher' in self.m_cfg['train_set']:
+                if self.m_cfg['stemmify'] == False:
+                    v_path = os.path.join(self.m_cfg['data_path'],
+                                                    v_pre+'train_vocab.dict')
+                else:
+                    v_path = os.path.join(self.m_cfg['data_path'],
+                                                    v_pre+'train_stemmed_vocab.dict')
             else:
                 v_path = os.path.join(self.m_cfg['data_path'],
-                                                v_pre+'train_stemmed_vocab.dict')
+                                                v_pre+'ch_train_vocab.dict')
+            vocab_dict = pickle.load(open(v_path, "rb"))
+            if self.m_cfg['enc_key'] != 'sp':
+                self.v_size_es = len(vocab_dict[self.m_cfg['enc_key']]['w2i'])
+            else:
+                self.v_size_es = 0
+            self.v_size_en = len(vocab_dict[self.m_cfg['dec_key']]['w2i'])
         else:
-            v_path = os.path.join(self.m_cfg['data_path'],
-                                            v_pre+'ch_train_vocab.dict')
-        vocab_dict = pickle.load(open(v_path, "rb"))
-        if self.m_cfg['enc_key'] != 'sp':
-            self.v_size_es = len(vocab_dict[self.m_cfg['enc_key']]['w2i'])
-        else:
+            print("-"*80)
+            v_path = os.path.join(self.m_cfg['data_path'], 
+                                  self.m_cfg["bagofwords_vocab"])
+            vocab_dict = pickle.load(open(v_path, "rb"))
             self.v_size_es = 0
-        self.v_size_en = len(vocab_dict[self.m_cfg['dec_key']]['w2i'])
+            self.v_size_en = len(vocab_dict['w2i'])
+            print("bow vocab size = {0:d}".format(self.v_size_en))
+            print("-"*80)
         #----------------------------------------------------------------------
         # sim dict
         #----------------------------------------------------------------------
@@ -200,13 +210,15 @@ class SpeechEncoderDecoder(Chain):
             # -----------------------------------------------------------------
             # add dec embedding layer
             # -----------------------------------------------------------------
-            self.add_link("embed_dec", L.EmbedID(self.v_size_en,
-                                                 self.m_cfg['embedding_units']))
+            self.add_link("embed_dec", 
+                           L.EmbedID(self.v_size_en,
+                           self.m_cfg['embedding_units']))
             # -----------------------------------------------------------------
             # add output layers
             # -----------------------------------------------------------------
-            self.add_link("out", L.Linear(self.m_cfg['attn_units'],
-                                          self.v_size_en))
+            self.add_link("out", 
+                           L.Linear(self.m_cfg['attn_units'],
+                           self.v_size_en))
             # -----------------------------------------------------------------
             # create masking array for pad id
             # -----------------------------------------------------------------
@@ -582,11 +594,11 @@ class SpeechEncoderDecoder(Chain):
                 if freq_pool == -1:
                     freq_pool = h.shape[-1]
 
-                #print(time_pool, freq_pool)
-                #print("before", h.shape)
+                # print(time_pool, freq_pool)
+                # print("before", h.shape)
 
                 h = F.max_pooling_nd(h, (time_pool, freq_pool))
-                #print("after", h.shape)
+                # print("after", h.shape)
             # -----------------------------------------------------------------
             # batch normalization before non-linearity
             # -----------------------------------------------------------------

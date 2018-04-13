@@ -72,6 +72,7 @@ dev_key = set_key
 batch_size=t_cfg['batch_size']
 enc_key=m_cfg['enc_key']
 dec_key=m_cfg['dec_key']
+
 input_path = os.path.join(m_cfg['data_path'], dev_key)
 # -------------------------------------------------------------------------
 # get data dictionaries
@@ -87,13 +88,13 @@ random.seed("meh")
 
 # Eval parameters
 ref_index = -1
-min_len, max_len= 0, m_cfg['max_en_pred']
+min_pred_len, max_pred_len= 0, m_cfg['max_en_pred']
 # min_len, max_len = 0, 10
 displayN = 50
 m_dict=map_dict[dev_key]
 # wavs_path = os.path.join(m_cfg['data_path'], "wavs")
 wavs_path = os.path.join("../chainer2/speech2text/both_fbank_out/", "wavs")
-v_dict = vocab_dict['en_w']
+v_dict = vocab_dict[dec_key]
 # key = m_cfg['dev_set']
 
 
@@ -277,7 +278,9 @@ all_valid_utts = [u for b in bucket_dict[set_key]["buckets"] for u in b]
 utt_hyps = {}
 for u in tqdm(all_valid_utts, ncols=80):
     with chainer.using_config('train', False):
-        n_best = decode_beam(u, set_key, stop_limit=200, max_n=N, beam_width=K)
+        n_best = decode_beam(u, set_key, 
+                             stop_limit=max_pred_len, 
+                             max_n=N, beam_width=K)
         utt_hyps[u] = [(e["hyp"], e["score"]) for e in n_best]
 
 
@@ -292,6 +295,11 @@ def clean_out_str(out_str):
     out_str = out_str.replace('"', '')
     out_str = out_str.replace('¿', '')
     out_str = out_str.replace("''", "")
+
+    # for BPE
+    out_str = out_str.replace("@@ ", "")
+    out_str = out_str.replace("@@", "")
+
     out_str = out_str.strip()
     return out_str
 
@@ -301,8 +309,14 @@ def clean_out_str(out_str):
 
 def get_out_str(h):
     out_str = ""
-    for w in h:
-        out_str += "{0:s}".format(w) if (w.startswith("'") or w=="n't") else " {0:s}".format(w)
+    if dec_key == "en_w":
+        for w in h:
+            out_str += "{0:s}".format(w) if (w.startswith("'") or w=="n't") else " {0:s}".format(w)
+    elif dec_key == "bpe_w":
+        out_str = " ".join(h)
+
+    elif dec_key == "en_c":
+        out_str = "".join(h)
 
     out_str = clean_out_str(out_str)
     return out_str
@@ -311,8 +325,8 @@ def get_out_str(h):
 # In[47]:
 
 
-MIN_LEN=0
-MAX_LEN=300
+# MIN_LEN=0
+# MAX_LEN=300
 
 
 # In[50]:
@@ -335,7 +349,7 @@ def write_to_file_len_filtered_preds(utts_beam, min_len, max_len):
                                                                      N,
                                                                      K))
     print("writing hyps to: {0:s}".format(hyp_path))
-    with open(hyp_path, "w") as out_f:
+    with open(hyp_path, "w", encoding="utf-8") as out_f:
         for u in filt_utts:
             hyp = [v_dict['i2w'][i].decode() for i in utts_beam[u][0][0] if i >= 4]
             out_str = get_out_str(hyp)

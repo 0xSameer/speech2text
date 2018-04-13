@@ -572,9 +572,10 @@ def get_data_dicts(m_cfg):
                               m_cfg['buckets_width'],
                               m_cfg['enc_key'],
                               scale=m_cfg['train_scale'],
-                              seed=m_cfg['seed'])
+                              seed=m_cfg['seed'],
+                              save_path=m_cfg['model_dir'])
 
-    buckets_path = os.path.join(m_cfg['data_path'],
+    buckets_path = os.path.join(m_cfg['model_dir'],
                                 'buckets_{0:s}.dict'.format(m_cfg['enc_key']))
     print("loading dict: {0:s}".format(buckets_path))
     bucket_dict = pickle.load(open(buckets_path, "rb"))
