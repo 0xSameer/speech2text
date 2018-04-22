@@ -347,7 +347,7 @@ class SpeechEncoderDecoder(Chain):
         h = self.feed_rnn(data_in, rnn_layers)
         return h
 
-    def decode(self, word, ht):
+    def decode(self, word, ht, get_alphas=False):
         # ---------------------------------------------------------------------
         # get embedding
         # ---------------------------------------------------------------------
@@ -364,7 +364,7 @@ class SpeechEncoderDecoder(Chain):
         # ---------------------------------------------------------------------
         # compute context vector
         # ---------------------------------------------------------------------
-        cv, _ = self.compute_context_vector(h)
+        cv, alphas = self.compute_context_vector(h)
         cv_hdec = F.concat((cv, h), axis=1)
         # ---------------------------------------------------------------------
         # compute attentional hidden state
@@ -379,7 +379,10 @@ class SpeechEncoderDecoder(Chain):
         else:
             predicted_out = self.out(ht)
         # ---------------------------------------------------------------------
-        return predicted_out, ht
+        if get_alphas:
+            return predicted_out, ht, alphas
+        else:
+            return predicted_out, ht
 
     def decode_batch(self, decoder_batch, teacher_ratio):
         xp = cuda.cupy if self.gpuid >= 0 else np

@@ -87,7 +87,8 @@ def main():
     uttr_info_dict = {}
 
     for cat in map_dict:
-        # if "fisher" in cat:
+        if "fisher" not in cat:
+            continue
         cat_speech_path = os.path.join(out_path, cat)
         if not os.path.isdir(cat_speech_path):
             print("{0:s} does not exist. Exiting!".format(cat_speech_path))
