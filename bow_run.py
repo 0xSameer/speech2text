@@ -101,55 +101,55 @@ def basic_precision_recall(r, h, display=False):
     i=1
 
     for references, hypothesis in zip(r, h):
-        if min([len(any_ref) for any_ref in references]) > 0:
-            if len(hypothesis) > 0:
-                p_i = modified_precision(references, hypothesis, i)
-                p_numerators[i] += p_i.numerator
-                p_denominators[i] += p_i.denominator
+#         if min([len(any_ref) for any_ref in references]) > 0:
+        if len(hypothesis) > 0:
+            p_i = modified_precision(references, hypothesis, i)
+            p_numerators[i] += p_i.numerator
+            p_denominators[i] += p_i.denominator
 
-                metrics["tc"] += p_i.numerator
-                metrics["tp"] += p_i.denominator
-            else:
-                p_numerators[i] += 0
-                p_denominators[i] += 0
+            metrics["tc"] += p_i.numerator
+            metrics["tp"] += p_i.denominator
+        else:
+            p_numerators[i] += 0
+            p_denominators[i] += 0
 
-                metrics["tc"] += 0
-                metrics["tp"] += 0
+            metrics["tc"] += 0
+            metrics["tp"] += 0
 
-            #print(p_i.numerator, p_i.denominator)
+        #print(p_i.numerator, p_i.denominator)
 
-            tot_match = 0
-            tot_count = 0
+        tot_match = 0
+        tot_count = 0
 
-            common_ref_words = set()
-            for curr_ref in references:
-                common_ref_words |= set(curr_ref)
+        common_ref_words = set()
+        for curr_ref in references:
+            common_ref_words |= set(curr_ref)
 
-            max_recall_match, max_tp, max_t, max_word_level_details = count_match(list(common_ref_words), hypothesis)
-            max_recall = max_recall_match / max_t if max_t > 0 else 0
+        max_recall_match, max_tp, max_t, max_word_level_details = count_match(list(common_ref_words), hypothesis)
+        max_recall = max_recall_match / max_t if max_t > 0 else 0
 
-            # max_recall_match, max_tp, max_t, max_word_level_details = count_match(references[0], hypothesis)
-            # max_recall = max_recall_match / max_t if max_t > 0 else 0
+        # max_recall_match, max_tp, max_t, max_word_level_details = count_match(references[0], hypothesis)
+        # max_recall = max_recall_match / max_t if max_t > 0 else 0
 
-            # for curr_ref in references:
-            #     curr_match, curr_tp, curr_t, curr_word_level_details = count_match(curr_ref, hypothesis)
-            #     curr_recall = curr_match / curr_t if curr_t > 0 else 0
+        # for curr_ref in references:
+        #     curr_match, curr_tp, curr_t, curr_word_level_details = count_match(curr_ref, hypothesis)
+        #     curr_recall = curr_match / curr_t if curr_t > 0 else 0
 
-            #     if curr_recall > max_recall:
-            #         max_recall_match = curr_match
-            #         max_t = curr_t
-            #         max_recall = curr_recall
-            #         max_word_level_details = curr_word_level_details
+        #     if curr_recall > max_recall:
+        #         max_recall_match = curr_match
+        #         max_t = curr_t
+        #         max_recall = curr_recall
+        #         max_word_level_details = curr_word_level_details
 
-            r_numerators[i] += max_recall_match
-            r_denominators[i] += max_t
-            metrics["rc"] += max_recall_match
-            metrics["rt"] += max_t
-            for key in {"t","tp","tc"}:
-                for w in max_word_level_details[key]:
-                    if w not in metrics["word"]:
-                        metrics["word"][w] = {"t": 0, "tp": 0, "tc": 0}
-                    metrics["word"][w][key] += max_word_level_details[key][w]
+        r_numerators[i] += max_recall_match
+        r_denominators[i] += max_t
+        metrics["rc"] += max_recall_match
+        metrics["rt"] += max_t
+        for key in {"t","tp","tc"}:
+            for w in max_word_level_details[key]:
+                if w not in metrics["word"]:
+                    metrics["word"][w] = {"t": 0, "tp": 0, "tc": 0}
+                metrics["word"][w][key] += max_word_level_details[key][w]
 
     prec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(p_numerators.values(), p_denominators.values())]
     rec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(r_numerators.values(), r_denominators.values())]
@@ -595,7 +595,8 @@ def check_model(cfg_path):
         optimizer = optimizers.Adam(alpha=t_cfg['lr'],
                                     beta1=0.9,
                                     beta2=0.999,
-                                    eps=1e-08)
+                                    eps=1e-08,
+                                    amsgrad=True)
     else:
         print("using SGD optimizer")
         optimizer = optimizers.SGD(lr=t_cfg['lr'])

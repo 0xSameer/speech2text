@@ -631,7 +631,8 @@ def check_model(cfg_path):
         optimizer = optimizers.Adam(alpha=t_cfg['lr'],
                                     beta1=0.9,
                                     beta2=0.999,
-                                    eps=1e-08)
+                                    eps=1e-08,
+                                    amsgrad=True)
     else:
         print("using SGD optimizer")
         optimizer = optimizers.SGD(lr=t_cfg['lr'])

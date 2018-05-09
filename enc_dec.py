@@ -210,9 +210,21 @@ class SpeechEncoderDecoder(Chain):
             # -----------------------------------------------------------------
             # add dec embedding layer
             # -----------------------------------------------------------------
+            if "init_emb" in self.m_cfg and self.m_cfg["init_emb"] == True:
+                print("-"*80)
+                print("using pre-trained embeddings")
+                print("-"*80)
+                initial_emb_W = xp.load(os.path.join(self.m_cfg["data_path"],
+                                                     self.m_cfg["emb_fname"]))
+            else:
+                print("-"*80)
+                print("using randomly initialized embeddings")
+                print("-"*80)
+                initial_emb_W = None
             self.add_link("embed_dec", 
                            L.EmbedID(self.v_size_en,
-                           self.m_cfg['embedding_units']))
+                           self.m_cfg['embedding_units'],
+                           initialW=initial_emb_W))
             # -----------------------------------------------------------------
             # add output layers
             # -----------------------------------------------------------------

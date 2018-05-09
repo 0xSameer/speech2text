@@ -337,3 +337,35 @@ def get_out_str(h):
 # In[50]:
 
 
+def write_to_file_len_filtered_preds(utts_beam, min_len, max_len):
+    filt_utts = []
+    for u in utts_beam:
+        if (len(map_dict[set_key][u]["es_w"]) >= min_len and
+           len(map_dict[set_key][u]["es_w"]) <= max_len):
+            filt_utts.append(u)
+
+    filt_utts = sorted(filt_utts)
+    print("Utts matching len filter={0:d}".format(len(filt_utts)))
+
+    hyp_path = os.path.join(m_cfg["model_dir"],
+                "{0:s}_beam_min-{1:d}_max-{2:d}_N-{3:d}_K-{4:d}.en".format(set_key,
+                                                                     min_len,
+                                                                     max_len,
+                                                                     N,
+                                                                     K))
+    print("writing hyps to: {0:s}".format(hyp_path))
+    with open(hyp_path, "w", encoding="utf-8") as out_f:
+        for u in filt_utts:
+            hyp = [v_dict['i2w'][i].decode() for i in utts_beam[u][0][0] if i >= 4]
+            out_str = get_out_str(hyp)
+            out_f.write("{0:s}\n".format(out_str))
+    print("all done")
+
+
+# In[51]:
+
+
+print("writing to file")
+write_to_file_len_filtered_preds(utt_hyps, 0, 300)
+
+print("all done")
