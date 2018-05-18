@@ -46,7 +46,7 @@ class SpeechEncoderDecoder(Chain):
             self.v_size_en = len(vocab_dict[self.m_cfg['dec_key']]['w2i'])
         else:
             print("-"*80)
-            v_path = os.path.join(self.m_cfg['data_path'], 
+            v_path = os.path.join(self.m_cfg['data_path'],
                                   self.m_cfg["bagofwords_vocab"])
             vocab_dict = pickle.load(open(v_path, "rb"))
             self.v_size_es = 0
@@ -221,14 +221,14 @@ class SpeechEncoderDecoder(Chain):
                 print("using randomly initialized embeddings")
                 print("-"*80)
                 initial_emb_W = None
-            self.add_link("embed_dec", 
+            self.add_link("embed_dec",
                            L.EmbedID(self.v_size_en,
                            self.m_cfg['embedding_units'],
                            initialW=initial_emb_W))
             # -----------------------------------------------------------------
             # add output layers
             # -----------------------------------------------------------------
-            self.add_link("out", 
+            self.add_link("out",
                            L.Linear(self.m_cfg['attn_units'],
                            self.v_size_en))
             # -----------------------------------------------------------------
@@ -777,6 +777,12 @@ class SpeechEncoderDecoder(Chain):
             X = X * noise
         # ---------------------------------------------------------------------
         # encode input
+        # ---------------------------------------------------------------------
+        if "input_dropout" in self.m_cfg:
+            h = self.forward_deep_cnn(F.dropout(X, ratio=self.m_cfg["input_dropout"]))
+        else:
+            h = self.forward_deep_cnn(X)
+        # ---------------------------------------------------------------------
         self.forward_enc(X)
         # -----------------------------------------------------------------
         # initialize decoder LSTM to final encoder state

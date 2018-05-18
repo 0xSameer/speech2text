@@ -27,7 +27,7 @@ class SpeechEncoderDecoder(Chain):
         # get vocab size
         #----------------------------------------------------------------------
         print("-"*80)
-        v_path = os.path.join(self.m_cfg['data_path'], 
+        v_path = os.path.join(self.m_cfg['data_path'],
                               self.m_cfg["bagofwords_vocab"])
         vocab_dict = pickle.load(open(v_path, "rb"))
         self.v_size_es = 0
@@ -90,7 +90,12 @@ class SpeechEncoderDecoder(Chain):
             # -----------------------------------------------------------------
             # apply cnn
             # -----------------------------------------------------------------
-            h = self[cnn_layer](h)
+            if ("dropout" in self.m_cfg) and (i == len(self.cnns)-1):
+                # h = F.dropout(self[cnn_layer](h), ratio=self.m_cfg["dropout"])
+                h = self[cnn_layer](F.dropout(h, ratio=self.m_cfg["dropout"]))
+            else:
+                h = self[cnn_layer](h)
+
             if "cnn_pool" in self.m_cfg:
                 time_pool = self.m_cfg['cnn_pool'][i][0]
                 if time_pool == -1:
@@ -138,7 +143,11 @@ class SpeechEncoderDecoder(Chain):
             X = X * noise
         # ---------------------------------------------------------------------
         # encode input
-        h = self.forward_deep_cnn(X)
+        # ---------------------------------------------------------------------
+        if "input_dropout" in self.m_cfg:
+            h = self.forward_deep_cnn(F.dropout(X, ratio=self.m_cfg["input_dropout"]))
+        else:
+            h = self.forward_deep_cnn(X)
         # -----------------------------------------------------------------
         # Compute SCORE
         # -----------------------------------------------------------------
@@ -158,12 +167,13 @@ class SpeechEncoderDecoder(Chain):
         pred_probs = []
         # ---------------------------------------------------------------------
         predicted_out = F.sigmoid(S)
+        # predicted_out = S
         for row in predicted_out.data:
             pred_inds = xp.where(row >= self.m_cfg["pred_thresh"])[0]
             if len(pred_inds) > pred_limit:
                 pred_inds = xp.argsort(row)[-pred_limit:][::-1]
             #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
-            pred_words.append([i for i in pred_inds.tolist() if i > 2])
+            pred_words.append([i for i in pred_inds.tolist() if i > 3])
             np_row = xp.asnumpy(row)
             pred_probs.append(np_row)
         # -----------------------------------------------------------------

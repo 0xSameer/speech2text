@@ -491,7 +491,8 @@ def feed_model(model, optimizer, m_dict, b_dict,
     # end tqdm
     # return pred_sents, utts, refs, loss_per_epoch
     if get_probs:
-        utts["probs"] = F.sigmoid(F.pad_sequence(utts["probs"]))
+        # utts["probs"] = F.sigmoid(F.pad_sequence(utts["probs"]))
+        utts["probs"] = F.pad_sequence(utts["probs"])
         utts["probs"].to_cpu()
         utts["probs"] = utts["probs"].data
 
