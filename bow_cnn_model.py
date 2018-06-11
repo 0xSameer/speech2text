@@ -115,7 +115,9 @@ class SpeechEncoderDecoder(Chain):
             if i < (len(self.cnns)-1):
                 h = F.relu(h)
             # -----------------------------------------------------------------
-        h = F.squeeze(F.swapaxes(h,1,2))
+        # h = F.squeeze(F.swapaxes(h,1,2))
+        h = F.squeeze(F.swapaxes(h,1,2), axis=3)
+        # print(h.shape)
         return h
     # -------------------------------------------------------------------------
 
@@ -179,6 +181,7 @@ class SpeechEncoderDecoder(Chain):
         # -----------------------------------------------------------------
         if compute_loss:
             # compute loss
+            # print(S.shape, y.shape)
             loss = F.sigmoid_cross_entropy(S, y, reduce="mean")
         # -----------------------------------------------------------------
         return pred_words, loss, pred_probs

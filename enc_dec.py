@@ -437,7 +437,12 @@ class SpeechEncoderDecoder(Chain):
                 for i in range(len(t_alt)):
                     # use_sample = True if random.random() > self.m_cfg["sample_out_prob"] else False
                     if random.random() > self.m_cfg["sample_out_prob"]:
-                        t_alt[i] = xp.random.choice(self.sim_dict['i'][int(t_alt[i])],1)
+                        # print(int(t_alt[i]))
+                        # print(self.sim_dict['i'][int(t_alt[i])])
+                        # print(xp.random.choice(self.sim_dict['i'][int(t_alt[i])],1))
+                        # print(i)
+                        # print(t_alt, len(t_alt), t_alt.shape)
+                        t_alt[i] = int(xp.random.choice(self.sim_dict['i'][int(t_alt[i])],1))
 
                 loss_arr = F.softmax_cross_entropy(predicted_out, t_alt,
                                                class_weight=self.mask_pad_id)
@@ -517,39 +522,39 @@ class SpeechEncoderDecoder(Chain):
             # -----------------------------------------------------------------
         return pred_sents.T, loss
 
-    def decode_bow_batch(self, y):
-        xp = cuda.cupy if self.gpuid >= 0 else np
-        # use final rnn state for both fwd and rev (if configured) rnns
+    # def decode_bow_batch(self, y):
+    #     xp = cuda.cupy if self.gpuid >= 0 else np
+    #     # use final rnn state for both fwd and rev (if configured) rnns
 
-        if self.m_cfg['highway_layers'] > 0:
-            highway_h = self.forward_highway(self.h_final_rnn)
+    #     if self.m_cfg['highway_layers'] > 0:
+    #         highway_h = self.forward_highway(self.h_final_rnn)
 
-        predicted_out = self.out(highway_h)
+    #     predicted_out = self.out(highway_h)
 
-        loss = F.sigmoid_cross_entropy(predicted_out, y, reduce="no")
+    #     loss = F.sigmoid_cross_entropy(predicted_out, y, reduce="no")
 
-        loss_weights = xp.ones(shape=y.data.shape, dtype="f")
-        loss_weights[y.data < 0] = 0
-        loss_weights[y.data == 0] = self.m_cfg["negative_weight"]
-        loss_weights[y.data > 0] = self.m_cfg["positive_weight"]
-        #loss_avg = F.average(F.sigmoid_cross_entropy(predicted_out, y, normalize=True, reduce='no'), weights=loss_weights)
-        loss_avg = F.mean(loss_weights * loss)
-        # ---------------------------------------------------------------------
-        pred_words = []
-        pred_probs = []
-        pred_limit = self.m_cfg['max_en_pred']
-        for row in predicted_out.data:
-            pred_inds = xp.where(row >= self.m_cfg["pred_thresh"])[0]
-            if len(pred_inds) > pred_limit:
-                pred_inds = xp.argsort(row)[-pred_limit:][::-1]
-            #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
-            pred_words.append([i for i in pred_inds.tolist() if i > 2])
-            np_row = xp.asnumpy(row)
-            pred_probs.append(np_row)
+    #     loss_weights = xp.ones(shape=y.data.shape, dtype="f")
+    #     loss_weights[y.data < 0] = 0
+    #     loss_weights[y.data == 0] = self.m_cfg["negative_weight"]
+    #     loss_weights[y.data > 0] = self.m_cfg["positive_weight"]
+    #     #loss_avg = F.average(F.sigmoid_cross_entropy(predicted_out, y, normalize=True, reduce='no'), weights=loss_weights)
+    #     loss_avg = F.mean(loss_weights * loss)
+    #     # ---------------------------------------------------------------------
+    #     pred_words = []
+    #     pred_probs = []
+    #     pred_limit = self.m_cfg['max_en_pred']
+    #     for row in predicted_out.data:
+    #         pred_inds = xp.where(row >= self.m_cfg["pred_thresh"])[0]
+    #         if len(pred_inds) > pred_limit:
+    #             pred_inds = xp.argsort(row)[-pred_limit:][::-1]
+    #         #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
+    #         pred_words.append([i for i in pred_inds.tolist() if i > 2])
+    #         np_row = xp.asnumpy(row)
+    #         pred_probs.append(np_row)
 
-        return pred_words, loss_avg, pred_probs
+    #     return pred_words, loss_avg, pred_probs
 
-    def predict_bow_batch(self, batch_size, pred_limit, y=None, display=False):
+    def predict_bow_batch(self, pred_limit, y=None, get_probs=False, display=False):
         xp = cuda.cupy if self.gpuid >= 0 else np
         # to store loss
         loss = 0
@@ -565,28 +570,22 @@ class SpeechEncoderDecoder(Chain):
 
         predicted_out = self.out(highway_h)
 
-        for row in predicted_out.data:
-            pred_inds = xp.where(row >= self.m_cfg["pred_thresh"])[0]
-            if len(pred_inds) > pred_limit:
-                pred_inds = xp.argsort(row)[-pred_limit:][::-1]
-            #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
-            pred_words.append([i for i in pred_inds.tolist() if i > 2])
-            np_row = xp.asnumpy(row)
-            pred_probs.append(np_row)
+        if get_probs:
+            for row in predicted_out.data:
+                pred_inds = xp.where(row >= self.m_cfg["pred_thresh"])[0]
+                if len(pred_inds) > pred_limit:
+                    pred_inds = xp.argsort(row)[-pred_limit:][::-1]
+                #pred_words.append([bow_dict['i2w'][i] for i in pred_inds.tolist()])
+                pred_words.append([i for i in pred_inds.tolist() if i > 3])
+                np_row = xp.asnumpy(row)
+                pred_probs.append(np_row)
 
         # -----------------------------------------------------------------
         if compute_loss:
             # compute loss
-            loss = F.sigmoid_cross_entropy(predicted_out, y, reduce="no")
-
-            loss_weights = xp.ones(shape=y.data.shape, dtype="f")
-            loss_weights[y.data < 0] = 0
-            loss_weights[y.data == 0] = self.m_cfg["negative_weight"]
-            loss_weights[y.data > 0] = self.m_cfg["positive_weight"]
-            #loss_avg = F.average(F.sigmoid_cross_entropy(predicted_out, y, normalize=True, reduce='no'), weights=loss_weights)
-            loss_avg = F.mean(loss_weights * loss)
+            loss = F.sigmoid_cross_entropy(predicted_out, y, reduce="mean")
         # -----------------------------------------------------------------
-        return pred_words, loss_avg, pred_probs
+        return loss, pred_words, pred_probs
 
     def forward_deep_cnn(self, h):
         # ---------------------------------------------------------------------
@@ -653,12 +652,11 @@ class SpeechEncoderDecoder(Chain):
         for i in range(len(self.highway)):
             if self.m_cfg['highway_dropout'] > 0:
                 h = F.dropout(self[self.highway[i]](h), ratio=self.m_cfg['highway_dropout'])
-                # h = F.dropout(F.relu(self[self.highway[i]](X)), ratio=self.m_cfg['highway_dropout'])
             else:
                 h = self[self.highway[i]](h)
-                # h = F.relu(self[self.highway[i]](X))
 
             # first layer is linear, apply RELU
+            # highway layers apply RELU by default
             if i == 0:
                 h = F.relu(h)
         return h
@@ -746,17 +744,33 @@ class SpeechEncoderDecoder(Chain):
         # ---------------------------------------------------------------------
         # if len(self.cnns) > 0:
         h = self.forward_deep_cnn(h)
+        # # ---------------------------------------------------------------------
+        # # OLD --- call rnn logic
+        # # ---------------------------------------------------------------------
+        # if "bagofwords" not in self.m_cfg or self.m_cfg['bagofwords'] == False:
+        #     self.forward_rnn(h)
+        # else:
+        #     if self.m_cfg["enc_layers"] > 0:
+        #         self.forward_bow_rnn(h, l)
+        #     else:
+        #         # cnn only
+        #         self.h_final_rnn = h
+        # # ---------------------------------------------------------------------
+        self.forward_rnn(h)
         # ---------------------------------------------------------------------
-        # call rnn logic
+        # RNN - bi-lstm max
         # ---------------------------------------------------------------------
-        if "bagofwords" not in self.m_cfg or self.m_cfg['bagofwords'] == False:
-            self.forward_rnn(h)
-        else:
+        if "bagofwords" in self.m_cfg and self.m_cfg['bagofwords'] == True:
             if self.m_cfg["enc_layers"] > 0:
-                self.forward_bow_rnn(h, l)
+                self.forward_rnn(h)
+                time_pool = self.enc_states.shape[-2]
+                freq_pool = 1
+                h_max_pool = F.max_pooling_nd(F.expand_dims(self.enc_states,1), (time_pool, freq_pool))
+                self.h_final_rnn = F.squeeze(h_max_pool, axis=(1,2))
             else:
                 # cnn only
                 self.h_final_rnn = h
+            # print("self.h_final_rnn shape: ", self.h_final_rnn.shape)
         # ---------------------------------------------------------------------
 
     def forward(self, X, add_noise=0, teacher_ratio=0, y=None):
@@ -840,19 +854,19 @@ class SpeechEncoderDecoder(Chain):
             # -------------------------------------------------------------
             # decode
             # -------------------------------------------------------------
-            # self.loss = self.decode_bow_batch(y)
-            # -------------------------------------------------------------
-            # make return statements consistent
-            # return [], self.loss
-            return(self.decode_bow_batch(y))
+            # return(self.decode_bow_batch(y))
+            return(self.predict_bow_batch(pred_limit=self.m_cfg['max_en_pred'],
+                                          y=y,
+                                          get_probs=False,
+                                          display=False))
         else:
             # -------------------------------------------------------------
             # predict
             # -------------------------------------------------------------
-            # make return statements consistent
-            return(self.predict_bow_batch(batch_size=batch_size,
-                                      pred_limit=self.m_cfg['max_en_pred'],
-                                      y=y))
+            return(self.predict_bow_batch(pred_limit=self.m_cfg['max_en_pred'],
+                                          y=y,
+                                          get_probs=True,
+                                          display=False))
         # -----------------------------------------------------------------
 
     def add_gru_weight_noise(self, rnn_layer, mu, sigma):

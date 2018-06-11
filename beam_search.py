@@ -66,7 +66,7 @@ def get_utt_data(eg_utt, curr_set):
 
 last_epoch, model, optimizer, m_cfg, t_cfg = check_model(cfg_path)
 
-train_key = m_cfg['train_set']
+# train_key = m_cfg['train_set']
 # dev_key = m_cfg['dev_set']
 dev_key = set_key
 batch_size=t_cfg['batch_size']
@@ -242,11 +242,11 @@ def decode_beam_step(decode_entry, beam_width=3):
 def decode_beam(utt, curr_set, stop_limit=10, max_n=5, beam_width=3):
     with chainer.using_config('train', False):
         batch_data = get_utt_data(utt, curr_set)
-        model.forward_enc(batch_data['X'])
 
         n_best = []
 
         if (len(batch_data['X']) > 0 and len(batch_data['y']) > 0):
+            model.forward_enc(batch_data['X'])
             n_best.append(init_hyp())
 
             for i in range(stop_limit):

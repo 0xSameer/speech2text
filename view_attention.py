@@ -27,6 +27,9 @@ parser.add_argument('-k','--K', help='softmax selection',
 parser.add_argument('-s','--S', help='dev/dev2/test',
                     required=True)
 
+parser.add_argument('--resume', action='store_true',
+                        help='Resume the training from snapshot')
+
 args = vars(parser.parse_args())
 cfg_path = args['nmt_path']
 
@@ -34,6 +37,8 @@ N = int(args['N'])
 K = int(args['K'])
 
 set_key = args['S']
+
+resume = bool(args['resume'])
 
 # cfg_path = "interspeech/sp_20hrs"
 
@@ -66,7 +71,7 @@ def get_utt_data(eg_utt, curr_set):
 
 last_epoch, model, optimizer, m_cfg, t_cfg = check_model(cfg_path)
 
-train_key = m_cfg['train_set']
+# train_key = m_cfg['train_set']
 # dev_key = m_cfg['dev_set']
 dev_key = set_key
 batch_size=t_cfg['batch_size']
@@ -246,6 +251,9 @@ def decode_beam(utt, curr_set, stop_limit=10, max_n=5, beam_width=3):
         batch_data = get_utt_data(utt, curr_set)
         model.forward_enc(batch_data['X'])
 
+        enc_states = F.squeeze(model.enc_states, axis=(0)).data
+        # print(enc_states.shape, model.enc_states.shape)
+
         n_best = []
 
         if (len(batch_data['X']) > 0 and len(batch_data['y']) > 0):
@@ -269,7 +277,7 @@ def decode_beam(utt, curr_set, stop_limit=10, max_n=5, beam_width=3):
                         curr_entries.append(e)
 
                 n_best = sorted(curr_entries, reverse=True, key=lambda t: t["score"])[:max_n]
-    return n_best
+    return n_best, enc_states
 
 
 
@@ -279,20 +287,43 @@ random.shuffle(all_valid_utts)
 
 # all_valid_utts = all_valid_utts[:10]
 
-utt_hyps = {}
-for u in tqdm(all_valid_utts, ncols=80):
-    with chainer.using_config('train', False):
-        n_best = decode_beam(u, set_key, 
-                             stop_limit=max_pred_len, 
-                             max_n=N, beam_width=K)
-#         utt_hyps[u] = [(e["hyp"], e["score"]) for e in n_best]
-        utt_hyps[u] = [(e["hyp"], e["score"], e["attn_history"]) for e in n_best]
+if resume == False:
+    print("Resume={0:d}, starting decoding process".format(resume))
+    utt_hyps = {}
+    utt_enc = {}
+    utt_enc_maxpool = {}
+    for u in tqdm(all_valid_utts, ncols=80):
+        with chainer.using_config('train', False):
+            n_best, enc_states = decode_beam(u, set_key, 
+                                 stop_limit=max_pred_len, 
+                                 max_n=N, beam_width=K)
+    #         utt_hyps[u] = [(e["hyp"], e["score"]) for e in n_best]
+            utt_hyps[u] = [(e["hyp"], e["score"], e["attn_history"]) for e in n_best]
+            enc_states = xp.asnumpy(enc_states)
+            utt_enc[u] = enc_states
+            enc_4d = F.expand_dims(F.expand_dims(enc_states,0),0)
+            enc_states_pool = F.squeeze(F.max_pooling_nd(enc_4d, 
+                                        (enc_4d.shape[-2], 1)))
+            utt_enc_maxpool[u] = xp.asnumpy(enc_states_pool.data)
 
+    print("saving hyps")
+    pickle.dump(utt_hyps, open(os.path.join(m_cfg["model_dir"],
+                                "{0:s}_attn_N-{1:d}_K-{2:d}.dict".format(set_key,N,K)),
+                                "wb"))
+    print("saving encoder states")
+    pickle.dump(utt_enc, open(os.path.join(m_cfg["model_dir"],
+                                "encoder_states.dict"),
+                                "wb"))
+    print("saving encoder states - max pool")
+    pickle.dump(utt_enc_maxpool, open(os.path.join(m_cfg["model_dir"],
+                                "encoder_states_maxpool.dict"),
+                                "wb"))
 
-print("saving hyps")
-pickle.dump(utt_hyps, open(os.path.join(m_cfg["model_dir"],
-                            "{0:s}_attn_N-{1:d}_K-{2:d}.dict".format(set_key,N,K)),
-                            "wb"))
+else:
+    print("Resume={0:d}, loading decoding results".format(resume))
+    utt_hyps = pickle.load(open(os.path.join(m_cfg["model_dir"],
+                                "{0:s}_attn_N-{1:d}_K-{2:d}.dict".format(set_key,N,K)),
+                                "rb"))
 
 
 def clean_out_str(out_str):
@@ -317,10 +348,13 @@ def get_out_str(h):
     if dec_key == "en_w":
         for w in h:
             out_str += "{0:s}".format(w) if (w.startswith("'") or w=="n't") else " {0:s}".format(w)
-    elif dec_key == "bpe_w":
+    elif "bpe_w" in dec_key:
         out_str = " ".join(h)
 
     elif dec_key == "en_c":
+        out_str = "".join(h)
+
+    else:
         out_str = "".join(h)
 
     out_str = clean_out_str(out_str)

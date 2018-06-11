@@ -439,7 +439,7 @@ def feed_model(model, optimizer, m_dict, b_dict,
                     # ---------------------------------------------------------
                     with chainer.using_config('train', train):
                         cuda.get_device(t_cfg['gpuid']).use()
-                        p_words, loss, p_probs = model.forward_bow(X=batch_data['X'],
+                        loss, p_words, p_probs = model.forward_bow(X=batch_data['X'],
                                                                    y=batch_data['y'],
                                                                    add_noise=t_cfg['speech_noise'],
                                                                    l=batch_data['l'])
@@ -450,7 +450,7 @@ def feed_model(model, optimizer, m_dict, b_dict,
                     # ---------------------------------------------------------
                     with chainer.using_config('train', False):
                         cuda.get_device(t_cfg['gpuid']).use()
-                        p_words, _, p_probs = model.forward_bow(X=batch_data['X'], l=batch_data['l'])
+                        _, p_words, p_probs = model.forward_bow(X=batch_data['X'], l=batch_data['l'])
                         loss_val = 0.0
                 # -------------------------------------------------------------
                 # add list of utterances used
@@ -525,13 +525,18 @@ def get_data_dicts(m_cfg):
     # -------------------------------------------------------------------------
     # BUCKETS
     # -------------------------------------------------------------------------
+    if "info_path" in m_cfg:
+        info_dict_path = m_cfg['info_path']
+    else:
+        info_dict_path = ''
     prep_buckets.buckets_main(m_cfg['data_path'],
                               m_cfg['buckets_num'],
                               m_cfg['buckets_width'],
                               m_cfg['enc_key'],
                               scale=m_cfg['train_scale'],
                               seed=m_cfg['seed'],
-                              save_path=m_cfg['model_dir'])
+                              save_path=m_cfg['model_dir'],
+                              info_dict_path=info_dict_path)
 
     buckets_path = os.path.join(m_cfg['model_dir'],
                                 'buckets_{0:s}.dict'.format(m_cfg['enc_key']))
@@ -708,7 +713,7 @@ def train_loop(cfg_path, epochs):
                                           max_dec=m_cfg['max_en_pred'],
                                           t_cfg=t_cfg,
                                           use_y=True,
-                                          get_probs=True)
+                                          get_probs=False)
 
             # mean_pos_scores = np.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
             # mean_neg_scores = np.array([0.0 for _ in bow_dict["i2w"]], dtype="f")
@@ -725,23 +730,23 @@ def train_loop(cfg_path, epochs):
                                                        m_cfg["pred_thresh"],
                                                        m_cfg['max_en_pred'])
 
-            train_prec, train_rec, _ = basic_precision_recall(train_utts["refs"], train_pred_words)
+            # train_prec, train_rec, _ = basic_precision_recall(train_utts["refs"], train_pred_words)
 
 
-            train_avg_p, _ = compute_avg_precision(train_utts["probs"],
-                                                     0.0, 1.0, 10,
-                                                     m_cfg['max_en_pred'],
-                                                     train_utts["refs"])
+            # train_avg_p, _ = compute_avg_precision(train_utts["probs"],
+            #                                          0.0, 1.0, 10,
+            #                                          m_cfg['max_en_pred'],
+            #                                          train_utts["refs"])
 
-            # log train loss
-            train_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}, {4:.4f}\n".format(last_epoch+i+1,
-                                                                 train_loss,
-                                                                 train_prec,
-                                                                 train_rec,
-                                                                 train_avg_p))
+            # # log train loss
+            # train_log.write("{0:d}, {1:.4f}, {2:.4f}, {3:.4f}, {4:.4f}\n".format(last_epoch+i+1,
+            #                                                      train_loss,
+            #                                                      train_prec,
+            #                                                      train_rec,
+            #                                                      train_avg_p))
 
-            # train_log.write("{0:d}, {1:.6f}\n".format(last_epoch+i+1,
-                                                                 # train_loss))
+            train_log.write("{0:d}, {1:.6f}\n".format(last_epoch+i+1,
+                                                                 train_loss))
 
             train_log.flush()
             os.fsync(train_log.fileno())
@@ -787,7 +792,7 @@ def train_loop(cfg_path, epochs):
             print("^"*80)
             print("{0:s} train avg loss={1:.6f}, dev avg loss={2:.6f}".format("*" * 10, train_loss, dev_loss))
             print("^"*80)
-            print("{0:s} train: prec={1:.3f}, recall={2:.3f}, avg prec={3:.3f}".format("*" * 10, train_prec, train_rec, train_avg_p))
+            # print("{0:s} train: prec={1:.3f}, recall={2:.3f}, avg prec={3:.3f}".format("*" * 10, train_prec, train_rec, train_avg_p))
             print("{0:s} dev: prec={1:.3f}, recall={2:.3f}, avg prec={3:.3f}".format("*" * 10, prec, rec, avg_p))
             print("^"*80)
             # -----------------------------------------------------------------
@@ -806,7 +811,7 @@ def train_loop(cfg_path, epochs):
             #     print("Saving model")
             #     serializers.save_npz(model_fil.replace(".model", "_last.model", model))
             #     print("Finished saving model")
-            pickle.dump(train_utts, open(os.path.join(m_cfg['model_dir'], "model_s2t_train_out.dict"), "wb"))
+            # pickle.dump(train_utts, open(os.path.join(m_cfg['model_dir'], "model_s2t_train_out.dict"), "wb"))
             pickle.dump(dev_utts, open(os.path.join(m_cfg['model_dir'], "model_s2t_dev_out.dict"), "wb"))
             # pickle.dump(mean_pos_scores, open(os.path.join(m_cfg['model_dir'], "mean_pos_scores.dict"), "wb"))
             # pickle.dump(mean_neg_scores, open(os.path.join(m_cfg['model_dir'], "mean_neg_scores.dict"), "wb"))

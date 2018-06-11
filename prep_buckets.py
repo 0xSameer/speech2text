@@ -64,7 +64,8 @@ def buckets_main(out_path,
                  key, 
                  scale=1, 
                  seed='haha',
-                 save_path=""):
+                 save_path="",
+                 info_dict_path=""):
     if save_path == "":
         save_path = out_path
     # create output file directory:
@@ -73,7 +74,12 @@ def buckets_main(out_path,
         return 0
 
     # load map dictionary
-    info_dict_path = os.path.join(out_path,'info.dict')
+    if info_dict_path == "":
+        info_dict_path = os.path.join(out_path,'info.dict')
+    else:
+        info_dict_path = os.path.join(out_path, info_dict_path)
+
+    print("loading info dictionary: {0:s}".format(info_dict_path))
 
     if not os.path.exists(info_dict_path):
         print("{0:s} does not exist. Exiting".format(info_dict_path))

@@ -45,7 +45,7 @@ def basic_bleu(r, preds, dec_key, weights=(0.25, 0.25, 0.25, 0.25)):
     en_hyp = []
     en_ref = []
 
-    if "bpe_w" == dec_key:
+    if "bpe_w" in dec_key:
         ref_key = dec_key
     else:
         ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
@@ -79,7 +79,7 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key,
     en_hyp = []
     en_ref = []
 
-    if "bpe_w" == dec_key:
+    if "bpe_w" in dec_key:
         ref_key = "en_c"
         join_str_ref = ""
     else:
@@ -108,7 +108,7 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key,
         total_matching_len += 1
         if type(p) == list:
             t_str = join_str.join([v_dict['i2w'][i].decode() for i in p])
-            if dec_key == "bpe_w":
+            if "bpe_w" in dec_key:
                 t_str = t_str.replace("@@ ", "")
             t_str = t_str[:t_str.find('_EOS')]
             en_hyp.append(t_str.strip().split())
@@ -163,48 +163,48 @@ def basic_precision_recall(r, h, display=False):
     i=1
 
     for references, hypothesis in zip(r, h):
-        if min([len(any_ref) for any_ref in references]) > 0:
-            if len(hypothesis) > 0:
-                p_i = modified_precision(references, hypothesis, i)
-                p_numerators[i] += p_i.numerator
-                p_denominators[i] += p_i.denominator
+        # if min([len(any_ref) for any_ref in references]) > 0:
+        if len(hypothesis) > 0:
+            p_i = modified_precision(references, hypothesis, i)
+            p_numerators[i] += p_i.numerator
+            p_denominators[i] += p_i.denominator
 
-                metrics["tc"] += p_i.numerator
-                metrics["tp"] += p_i.denominator
-            else:
-                p_numerators[i] += 0
-                p_denominators[i] += 0
+            metrics["tc"] += p_i.numerator
+            metrics["tp"] += p_i.denominator
+        else:
+            p_numerators[i] += 0
+            p_denominators[i] += 0
 
-                metrics["tc"] += 0
-                metrics["tp"] += 0
+            metrics["tc"] += 0
+            metrics["tp"] += 0
 
-            #print(p_i.numerator, p_i.denominator)
+        #print(p_i.numerator, p_i.denominator)
 
-            tot_match = 0
-            tot_count = 0
+        tot_match = 0
+        tot_count = 0
 
-            max_recall_match, max_tp, max_t, max_word_level_details = count_match(references[0], hypothesis)
-            max_recall = max_recall_match / max_t if max_t > 0 else 0
+        max_recall_match, max_tp, max_t, max_word_level_details = count_match(references[0], hypothesis)
+        max_recall = max_recall_match / max_t if max_t > 0 else 0
 
-            for curr_ref in references:
-                curr_match, curr_tp, curr_t, curr_word_level_details = count_match(curr_ref, hypothesis)
-                curr_recall = curr_match / curr_t if curr_t > 0 else 0
+        for curr_ref in references:
+            curr_match, curr_tp, curr_t, curr_word_level_details = count_match(curr_ref, hypothesis)
+            curr_recall = curr_match / curr_t if curr_t > 0 else 0
 
-                if curr_recall > max_recall:
-                    max_recall_match = curr_match
-                    max_t = curr_t
-                    max_recall = curr_recall
-                    max_word_level_details = curr_word_level_details
+            if curr_recall > max_recall:
+                max_recall_match = curr_match
+                max_t = curr_t
+                max_recall = curr_recall
+                max_word_level_details = curr_word_level_details
 
-            r_numerators[i] += max_recall_match
-            r_denominators[i] += max_t
-            metrics["rc"] += max_recall_match
-            metrics["rt"] += max_t
-            for key in {"t","tp","tc"}:
-                for w in max_word_level_details[key]:
-                    if w not in metrics["word"]:
-                        metrics["word"][w] = {"t": 0, "tp": 0, "tc": 0}
-                    metrics["word"][w][key] += max_word_level_details[key][w]
+        r_numerators[i] += max_recall_match
+        r_denominators[i] += max_t
+        metrics["rc"] += max_recall_match
+        metrics["rt"] += max_t
+        for key in {"t","tp","tc"}:
+            for w in max_word_level_details[key]:
+                if w not in metrics["word"]:
+                    metrics["word"][w] = {"t": 0, "tp": 0, "tc": 0}
+                metrics["word"][w][key] += max_word_level_details[key][w]
 
     prec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(p_numerators.values(), p_denominators.values())]
     rec = [(n / d) * 100 if d > 0 else 0 for n,d in zip(r_numerators.values(), r_denominators.values())]
@@ -395,11 +395,14 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
         batch_data['y'] = F.pad_sequence(batch_data['y'], padding=PAD_ID)
     return batch_data
 
-def create_batches(b_dict, batch_size):
+def create_batches(b_dict, batch_size, curriculum=False):
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
     b_shuffled = list(range(num_b))
-    random.shuffle(b_shuffled)
+    if curriculum == True:
+        b_shuffled = sorted(b_shuffled)
+    else:
+        random.shuffle(b_shuffled)
     total_utts = 0
     utt_list_batches = []
     # 'max': 256, 'med': 200, 'min': 100, 'scale':1
@@ -429,8 +432,9 @@ def create_batches(b_dict, batch_size):
         # end bucket loop
     # end all buckets loop
     # -------------------------------------------------------------------------
-    # shuffle the entire list of batches
-    random.shuffle(utt_list_batches)
+    if curriculum == False:
+        # shuffle the entire list of batches
+        random.shuffle(utt_list_batches)
     return utt_list_batches, total_utts
 
 def feed_model(model, optimizer, m_dict, b_dict,
@@ -451,7 +455,13 @@ def feed_model(model, optimizer, m_dict, b_dict,
     # -------------------------------------------------------------------------
     # create batches of utterances - shuffled
     # -------------------------------------------------------------------------
-    utt_list_batches, total_utts = create_batches(b_dict, batch_size)
+    if "curriculum" in t_cfg and t_cfg["curriculum"] == True:
+        curriculum = True
+    else:
+        curriculum = False
+    # curriculum controls order in which buckets are fed to training
+    utt_list_batches, total_utts = create_batches(b_dict, 
+                                                  batch_size, curriculum)
     # -------------------------------------------------------------------------
     with tqdm(total=total_utts, ncols=80) as pbar:
         for i, (utt_list, b) in enumerate(utt_list_batches):

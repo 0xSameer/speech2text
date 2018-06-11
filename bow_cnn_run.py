@@ -799,12 +799,11 @@ def train_loop(cfg_path, epochs):
                 print("Saving optimizer")
                 serializers.save_npz(m_cfg['opt_fname'], optimizer)
                 print("Finished saving optimizer")
-                print("Saving utterance predictions")
             # else:
             #     print("Saving model")
             #     serializers.save_npz(model_fil.replace(".model", "_last.model", model))
             #     print("Finished saving model")
-            pickle.dump(train_utts, open(os.path.join(m_cfg['model_dir'], "model_s2t_train_out.dict"), "wb"))
+            # pickle.dump(train_utts, open(os.path.join(m_cfg['model_dir'], "model_s2t_train_out.dict"), "wb"))
             pickle.dump(dev_utts, open(os.path.join(m_cfg['model_dir'], "model_s2t_dev_out.dict"), "wb"))
             # pickle.dump(mean_pos_scores, open(os.path.join(m_cfg['model_dir'], "mean_pos_scores.dict"), "wb"))
             # pickle.dump(mean_neg_scores, open(os.path.join(m_cfg['model_dir'], "mean_neg_scores.dict"), "wb"))
