@@ -310,14 +310,14 @@ if resume == False:
     pickle.dump(utt_hyps, open(os.path.join(m_cfg["model_dir"],
                                 "{0:s}_attn_N-{1:d}_K-{2:d}.dict".format(set_key,N,K)),
                                 "wb"))
-    print("saving encoder states")
-    pickle.dump(utt_enc, open(os.path.join(m_cfg["model_dir"],
-                                "encoder_states.dict"),
-                                "wb"))
-    print("saving encoder states - max pool")
-    pickle.dump(utt_enc_maxpool, open(os.path.join(m_cfg["model_dir"],
-                                "encoder_states_maxpool.dict"),
-                                "wb"))
+    # print("saving encoder states")
+    # pickle.dump(utt_enc, open(os.path.join(m_cfg["model_dir"],
+    #                             "encoder_states.dict"),
+    #                             "wb"))
+    # print("saving encoder states - max pool")
+    # pickle.dump(utt_enc_maxpool, open(os.path.join(m_cfg["model_dir"],
+    #                             "encoder_states_maxpool.dict"),
+    #                             "wb"))
 
 else:
     print("Resume={0:d}, loading decoding results".format(resume))

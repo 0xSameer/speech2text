@@ -523,13 +523,18 @@ def get_data_dicts(m_cfg):
     # -------------------------------------------------------------------------
     # BUCKETS
     # -------------------------------------------------------------------------
+    if "info_path" in m_cfg:
+        info_dict_path = m_cfg['info_path']
+    else:
+        info_dict_path = ''
     prep_buckets.buckets_main(m_cfg['data_path'],
                               m_cfg['buckets_num'],
                               m_cfg['buckets_width'],
                               m_cfg['enc_key'],
                               scale=m_cfg['train_scale'],
                               seed=m_cfg['seed'],
-                              save_path=m_cfg['model_dir'])
+                              save_path=m_cfg['model_dir'],
+                              info_dict_path=info_dict_path)
 
     buckets_path = os.path.join(m_cfg['model_dir'],
                                 'buckets_{0:s}.dict'.format(m_cfg['enc_key']))

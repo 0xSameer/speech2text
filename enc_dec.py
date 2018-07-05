@@ -162,7 +162,12 @@ class SpeechEncoderDecoder(Chain):
                 lname = "CNN_{0:d}".format(i)
                 cnn_out_dim += l["out_channels"]
                 self.cnns.append(lname)
-                self.add_link(lname, L.Convolution2D(**l, initialW=w))
+                # self.add_link(lname, L.Convolution2D(**l,
+                #                                      initialW=w))
+                print("nobias = ", self.m_cfg['bn'])
+                self.add_link(lname, L.Convolution2D(**l,
+                                                     initialW=w,
+                                                     nobias=self.m_cfg['bn']))
                 reduce_dim = math.ceil(reduce_dim / l["stride"][1])
                 self.reduce_dim_len *= l["stride"][0]
                 if self.m_cfg['bn']:
@@ -240,6 +245,17 @@ class SpeechEncoderDecoder(Chain):
             # this way loss will not be computed for this predicted loss
             self.mask_pad_id[0] = 0
             # -----------------------------------------------------------------
+            # Add multitask layers for sent embedding projection
+            # -----------------------------------------------------------------
+            if 'multitask_sent_emb' in self.m_cfg:
+                self.sent_emb_dim = self.m_cfg['multitask_sent_emb']['emb_dim']
+                h_units = self.m_cfg['hidden_units']
+                if self.m_cfg['bi_rnn']:
+                    self.add_link("sent_emb_proj",
+                                    L.Linear(2*h_units, self.sent_emb_dim))
+                else:
+                    self.add_link("sent_emb_proj",
+                                    L.Linear(h_units, self.sent_emb_dim))
         else:
             # -----------------------------------------------------------------
             # add bag-of-words output layer
@@ -620,7 +636,10 @@ class SpeechEncoderDecoder(Chain):
                 bn_lname = '{0:s}_bn'.format(cnn_layer)
                 h = self[bn_lname](h)
             # -----------------------------------------------------------------
-            h = F.relu(h)
+            if 'leaky_relu' in self.m_cfg and self.m_cfg['leaky_relu'] == True:
+                h = F.leaky_relu(h)
+            else:
+                h = F.relu(h)
             # -----------------------------------------------------------------
 
         # ---------------------------------------------------------------------
@@ -772,6 +791,17 @@ class SpeechEncoderDecoder(Chain):
                 self.h_final_rnn = h
             # print("self.h_final_rnn shape: ", self.h_final_rnn.shape)
         # ---------------------------------------------------------------------
+
+    def compute_sent_emb_loss(self, y):
+        time_pool = self.enc_states.shape[-2]
+        freq_pool = 1
+        h_max_pool = F.max_pooling_nd(F.expand_dims(self.enc_states,1), (time_pool, freq_pool))
+        self.h_final_rnn = F.squeeze(h_max_pool, axis=(1,2))
+        #print(self.h_final_rnn.shape)
+        emb_proj = self.sent_emb_proj(self.h_final_rnn)
+        self.emb_loss = F.mean_squared_error(emb_proj, y)
+        return self.emb_loss
+        # -------------------------------------------------------------
 
     def forward(self, X, add_noise=0, teacher_ratio=0, y=None):
         # get shape

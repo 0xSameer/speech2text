@@ -88,7 +88,7 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key,
 
     src_key = 'es_w'
 
-    for u in tqdm(utts, ncols=80):
+    for u in tqdm(utts, ncols=120):
         if type(m_dict[u][ref_key]) == list:
             en_ref.append([get_en_words_from_list(m_dict[u][ref_key], join_str_ref)])
         else:
@@ -395,6 +395,13 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
         batch_data['y'] = F.pad_sequence(batch_data['y'], padding=PAD_ID)
     return batch_data
 
+def get_sent_emb(utt_list, emb_data):
+    embs = []
+    for u in utt_list:
+        embs.append(xp.asarray(emb_data["map"][u], dtype=xp.float32))
+    embs = F.pad_sequence(embs, padding=PAD_ID)
+    return embs
+
 def create_batches(b_dict, batch_size, curriculum=False):
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
@@ -440,7 +447,8 @@ def create_batches(b_dict, batch_size, curriculum=False):
 def feed_model(model, optimizer, m_dict, b_dict,
                batch_size, vocab_dict, x_key, y_key,
                train, input_path, max_dec, t_cfg,
-               use_y=True, limit_vocab=False, add_unk=False):
+               use_y=True, limit_vocab=False, add_unk=False,
+               task_sent_emb=None):
     # number of buckets
     num_b = b_dict['num_b']
     width_b = b_dict['width_b']
@@ -448,8 +456,10 @@ def feed_model(model, optimizer, m_dict, b_dict,
     ref_sents = []
     utts = []
     total_loss = 0
+    total_emb_loss = 0
     loss_per_epoch = 0
     total_loss_updates= 0
+    loss_emb_per_epoch = 0
 
     sys.stderr.flush()
     # -------------------------------------------------------------------------
@@ -463,7 +473,7 @@ def feed_model(model, optimizer, m_dict, b_dict,
     utt_list_batches, total_utts = create_batches(b_dict, 
                                                   batch_size, curriculum)
     # -------------------------------------------------------------------------
-    with tqdm(total=total_utts, ncols=80) as pbar:
+    with tqdm(total=total_utts, ncols=120) as pbar:
         for i, (utt_list, b) in enumerate(utt_list_batches):
             # -----------------------------------------------------------------
             # get batch_data
@@ -490,7 +500,22 @@ def feed_model(model, optimizer, m_dict, b_dict,
                                     y=batch_data['y'],
                                     add_noise=t_cfg['speech_noise'],
                                     teacher_ratio = t_cfg['teach_ratio'])
+                        if train and task_sent_emb:
+                            data_y = get_sent_emb(batch_data['utts'], 
+                                                  task_sent_emb)
+                            
+                            loss_sent_emb = model.compute_sent_emb_loss(data_y)
+                        
+                            alpha = task_sent_emb["alpha"]
+                            beta = task_sent_emb["beta"]
+                            loss = (alpha*loss) + (beta*loss_sent_emb)
+                            # the emb loss is for the entire utterance
+                            loss_emb_val = float(loss_sent_emb.data)
+                            total_emb_loss += loss_emb_val
+
+                        # the NMT loss is divided by the batch sequence length
                         loss_val = float(loss.data) / batch_data['y'].shape[1]
+
                 else:
                     # ---------------------------------------------------------
                     # prediction only
@@ -529,6 +554,14 @@ def feed_model(model, optimizer, m_dict, b_dict,
                             optimizer.hyperparam.lr = t_cfg['lr']
 
                         out_str = "b={0:d},l={1:.2f},avg={2:.2f},lr={3:.7f}".format((b+1),loss_val,loss_per_epoch, optimizer.hyperparam.lr)
+                    if task_sent_emb:
+                        loss_emb_per_epoch = (total_emb_loss / 
+                                               total_loss_updates)
+                        out_str = "b={0:d},l={1:.2f},l_e={2:.5f},avg={3:.2f}, avg emb={4:.5f}".format((b+1),
+                                   loss_val,
+                                   loss_emb_val,
+                                   loss_per_epoch,
+                                   loss_emb_per_epoch)
                     # ---------------------------------------------------------
                     model.cleargrads()
                     loss.backward()
@@ -544,7 +577,7 @@ def feed_model(model, optimizer, m_dict, b_dict,
             pbar.update(len(batch_data['utts']))
         # end for batches
     # end tqdm
-    return pred_sents, ref_sents, utts, loss_per_epoch
+    return pred_sents, ref_sents, utts, loss_per_epoch, loss_emb_per_epoch
 # end feed_model
 
 # map_dict, vocab_dict, bucket_dict = get_data_dicts(model_cfg)
@@ -577,13 +610,18 @@ def get_data_dicts(m_cfg):
     # -------------------------------------------------------------------------
     # BUCKETS
     # -------------------------------------------------------------------------
+    if "info_path" in m_cfg:
+        info_dict_path = m_cfg['info_path']
+    else:
+        info_dict_path = ''
     prep_buckets.buckets_main(m_cfg['data_path'],
                               m_cfg['buckets_num'],
                               m_cfg['buckets_width'],
                               m_cfg['enc_key'],
                               scale=m_cfg['train_scale'],
                               seed=m_cfg['seed'],
-                              save_path=m_cfg['model_dir'])
+                              save_path=m_cfg['model_dir'],
+                              info_dict_path=info_dict_path)
 
     buckets_path = os.path.join(m_cfg['model_dir'],
                                 'buckets_{0:s}.dict'.format(m_cfg['enc_key']))
@@ -721,6 +759,22 @@ def train_loop(cfg_path, epochs):
     # -------------------------------------------------------------------------
     map_dict, vocab_dict, bucket_dict = get_data_dicts(m_cfg)
     # -------------------------------------------------------------------------
+    if 'multitask_sent_emb' in m_cfg:
+        task_sent_emb = {}
+        os.path.join(m_cfg['data_path'],
+                                      m_cfg['train_set'])
+        emb_fname_prefix = os.path.join(m_cfg['data_path'],
+                                    m_cfg['multitask_sent_emb']['emb_fname'])
+        # task_sent_emb["embs"] = np.load(emb_fname_prefix+".npy")
+        task_sent_emb["map"] = pickle.load(open(emb_fname_prefix+".map", 
+                                                 "rb"))
+        task_sent_emb["emb_dim"] = m_cfg['multitask_sent_emb']['emb_dim']
+        task_sent_emb["alpha"] = m_cfg['multitask_sent_emb']['alpha']
+        task_sent_emb["beta"] = m_cfg['multitask_sent_emb']['beta']
+    else:
+        task_sent_emb = None
+    # -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # start train loop
     # -------------------------------------------------------------------------
     with open(m_cfg['train_log'], mode='a') as train_log, open(m_cfg['dev_log'], mode='a') as dev_log:
@@ -742,7 +796,7 @@ def train_loop(cfg_path, epochs):
             # -----------------------------------------------------------------
             input_path = os.path.join(m_cfg['data_path'],
                                       m_cfg['train_set'])
-            pred_sents, ref_sents, utts, train_loss = feed_model(model,
+            pred_sents, ref_sents, utts, train_loss, emb_loss = feed_model(model,
                                               optimizer=optimizer,
                                               m_dict=map_dict[train_key],
                                               b_dict=bucket_dict[train_key],
@@ -756,9 +810,10 @@ def train_loop(cfg_path, epochs):
                                               t_cfg=t_cfg,
                                               use_y=True,
                                               limit_vocab=limit_vocab,
-                                              add_unk=add_unk)
+                                              add_unk=add_unk,
+                                              task_sent_emb=task_sent_emb)
             # log train loss
-            train_log.write("{0:d}, {1:.4f}\n".format(last_epoch+i+1, train_loss))
+            train_log.write("{0:d}, {1:.4f}, {2:.6f}\n".format(last_epoch+i+1, train_loss, emb_loss))
             train_log.flush()
             os.fsync(train_log.fileno())
             # -----------------------------------------------------------------
@@ -768,7 +823,7 @@ def train_loop(cfg_path, epochs):
             # -----------------------------------------------------------------
             input_path = os.path.join(m_cfg['data_path'],
                                       m_cfg['dev_set'])
-            pred_sents, ref_sents, utts, dev_loss = feed_model(model,
+            pred_sents, ref_sents, utts, dev_loss, _ = feed_model(model,
                                               optimizer=optimizer,
                                               m_dict=map_dict[dev_key],
                                               b_dict=bucket_dict[dev_key],
