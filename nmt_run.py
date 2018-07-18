@@ -34,6 +34,9 @@ python nmt_run.py -o $PWD/out -e 2 -k fisher_train
 '''
 xp = cuda.cupy
 
+base_mfcc = "./mfcc_13dim/swbd1_mfcc/"
+swbd1_folders = {"swbd1_train_100k", "swbd1_train_dev"}
+swbd1_data = {}
 # -----------------------------------------------------------------------------
 # helper functions for metrics
 # -----------------------------------------------------------------------------
@@ -80,8 +83,12 @@ def calc_bleu(m_dict, v_dict, preds, utts, dec_key,
     en_ref = []
 
     if "bpe_w" in dec_key:
-        ref_key = "en_c"
-        join_str_ref = ""
+        if "en_c" in m_dict[utts[0]]:
+            ref_key = "en_c"
+            join_str_ref = ""
+        else:
+            ref_key = "en_w"
+            join_str_ref = " "
     else:
         ref_key = 'en_w' if 'en_' in dec_key else 'es_w'
         join_str_ref = " "
@@ -291,9 +298,24 @@ def modified_precision_recall(references, hypothesis, n):
 
     return prec, rec
 
+def drop_frames(x_data, drop_rate):
+    sp_mask = xp.ones(len(x_data), dtype=xp.float32)
+    num_drop_frame = int(drop_rate * len(x_data))
+    if num_drop_frame > 0:
+        inds=np.random.choice(np.arange(len(x_data)),size=num_drop_frame)
+        sp_mask[inds] = 0
+        # sp_mask[:num_drop_frame] = 0
+        # xp.random.shuffle(sp_mask)
+        masked_x = x_data * sp_mask[:,xp.newaxis]
+        return masked_x
+    else:
+        return x_data
 
 def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
-              max_enc, max_dec, input_path='', limit_vocab=False, add_unk=False):
+              max_enc, max_dec, input_path='', 
+              limit_vocab=False, add_unk=False,
+              drop_input_frames=0,
+              switchboard=False):
     batch_data = {'X':[], 'y':[], 'r':[], "utts": []}
     # -------------------------------------------------------------------------
     # loop through each utterance in utt list
@@ -306,21 +328,35 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
             # -----------------------------------------------------------------
             # for speech data
             # -----------------------------------------------------------------
-            # get path to speech file
-            utt_sp_path = os.path.join(input_path, "{0:s}.npy".format(u))
-            if not os.path.exists(utt_sp_path):
-                # for training data, there are sub-folders
-                utt_sp_path = os.path.join(input_path,
-                                           u.split('_',1)[0],
-                                           "{0:s}.npy".format(u))
-            if os.path.exists(utt_sp_path):
-                x_data = xp.load(utt_sp_path)[:max_enc]
+            if switchboard == False:
+                # get path to speech file
+                utt_sp_path = os.path.join(input_path, "{0:s}.npy".format(u))
+                if not os.path.exists(utt_sp_path):
+                    # for training data, there are sub-folders
+                    utt_sp_path = os.path.join(input_path,
+                                               u.split('_',1)[0],
+                                               "{0:s}.npy".format(u))
+                if os.path.exists(utt_sp_path):
+                    x_data = xp.load(utt_sp_path)[:max_enc]
+                    # Drop input frames logic
+                    if drop_input_frames > 0:
+                        # print("dropping input frames")
+                        # print(x_data[:5,:2])
+                        x_data = drop_frames(x_data, drop_input_frames)
+                        # print(x_data[:5,:2])
+                else:
+                    # ---------------------------------------------------------
+                    # exception if file not found
+                    # ---------------------------------------------------------
+                    raise FileNotFoundError("ERROR!! file not found: {0:s}".format(utt_sp_path))
+                    # ---------------------------------------------------------
             else:
-                # -------------------------------------------------------------
-                # exception if file not found
-                # -------------------------------------------------------------
-                raise FileNotFoundError("ERROR!! file not found: {0:s}".format(utt_sp_path))
-                # -------------------------------------------------------------
+                # print("switchboard")
+                x_data = swbd1_data[u]
+                # print(x_data.shape)
+                # Drop input frames logic
+                if drop_input_frames > 0:
+                    x_data = drop_frames(x_data, drop_input_frames)
         else:
             # -----------------------------------------------------------------
             # for text data
@@ -446,7 +482,7 @@ def create_batches(b_dict, batch_size, curriculum=False):
 
 def feed_model(model, optimizer, m_dict, b_dict,
                batch_size, vocab_dict, x_key, y_key,
-               train, input_path, max_dec, t_cfg,
+               train, input_path, max_dec, m_cfg, t_cfg,
                use_y=True, limit_vocab=False, add_unk=False,
                task_sent_emb=None):
     # number of buckets
@@ -472,6 +508,17 @@ def feed_model(model, optimizer, m_dict, b_dict,
     # curriculum controls order in which buckets are fed to training
     utt_list_batches, total_utts = create_batches(b_dict, 
                                                   batch_size, curriculum)
+
+    #  Check for dropping input frames
+    if "zero_input" in t_cfg and train:
+        drop_input_frames = t_cfg["zero_input"]
+    else:
+        drop_input_frames = 0
+    print("Zeroing inputs with rate={0:.2f}".format(drop_input_frames))
+    # print(drop_input_frames)
+
+    # check for switchboard
+    switchboard = True if "swbd1" in m_cfg["train_set"] else False
     # -------------------------------------------------------------------------
     with tqdm(total=total_utts, ncols=120) as pbar:
         for i, (utt_list, b) in enumerate(utt_list_batches):
@@ -486,7 +533,9 @@ def feed_model(model, optimizer, m_dict, b_dict,
                                    max_dec,
                                    input_path=input_path,
                                    limit_vocab=limit_vocab,
-                                   add_unk=add_unk)
+                                   add_unk=add_unk,
+                                   drop_input_frames=drop_input_frames,
+                                   switchboard=switchboard)
             # -----------------------------------------------------------------
             if (len(batch_data['X']) > 0 and len(batch_data['y']) > 0):
                 if use_y:
@@ -508,7 +557,8 @@ def feed_model(model, optimizer, m_dict, b_dict,
                         
                             alpha = task_sent_emb["alpha"]
                             beta = task_sent_emb["beta"]
-                            loss = (alpha*loss) + (beta*loss_sent_emb)
+                            
+                            # loss = (alpha*loss) + (beta*loss_sent_emb)
                             # the emb loss is for the entire utterance
                             loss_emb_val = float(loss_sent_emb.data)
                             total_emb_loss += loss_emb_val
@@ -564,7 +614,18 @@ def feed_model(model, optimizer, m_dict, b_dict,
                                    loss_emb_per_epoch)
                     # ---------------------------------------------------------
                     model.cleargrads()
+                    # ---------------------------------------------------------
+                    if task_sent_emb:
+                        alpha = task_sent_emb["alpha"]
+                        beta = task_sent_emb["beta"]
+                        use_secondary_task_loss = True if random.random() < beta else False
+                        if use_secondary_task_loss:
+                            # print("using secondary_task_loss")
+                            loss_sent_emb.backward()
+                    # end if
+                    # ---------------------------------------------------------
                     loss.backward()
+                    # ---------------------------------------------------------
                     optimizer.update()
                     # ---------------------------------------------------------
 
@@ -597,7 +658,8 @@ def get_data_dicts(m_cfg):
     if 'limit_vocab' in m_cfg and m_cfg["limit_vocab"] == True:
         vocab_path = os.path.join(m_cfg['data_path'], m_cfg["vocab_path"])
     else:
-        if 'fisher' in m_cfg['train_set']:
+        if (('fisher' in m_cfg['train_set']) or 
+            ("swbd1" in m_cfg['train_set'])):
             if m_cfg['stemmify'] == False:
                 vocab_path = os.path.join(m_cfg['data_path'], v_pre+'train_vocab.dict')
             else:
@@ -759,6 +821,18 @@ def train_loop(cfg_path, epochs):
     # -------------------------------------------------------------------------
     map_dict, vocab_dict, bucket_dict = get_data_dicts(m_cfg)
     # -------------------------------------------------------------------------
+    # initialize switchboard data if required
+    # -------------------------------------------------------------------------
+    if "swbd1" in m_cfg["train_set"]:
+        print("loading switchboard data")
+        for c in swbd1_folders:
+            for x in tqdm(os.listdir(os.path.join(base_mfcc, c)), ncols=80):
+                temp = np.load(os.path.join(base_mfcc, c, x))
+                for k in temp:
+                    swbd1_data[k] = temp[k]
+                # end for
+            # end for
+        # end for
     if 'multitask_sent_emb' in m_cfg:
         task_sent_emb = {}
         os.path.join(m_cfg['data_path'],
@@ -807,6 +881,7 @@ def train_loop(cfg_path, epochs):
                                               train=True,
                                               input_path=input_path,
                                               max_dec=m_cfg['max_en_pred'],
+                                              m_cfg=m_cfg,
                                               t_cfg=t_cfg,
                                               use_y=True,
                                               limit_vocab=limit_vocab,
@@ -834,6 +909,7 @@ def train_loop(cfg_path, epochs):
                                               train=False,
                                               input_path=input_path,
                                               max_dec=m_cfg['max_en_pred'],
+                                              m_cfg=m_cfg,
                                               t_cfg=t_cfg,
                                               use_y=True,
                                               limit_vocab=limit_vocab,

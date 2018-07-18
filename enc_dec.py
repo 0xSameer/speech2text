@@ -28,7 +28,8 @@ class SpeechEncoderDecoder(Chain):
         #----------------------------------------------------------------------
         if "bagofwords" not in self.m_cfg or self.m_cfg["bagofwords"] == False:
             v_pre = self.m_cfg['vocab_pre']
-            if 'fisher' in self.m_cfg['train_set']:
+            if (('fisher' in self.m_cfg['train_set']) or 
+                ("swbd1" in self.m_cfg['train_set'])):
                 if self.m_cfg['stemmify'] == False:
                     v_path = os.path.join(self.m_cfg['data_path'],
                                                     v_pre+'train_vocab.dict')
@@ -159,6 +160,8 @@ class SpeechEncoderDecoder(Chain):
             self.reduce_dim_len = 1
             reduce_dim = CNN_IN_DIM
             for i, l in enumerate(self.m_cfg['cnn_layers']):
+                if "dilate" not in l:
+                    l["dilate"] = 1
                 lname = "CNN_{0:d}".format(i)
                 cnn_out_dim += l["out_channels"]
                 self.cnns.append(lname)
@@ -805,6 +808,7 @@ class SpeechEncoderDecoder(Chain):
 
     def forward(self, X, add_noise=0, teacher_ratio=0, y=None):
         # get shape
+        X.to_gpu(self.gpuid)
         batch_size = X.shape[0]
         # check whether to add noi, start=1se
         # ---------------------------------------------------------------------
