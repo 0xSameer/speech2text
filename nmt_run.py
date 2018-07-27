@@ -352,7 +352,7 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
                     # ---------------------------------------------------------
             else:
                 # print("switchboard")
-                x_data = swbd1_data[u]
+                x_data = swbd1_data[u][:max_enc]
                 # print(x_data.shape)
                 # Drop input frames logic
                 if drop_input_frames > 0:
@@ -659,7 +659,8 @@ def get_data_dicts(m_cfg):
         vocab_path = os.path.join(m_cfg['data_path'], m_cfg["vocab_path"])
     else:
         if (('fisher' in m_cfg['train_set']) or 
-            ("swbd1" in m_cfg['train_set'])):
+            ("swbd1" in m_cfg['train_set']) or 
+            ("ainu" in m_cfg['train_set'])):
             if m_cfg['stemmify'] == False:
                 vocab_path = os.path.join(m_cfg['data_path'], v_pre+'train_vocab.dict')
             else:
@@ -825,7 +826,7 @@ def train_loop(cfg_path, epochs):
     # -------------------------------------------------------------------------
     if "swbd1" in m_cfg["train_set"]:
         print("loading switchboard data")
-        for c in swbd1_folders:
+        for c in [m_cfg["train_set"], m_cfg["dev_set"]]:
             for x in tqdm(os.listdir(os.path.join(base_mfcc, c)), ncols=80):
                 temp = np.load(os.path.join(base_mfcc, c, x))
                 for k in temp:
@@ -868,8 +869,13 @@ def train_loop(cfg_path, epochs):
             # -----------------------------------------------------------------
             # train
             # -----------------------------------------------------------------
-            input_path = os.path.join(m_cfg['data_path'],
-                                      m_cfg['train_set'])
+            if "ainu" in m_cfg['train_set']:
+                print("using ainu mfccs")
+                input_path = os.path.join(m_cfg['data_path'],
+                                          "ainu_mfccs")
+            else:
+                input_path = os.path.join(m_cfg['data_path'],
+                                          m_cfg['train_set'])
             pred_sents, ref_sents, utts, train_loss, emb_loss = feed_model(model,
                                               optimizer=optimizer,
                                               m_dict=map_dict[train_key],
@@ -896,8 +902,13 @@ def train_loop(cfg_path, epochs):
             # -----------------------------------------------------------------
             # dev
             # -----------------------------------------------------------------
-            input_path = os.path.join(m_cfg['data_path'],
-                                      m_cfg['dev_set'])
+            if "ainu" in m_cfg['train_set']:
+                print("using ainu mfccs")
+                input_path = os.path.join(m_cfg['data_path'],
+                                          "ainu_mfccs")
+            else:
+                input_path = os.path.join(m_cfg['data_path'],
+                                          m_cfg['dev_set'])
             pred_sents, ref_sents, utts, dev_loss, _ = feed_model(model,
                                               optimizer=optimizer,
                                               m_dict=map_dict[dev_key],
