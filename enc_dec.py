@@ -30,7 +30,8 @@ class SpeechEncoderDecoder(Chain):
             v_pre = self.m_cfg['vocab_pre']
             if (('fisher' in self.m_cfg['train_set']) or 
                 ("swbd1" in self.m_cfg['train_set']) or
-                ("ainu" in self.m_cfg['train_set'])):
+                ("ainu" in self.m_cfg['train_set']) or
+                ("mboshi" in self.m_cfg['train_set'])):
                 if self.m_cfg['stemmify'] == False:
                     v_path = os.path.join(self.m_cfg['data_path'],
                                                     v_pre+'train_vocab.dict')

@@ -660,7 +660,8 @@ def get_data_dicts(m_cfg):
     else:
         if (('fisher' in m_cfg['train_set']) or 
             ("swbd1" in m_cfg['train_set']) or 
-            ("ainu" in m_cfg['train_set'])):
+            ("ainu" in m_cfg['train_set']) or 
+            ("mboshi" in m_cfg['train_set'])):
             if m_cfg['stemmify'] == False:
                 vocab_path = os.path.join(m_cfg['data_path'], v_pre+'train_vocab.dict')
             else:
@@ -873,6 +874,10 @@ def train_loop(cfg_path, epochs):
                 print("using ainu mfccs")
                 input_path = os.path.join(m_cfg['data_path'],
                                           "ainu_mfccs")
+            elif "mboshi" in m_cfg['train_set']:
+                print("using mboshi mfccs")
+                input_path = os.path.join(m_cfg['data_path'],
+                                          "mboshi_mfccs")
             else:
                 input_path = os.path.join(m_cfg['data_path'],
                                           m_cfg['train_set'])
@@ -906,6 +911,10 @@ def train_loop(cfg_path, epochs):
                 print("using ainu mfccs")
                 input_path = os.path.join(m_cfg['data_path'],
                                           "ainu_mfccs")
+            elif "mboshi" in m_cfg['train_set']:
+                print("using mboshi mfccs")
+                input_path = os.path.join(m_cfg['data_path'],
+                                          "mboshi_mfccs")
             else:
                 input_path = os.path.join(m_cfg['data_path'],
                                           m_cfg['dev_set'])

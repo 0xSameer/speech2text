@@ -46,6 +46,70 @@ print("-"*80)
 print("Using model: {0:s}".format(cfg_path))
 print("-"*80)
 
+def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
+              max_enc, max_dec, input_path='', 
+              limit_vocab=False, add_unk=False,
+              drop_input_frames=0,
+              switchboard=False):
+    batch_data = {'X':[], 'y':[], 'r':[], "utts": []}
+    # -------------------------------------------------------------------------
+    # loop through each utterance in utt list
+    # -------------------------------------------------------------------------
+    for u in utt_list:
+        # ---------------------------------------------------------------------
+        #  add X data
+        # ---------------------------------------------------------------------
+        if x_key == 'sp':
+            # -----------------------------------------------------------------
+            # for speech data
+            # -----------------------------------------------------------------
+            if switchboard == False:
+                # get path to speech file
+                utt_sp_path = os.path.join(input_path, "{0:s}.npy".format(u))
+                if not os.path.exists(utt_sp_path):
+                    # for training data, there are sub-folders
+                    utt_sp_path = os.path.join(input_path,
+                                               u.split('_',1)[0],
+                                               "{0:s}.npy".format(u))
+                if os.path.exists(utt_sp_path):
+                    x_data = xp.load(utt_sp_path)[:max_enc]
+                    # Drop input frames logic
+                    if drop_input_frames > 0:
+                        # print("dropping input frames")
+                        # print(x_data[:5,:2])
+                        x_data = drop_frames(x_data, drop_input_frames)
+                        # print(x_data[:5,:2])
+                else:
+                    # ---------------------------------------------------------
+                    # exception if file not found
+                    # ---------------------------------------------------------
+                    raise FileNotFoundError("ERROR!! file not found: {0:s}".format(utt_sp_path))
+                    # ---------------------------------------------------------
+            else:
+                # print("switchboard")
+                x_data = swbd1_data[u][:max_enc]
+                # print(x_data.shape)
+                # Drop input frames logic
+                if drop_input_frames > 0:
+                    x_data = drop_frames(x_data, drop_input_frames)
+        else:
+            # -----------------------------------------------------------------
+            # for text data
+            # -----------------------------------------------------------------
+            x_ids = [vocab_dict[x_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][x_key]]
+            x_data = xp.asarray(x_ids, dtype=xp.int32)[:max_enc]
+            # -----------------------------------------------------------------
+        # ---------------------------------------------------------------------
+        if len(x_data) > 0:
+            batch_data['X'].append(x_data)
+            batch_data['utts'].append(u)
+    # -------------------------------------------------------------------------
+    # end for all utterances in batch
+    # -------------------------------------------------------------------------
+    if len(batch_data['X']) > 0:
+        batch_data['X'] = F.pad_sequence(batch_data['X'], padding=PAD_ID)
+    return batch_data
+
 def get_utt_data(eg_utt, curr_set):
     # get shape
     local_input_path = os.path.join(m_cfg['data_path'], curr_set)
@@ -256,7 +320,7 @@ def decode_beam(utt, curr_set, stop_limit=10, max_n=5, beam_width=3):
 
         n_best = []
 
-        if (len(batch_data['X']) > 0 and len(batch_data['y']) > 0):
+        if len(batch_data['X']) > 0:
             n_best.append(init_hyp())
 
             for i in range(stop_limit):
@@ -297,7 +361,6 @@ if resume == False:
             n_best, enc_states = decode_beam(u, set_key, 
                                  stop_limit=max_pred_len, 
                                  max_n=N, beam_width=K)
-    #         utt_hyps[u] = [(e["hyp"], e["score"]) for e in n_best]
             utt_hyps[u] = [(e["hyp"], e["score"], e["attn_history"]) for e in n_best]
             enc_states = xp.asnumpy(enc_states)
             utt_enc[u] = enc_states
