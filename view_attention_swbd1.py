@@ -46,73 +46,19 @@ print("-"*80)
 print("Using model: {0:s}".format(cfg_path))
 print("-"*80)
 
-def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
-              max_enc, max_dec, input_path='', 
-              limit_vocab=False, add_unk=False,
-              drop_input_frames=0,
-              switchboard=False):
-    batch_data = {'X':[], 'y':[], 'r':[], "utts": []}
-    # -------------------------------------------------------------------------
-    # loop through each utterance in utt list
-    # -------------------------------------------------------------------------
-    for u in utt_list:
-        # ---------------------------------------------------------------------
-        #  add X data
-        # ---------------------------------------------------------------------
-        if x_key == 'sp':
-            # -----------------------------------------------------------------
-            # for speech data
-            # -----------------------------------------------------------------
-            if switchboard == False:
-                # get path to speech file
-                utt_sp_path = os.path.join(input_path, "{0:s}.npy".format(u))
-                if not os.path.exists(utt_sp_path):
-                    # for training data, there are sub-folders
-                    utt_sp_path = os.path.join(input_path,
-                                               u.split('_',1)[0],
-                                               "{0:s}.npy".format(u))
-                if os.path.exists(utt_sp_path):
-                    x_data = xp.load(utt_sp_path)[:max_enc]
-                    # Drop input frames logic
-                    if drop_input_frames > 0:
-                        # print("dropping input frames")
-                        # print(x_data[:5,:2])
-                        x_data = drop_frames(x_data, drop_input_frames)
-                        # print(x_data[:5,:2])
-                else:
-                    # ---------------------------------------------------------
-                    # exception if file not found
-                    # ---------------------------------------------------------
-                    raise FileNotFoundError("ERROR!! file not found: {0:s}".format(utt_sp_path))
-                    # ---------------------------------------------------------
-            else:
-                # print("switchboard")
-                x_data = swbd1_data[u][:max_enc]
-                # print(x_data.shape)
-                # Drop input frames logic
-                if drop_input_frames > 0:
-                    x_data = drop_frames(x_data, drop_input_frames)
-        else:
-            # -----------------------------------------------------------------
-            # for text data
-            # -----------------------------------------------------------------
-            x_ids = [vocab_dict[x_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][x_key]]
-            x_data = xp.asarray(x_ids, dtype=xp.int32)[:max_enc]
-            # -----------------------------------------------------------------
-        # ---------------------------------------------------------------------
-        if len(x_data) > 0:
-            batch_data['X'].append(x_data)
-            batch_data['utts'].append(u)
-    # -------------------------------------------------------------------------
-    # end for all utterances in batch
-    # -------------------------------------------------------------------------
-    if len(batch_data['X']) > 0:
-        batch_data['X'] = F.pad_sequence(batch_data['X'], padding=PAD_ID)
-    return batch_data
+print("loading switchboard data")
+for c in swbd1_folders:
+    for x in tqdm(os.listdir(os.path.join(base_mfcc, c)), ncols=80):
+        temp = np.load(os.path.join(base_mfcc, c, x))
+        for k in temp:
+            swbd1_data[k] = temp[k]
+        # end for
+    # end for
+# end for
 
 def get_utt_data(eg_utt, curr_set):
     # get shape
-    local_input_path = os.path.join(m_cfg['data_path'], "mboshi_mfccs")
+    local_input_path = os.path.join(m_cfg['data_path'], curr_set)
 
     width_b = bucket_dict[dev_key]["width_b"]
     num_b = bucket_dict[dev_key]["num_b"]
@@ -126,7 +72,7 @@ def get_utt_data(eg_utt, curr_set):
                            num_b * width_b,
                            200,
                            input_path=local_input_path,
-                           switchboard=False)
+                           switchboard=True)
 
     return batch_data
 
@@ -316,10 +262,11 @@ def decode_beam(utt, curr_set, stop_limit=10, max_n=5, beam_width=3):
         batch_data = get_utt_data(utt, curr_set)
 
         # print(enc_states.shape, model.enc_states.shape)
+
         n_best = []
         enc_states = []
 
-        if (len(batch_data['X']) > 0):
+        if (len(batch_data['X']) > 0 and len(batch_data['y']) > 0):
             X = batch_data['X']
             X.to_gpu(model.gpuid)
             # print(X.shape)
@@ -444,7 +391,8 @@ def get_out_str(h):
 
 
 def write_to_file_len_filtered_preds(utts_beam, min_len, max_len):
-    ids_path = os.path.join("./mboshi", "{0:s}.ids".format(set_key))
+    swbd1_ids = pickle.load(open("../speech2text/mfcc_13dim/swbd1_ids.dict", 
+                                "rb"))
 
     hyp_path = os.path.join(m_cfg["model_dir"],
                 "{0:s}_beam_min-{1:d}_max-{2:d}_N-{3:d}_K-{4:d}.en".format(set_key,
@@ -453,15 +401,15 @@ def write_to_file_len_filtered_preds(utts_beam, min_len, max_len):
                                                                      N,
                                                                      K))
     print("writing hyps to: {0:s}".format(hyp_path))
-    with open(hyp_path, "w", encoding="utf-8") as out_f, open(ids_path, "r", encoding="utf-8") as ids_f:
-        for line in ids_f:
-            u = line.strip()
+    with open(hyp_path, "w", encoding="utf-8") as out_f, open(hyp_path+".ids", "w", encoding="utf-8") as out_ids_f:
+        for u in swbd1_ids[set_key]:
             if len(utts_beam[u]) > 0:
                 hyp = [v_dict['i2w'][i].decode() for i in utts_beam[u][0][0] if i >= 4]
             else:
                 hyp = []
             out_str = get_out_str(hyp)
             out_f.write("{0:s}\n".format(out_str))
+            out_ids_f.write("{0:s} ({1:s})\n".format(out_str, u))
     print("all done")
 
 
