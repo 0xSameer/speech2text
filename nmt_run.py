@@ -34,9 +34,7 @@ python nmt_run.py -o $PWD/out -e 2 -k fisher_train
 '''
 xp = cuda.cupy
 
-base_mfcc = "./mfcc_13dim/swbd1_mfcc/"
-swbd1_folders = {"swbd1_train_100k", "swbd1_train_dev"}
-swbd1_data = {}
+speech_data = {}
 # -----------------------------------------------------------------------------
 # helper functions for metrics
 # -----------------------------------------------------------------------------
@@ -351,8 +349,8 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
                     raise FileNotFoundError("ERROR!! file not found: {0:s}".format(utt_sp_path))
                     # ---------------------------------------------------------
             else:
-                # print("switchboard")
-                x_data = swbd1_data[u][:max_enc]
+                # print("hahaha")
+                x_data = xp.asarray(speech_data[u][:max_enc])
                 # print(x_data.shape)
                 # Drop input frames logic
                 if drop_input_frames > 0:
@@ -518,7 +516,10 @@ def feed_model(model, optimizer, m_dict, b_dict,
     # print(drop_input_frames)
 
     # check for switchboard
-    switchboard = True if "swbd1" in m_cfg["train_set"] else False
+    if "swbd1" in m_cfg["train_set"] or "mboshi" in m_cfg["train_set"]:
+        switchboard = True
+    else:
+        switchboard = False
     # -------------------------------------------------------------------------
     with tqdm(total=total_utts, ncols=120) as pbar:
         for i, (utt_list, b) in enumerate(utt_list_batches):
@@ -825,16 +826,29 @@ def train_loop(cfg_path, epochs):
     # -------------------------------------------------------------------------
     # initialize switchboard data if required
     # -------------------------------------------------------------------------
-    if "swbd1" in m_cfg["train_set"]:
-        print("loading switchboard data")
-        for c in [m_cfg["train_set"], m_cfg["dev_set"]]:
-            for x in tqdm(os.listdir(os.path.join(base_mfcc, c)), ncols=80):
-                temp = np.load(os.path.join(base_mfcc, c, x))
-                for k in temp:
-                    swbd1_data[k] = temp[k]
+    if "swbd1" in m_cfg["train_set"] or "mboshi" in m_cfg["train_set"]:
+        if "swbd1" in m_cfg["train_set"]:
+            base_mfcc = "./mfcc_13dim/swbd1_mfcc/"
+            print("loading speech data from {0:s}".format(base_mfcc))
+            for c in [m_cfg["train_set"], m_cfg["dev_set"]]:
+                for x in tqdm(os.listdir(os.path.join(base_mfcc, c)), ncols=80):
+                    temp = np.load(os.path.join(base_mfcc, c, x))
+                    for k in temp:
+                        speech_data[k] = temp[k]
+                    # end for
                 # end for
             # end for
-        # end for
+        else:
+            base_mfcc = "./mboshi/mboshi_kaldi_mfccs/"
+            print("loading speech data from {0:s}".format(base_mfcc))
+            for x in tqdm(os.listdir(base_mfcc), ncols=80):
+                temp = np.load(os.path.join(base_mfcc, x))
+                for k in temp:
+                    speech_data[k] = temp[k]
+                # end for
+            # end for
+        # end if else
+    # end if to check for swbd1 or mboshi data
     if 'multitask_sent_emb' in m_cfg:
         task_sent_emb = {}
         os.path.join(m_cfg['data_path'],
@@ -874,10 +888,10 @@ def train_loop(cfg_path, epochs):
                 print("using ainu mfccs")
                 input_path = os.path.join(m_cfg['data_path'],
                                           "ainu_mfccs")
-            elif "mboshi" in m_cfg['train_set']:
-                print("using mboshi mfccs")
-                input_path = os.path.join(m_cfg['data_path'],
-                                          "mboshi_mfccs")
+            # elif "mboshi" in m_cfg['train_set']:
+            #     print("using mboshi mfccs")
+            #     input_path = os.path.join(m_cfg['data_path'],
+            #                               "mboshi_mfccs")
             else:
                 input_path = os.path.join(m_cfg['data_path'],
                                           m_cfg['train_set'])
@@ -911,10 +925,10 @@ def train_loop(cfg_path, epochs):
                 print("using ainu mfccs")
                 input_path = os.path.join(m_cfg['data_path'],
                                           "ainu_mfccs")
-            elif "mboshi" in m_cfg['train_set']:
-                print("using mboshi mfccs")
-                input_path = os.path.join(m_cfg['data_path'],
-                                          "mboshi_mfccs")
+            # elif "mboshi" in m_cfg['train_set']:
+            #     print("using mboshi mfccs")
+            #     input_path = os.path.join(m_cfg['data_path'],
+            #                               "mboshi_mfccs")
             else:
                 input_path = os.path.join(m_cfg['data_path'],
                                           m_cfg['dev_set'])

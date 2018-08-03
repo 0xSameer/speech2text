@@ -42,6 +42,16 @@ resume = bool(args['resume'])
 
 # cfg_path = "interspeech/sp_20hrs"
 
+print("loading MBOSHI data")
+base_mfcc = "./mboshi/mboshi_kaldi_mfccs/"
+print("loading speech data from {0:s}".format(base_mfcc))
+for x in tqdm(os.listdir(base_mfcc), ncols=80):
+    temp = np.load(os.path.join(base_mfcc, x))
+    for k in temp:
+        speech_data[k] = temp[k]
+    # end for
+# end for
+
 print("-"*80)
 print("Using model: {0:s}".format(cfg_path))
 print("-"*80)
@@ -59,47 +69,7 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
         # ---------------------------------------------------------------------
         #  add X data
         # ---------------------------------------------------------------------
-        if x_key == 'sp':
-            # -----------------------------------------------------------------
-            # for speech data
-            # -----------------------------------------------------------------
-            if switchboard == False:
-                # get path to speech file
-                utt_sp_path = os.path.join(input_path, "{0:s}.npy".format(u))
-                if not os.path.exists(utt_sp_path):
-                    # for training data, there are sub-folders
-                    utt_sp_path = os.path.join(input_path,
-                                               u.split('_',1)[0],
-                                               "{0:s}.npy".format(u))
-                if os.path.exists(utt_sp_path):
-                    x_data = xp.load(utt_sp_path)[:max_enc]
-                    # Drop input frames logic
-                    if drop_input_frames > 0:
-                        # print("dropping input frames")
-                        # print(x_data[:5,:2])
-                        x_data = drop_frames(x_data, drop_input_frames)
-                        # print(x_data[:5,:2])
-                else:
-                    # ---------------------------------------------------------
-                    # exception if file not found
-                    # ---------------------------------------------------------
-                    raise FileNotFoundError("ERROR!! file not found: {0:s}".format(utt_sp_path))
-                    # ---------------------------------------------------------
-            else:
-                # print("switchboard")
-                x_data = swbd1_data[u][:max_enc]
-                # print(x_data.shape)
-                # Drop input frames logic
-                if drop_input_frames > 0:
-                    x_data = drop_frames(x_data, drop_input_frames)
-        else:
-            # -----------------------------------------------------------------
-            # for text data
-            # -----------------------------------------------------------------
-            x_ids = [vocab_dict[x_key]['w2i'].get(w, UNK_ID) for w in m_dict[u][x_key]]
-            x_data = xp.asarray(x_ids, dtype=xp.int32)[:max_enc]
-            # -----------------------------------------------------------------
-        # ---------------------------------------------------------------------
+        x_data = xp.asarray(speech_data[u][:max_enc])
         if len(x_data) > 0:
             batch_data['X'].append(x_data)
             batch_data['utts'].append(u)
@@ -112,8 +82,6 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
 
 def get_utt_data(eg_utt, curr_set):
     # get shape
-    local_input_path = os.path.join(m_cfg['data_path'], "mboshi_mfccs")
-
     width_b = bucket_dict[dev_key]["width_b"]
     num_b = bucket_dict[dev_key]["num_b"]
     utt_list = [eg_utt]
@@ -125,7 +93,7 @@ def get_utt_data(eg_utt, curr_set):
                            vocab_dict,
                            num_b * width_b,
                            200,
-                           input_path=local_input_path,
+                           input_path="",
                            switchboard=False)
 
     return batch_data
