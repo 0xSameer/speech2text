@@ -428,9 +428,11 @@ def get_out_str(h):
 # In[50]:
 
 
+gpfr_out_path = "./gp/FR"
+
 def write_to_file_len_filtered_preds(utts_beam, min_len, max_len):
-    swbd1_ids = pickle.load(open("../speech2text/mfcc_13dim/swbd1_ids.dict",
-                                "rb"))
+    # swbd1_ids = pickle.load(open("../speech2text/mfcc_13dim/swbd1_ids.dict",
+    #                             "rb"))
 
     hyp_path = os.path.join(m_cfg["model_dir"],
                 "{0:s}_beam_min-{1:d}_max-{2:d}_N-{3:d}_K-{4:d}.en".format(set_key,
@@ -439,8 +441,11 @@ def write_to_file_len_filtered_preds(utts_beam, min_len, max_len):
                                                                      N,
                                                                      K))
     print("writing hyps to: {0:s}".format(hyp_path))
-    with open(hyp_path, "w", encoding="utf-8") as out_f, open(hyp_path+".ids", "w", encoding="utf-8") as out_ids_f:
-        for u in swbd1_ids[set_key]:
+    with open(hyp_path, "w", encoding="utf-8") as out_f, \
+         open(hyp_path+".ids", "w", encoding="utf-8") as out_ids_f, \
+         open(os.path.join(gpfr_out_path, "{0:s}.ids".format(set_key)), "r", encoding="utf-8") as id_f:
+        for i in id_f:
+            u = i.strip()
             if len(utts_beam[u]) > 0:
                 hyp = [v_dict['i2w'][i].decode() for i in utts_beam[u][0][0] if i >= 4]
             else:
