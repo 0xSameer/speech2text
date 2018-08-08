@@ -310,7 +310,7 @@ def drop_frames(x_data, drop_rate):
         return x_data
 
 def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
-              max_enc, max_dec, input_path='', 
+              max_enc, max_dec, input_path='',
               limit_vocab=False, add_unk=False,
               drop_input_frames=0,
               switchboard=False):
@@ -504,7 +504,7 @@ def feed_model(model, optimizer, m_dict, b_dict,
     else:
         curriculum = False
     # curriculum controls order in which buckets are fed to training
-    utt_list_batches, total_utts = create_batches(b_dict, 
+    utt_list_batches, total_utts = create_batches(b_dict,
                                                   batch_size, curriculum)
 
     #  Check for dropping input frames
@@ -516,7 +516,9 @@ def feed_model(model, optimizer, m_dict, b_dict,
     # print(drop_input_frames)
 
     # check for switchboard
-    if "swbd1" in m_cfg["train_set"] or "mboshi" in m_cfg["train_set"]:
+    if (("swbd1" in m_cfg["train_set"]) or 
+        ("mboshi" in m_cfg["train_set"]) or 
+        ("gpfr" in m_cfg["info_path"])):
         switchboard = True
     else:
         switchboard = False
@@ -551,14 +553,14 @@ def feed_model(model, optimizer, m_dict, b_dict,
                                     add_noise=t_cfg['speech_noise'],
                                     teacher_ratio = t_cfg['teach_ratio'])
                         if train and task_sent_emb:
-                            data_y = get_sent_emb(batch_data['utts'], 
+                            data_y = get_sent_emb(batch_data['utts'],
                                                   task_sent_emb)
-                            
+
                             loss_sent_emb = model.compute_sent_emb_loss(data_y)
-                        
+
                             alpha = task_sent_emb["alpha"]
                             beta = task_sent_emb["beta"]
-                            
+
                             # loss = (alpha*loss) + (beta*loss_sent_emb)
                             # the emb loss is for the entire utterance
                             loss_emb_val = float(loss_sent_emb.data)
@@ -606,7 +608,7 @@ def feed_model(model, optimizer, m_dict, b_dict,
 
                         out_str = "b={0:d},l={1:.2f},avg={2:.2f},lr={3:.7f}".format((b+1),loss_val,loss_per_epoch, optimizer.hyperparam.lr)
                     if task_sent_emb:
-                        loss_emb_per_epoch = (total_emb_loss / 
+                        loss_emb_per_epoch = (total_emb_loss /
                                                total_loss_updates)
                         out_str = "b={0:d},l={1:.2f},l_e={2:.5f},avg={3:.2f}, avg emb={4:.5f}".format((b+1),
                                    loss_val,
@@ -656,19 +658,8 @@ def get_data_dicts(m_cfg):
     # -------------------------------------------------------------------------
     # VOCAB
     # -------------------------------------------------------------------------
-    if 'limit_vocab' in m_cfg and m_cfg["limit_vocab"] == True:
-        vocab_path = os.path.join(m_cfg['data_path'], m_cfg["vocab_path"])
-    else:
-        if (('fisher' in m_cfg['train_set']) or 
-            ("swbd1" in m_cfg['train_set']) or 
-            ("ainu" in m_cfg['train_set']) or 
-            ("mboshi" in m_cfg['train_set'])):
-            if m_cfg['stemmify'] == False:
-                vocab_path = os.path.join(m_cfg['data_path'], v_pre+'train_vocab.dict')
-            else:
-                vocab_path = os.path.join(m_cfg['data_path'], v_pre+'train_stemmed_vocab.dict')
-        else:
-            vocab_path = os.path.join(m_cfg['data_path'], v_pre+'ch_train_vocab.dict')
+    vocab_path = os.path.join(m_cfg['data_path'], v_pre+'train_vocab.dict')
+
     print("loading dict: {0:s}".format(vocab_path))
     vocab_dict = pickle.load(open(vocab_path, "rb"))
     print("-"*50)
@@ -826,29 +817,39 @@ def train_loop(cfg_path, epochs):
     # -------------------------------------------------------------------------
     # initialize switchboard data if required
     # -------------------------------------------------------------------------
-    if "swbd1" in m_cfg["train_set"] or "mboshi" in m_cfg["train_set"]:
-        if "swbd1" in m_cfg["train_set"]:
-            base_mfcc = "./mfcc_13dim/swbd1_mfcc/"
-            print("loading speech data from {0:s}".format(base_mfcc))
-            for c in [m_cfg["train_set"], m_cfg["dev_set"]]:
-                for x in tqdm(os.listdir(os.path.join(base_mfcc, c)), ncols=80):
-                    temp = np.load(os.path.join(base_mfcc, c, x))
-                    for k in temp:
-                        speech_data[k] = temp[k]
-                    # end for
-                # end for
-            # end for
-        else:
-            base_mfcc = "./mboshi/mboshi_kaldi_mfccs/"
-            print("loading speech data from {0:s}".format(base_mfcc))
-            for x in tqdm(os.listdir(base_mfcc), ncols=80):
-                temp = np.load(os.path.join(base_mfcc, x))
+    if "swbd1" in m_cfg["train_set"]:
+        base_mfcc = "./mfcc_13dim/swbd1_mfcc/"
+        print("loading speech data from {0:s}".format(base_mfcc))
+        for c in [m_cfg["train_set"], m_cfg["dev_set"]]:
+            for x in tqdm(os.listdir(os.path.join(base_mfcc, c)), ncols=80):
+                temp = np.load(os.path.join(base_mfcc, c, x))
                 for k in temp:
                     speech_data[k] = temp[k]
                 # end for
             # end for
-        # end if else
-    # end if to check for swbd1 or mboshi data
+        # end for
+    elif "gpfr" in m_cfg["info_path"]:
+        base_mfcc = "./gp/FR/"
+        print("loading speech data from {0:s}".format(base_mfcc))
+        for c in [m_cfg["train_set"], m_cfg["dev_set"]]:
+            for x in tqdm(os.listdir(os.path.join(base_mfcc, c)), ncols=80):
+                if x.endswith(".np"):
+                    temp = np.load(os.path.join(base_mfcc, c, x))
+                    for k in temp:
+                        speech_data[k] = temp[k]
+                # end for
+            # end for
+        # end for
+    elif "mboshi" in m_cfg["train_set"]:
+        base_mfcc = "./mboshi/mboshi_kaldi_mfccs/"
+        print("loading speech data from {0:s}".format(base_mfcc))
+        for x in tqdm(os.listdir(base_mfcc), ncols=80):
+            temp = np.load(os.path.join(base_mfcc, x))
+            for k in temp:
+                speech_data[k] = temp[k]
+            # end for
+        # end for
+
     if 'multitask_sent_emb' in m_cfg:
         task_sent_emb = {}
         os.path.join(m_cfg['data_path'],
@@ -856,7 +857,7 @@ def train_loop(cfg_path, epochs):
         emb_fname_prefix = os.path.join(m_cfg['data_path'],
                                     m_cfg['multitask_sent_emb']['emb_fname'])
         # task_sent_emb["embs"] = np.load(emb_fname_prefix+".npy")
-        task_sent_emb["map"] = pickle.load(open(emb_fname_prefix+".map", 
+        task_sent_emb["map"] = pickle.load(open(emb_fname_prefix+".map",
                                                  "rb"))
         task_sent_emb["emb_dim"] = m_cfg['multitask_sent_emb']['emb_dim']
         task_sent_emb["alpha"] = m_cfg['multitask_sent_emb']['alpha']

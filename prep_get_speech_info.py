@@ -87,14 +87,12 @@ def main():
     uttr_info_dict = {}
 
     for cat in map_dict:
-        if "fisher" not in cat:
-            continue
         cat_speech_path = os.path.join(out_path, cat)
         if not os.path.isdir(cat_speech_path):
             print("{0:s} does not exist. Exiting!".format(cat_speech_path))
-            return 0
-        split = "train" in cat
-        uttr_info_dict[cat] = get_info(map_dict[cat], cat_speech_path, split)
+        else:
+            split = "train" in cat
+            uttr_info_dict[cat] = get_info(map_dict[cat], cat_speech_path, split)
     # end for category: dev, dev2, test, train
 
     uttr_info_dict_path = os.path.join(out_path,'info.dict')

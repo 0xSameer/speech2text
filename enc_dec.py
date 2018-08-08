@@ -28,19 +28,8 @@ class SpeechEncoderDecoder(Chain):
         #----------------------------------------------------------------------
         if "bagofwords" not in self.m_cfg or self.m_cfg["bagofwords"] == False:
             v_pre = self.m_cfg['vocab_pre']
-            if (('fisher' in self.m_cfg['train_set']) or 
-                ("swbd1" in self.m_cfg['train_set']) or
-                ("ainu" in self.m_cfg['train_set']) or
-                ("mboshi" in self.m_cfg['train_set'])):
-                if self.m_cfg['stemmify'] == False:
-                    v_path = os.path.join(self.m_cfg['data_path'],
-                                                    v_pre+'train_vocab.dict')
-                else:
-                    v_path = os.path.join(self.m_cfg['data_path'],
-                                                    v_pre+'train_stemmed_vocab.dict')
-            else:
-                v_path = os.path.join(self.m_cfg['data_path'],
-                                                v_pre+'ch_train_vocab.dict')
+            v_path = os.path.join(self.m_cfg['data_path'],
+                                            v_pre+'train_vocab.dict')
             vocab_dict = pickle.load(open(v_path, "rb"))
             if self.m_cfg['enc_key'] != 'sp':
                 self.v_size_es = len(vocab_dict[self.m_cfg['enc_key']]['w2i'])

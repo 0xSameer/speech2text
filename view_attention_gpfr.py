@@ -46,13 +46,14 @@ print("-"*80)
 print("Using model: {0:s}".format(cfg_path))
 print("-"*80)
 
-swbd1_data = {}
-base_mfcc = "./mfcc_13dim/swbd1_mfcc/"
-print("loading switchboard data")
+speech_data = {}
+base_mfcc = "./gp/FR/"
+print("loading speech data from {0:s}".format(base_mfcc))
 for x in tqdm(os.listdir(os.path.join(base_mfcc, set_key)), ncols=80):
-    temp = np.load(os.path.join(base_mfcc, set_key, x))
-    for k in temp:
-        swbd1_data[k] = temp[k]
+    if x.endswith(".np"):
+        temp = np.load(os.path.join(base_mfcc, set_key, x))
+        for k in temp:
+            speech_data[k] = temp[k]
     # end for
 # end for
 
@@ -74,11 +75,7 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
             # for speech data
             # -----------------------------------------------------------------
             # print("switchboard")
-            x_data = swbd1_data[u][:max_enc]
-            # print(x_data.shape)
-            # Drop input frames logic
-            if drop_input_frames > 0:
-                x_data = drop_frames(x_data, drop_input_frames)
+            x_data = speech_data[u][:max_enc]
         else:
             # -----------------------------------------------------------------
             # for text data
@@ -387,10 +384,10 @@ else:
 
 
 def clean_out_str(out_str):
-    out_str = out_str.replace("`", "")
-    out_str = out_str.replace('"', '')
-    out_str = out_str.replace('¿', '')
-    out_str = out_str.replace("''", "")
+    # out_str = out_str.replace("`", "")
+    # out_str = out_str.replace('"', '')
+    # out_str = out_str.replace('¿', '')
+    # out_str = out_str.replace("''", "")
 
     # for BPE
     out_str = out_str.replace("@@ ", "")

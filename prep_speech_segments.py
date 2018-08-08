@@ -106,11 +106,11 @@ def main():
     for cat in map_dict:
         if not os.path.isdir(os.path.join(speech_dir, cat)):
             print("{0:s} does not exist. Exiting!".format(os.path.join(speech_dir, cat)))
-            return 0
-        cat_speech_path = os.path.join(speech_dir, cat)
-        cat_out_path = os.path.join(out_path, cat)
-        split = "train" in cat
-        map_speech_segments(map_dict[cat], cat_speech_path, cat_out_path, split)
+        else:    
+            cat_speech_path = os.path.join(speech_dir, cat)
+            cat_out_path = os.path.join(out_path, cat)
+            split = "train" in cat
+            map_speech_segments(map_dict[cat], cat_speech_path, cat_out_path, split)
 
     print("-"*50)
     print("all done ...")
