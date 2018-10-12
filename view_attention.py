@@ -27,6 +27,9 @@ parser.add_argument('-k','--K', help='softmax selection',
 parser.add_argument('-s','--S', help='dev/dev2/test',
                     required=True)
 
+parser.add_argument('-w','--W', help='len normalization weight',
+                    required=True)
+
 parser.add_argument('--resume', action='store_true',
                         help='Resume the training from snapshot')
 
@@ -35,6 +38,7 @@ cfg_path = args['nmt_path']
 
 N = int(args['N'])
 K = int(args['K'])
+W = float(args['W'])
 
 set_key = args['S']
 
@@ -433,6 +437,9 @@ def get_out_str(h):
 
 # In[50]:
 
+def rerank_hypothesis(beam_hyps, weight=0.8):
+    return sorted([(i[0], i[1]/math.pow(len(i[0])-2,weight), len(i[0])) for i in beam_hyps],
+       reverse=True, key=lambda t: t[1])
 
 def write_to_file_len_filtered_preds(utts_beam, min_len, max_len):
     filt_utts = []
@@ -456,8 +463,27 @@ def write_to_file_len_filtered_preds(utts_beam, min_len, max_len):
             hyp = [v_dict['i2w'][i].decode() for i in utts_beam[u][0][0] if i >= 4]
             out_str = get_out_str(hyp)
             out_f.write("{0:s}\n".format(out_str))
-    print("all done")
+    print("written beam")
 
+    len_norm_path = os.path.join(m_cfg["model_dir"],
+                "{0:s}_beam_len-norm_min-{1:d}_max-{2:d}_N-{3:d}_K-{4:d}_W-{5:.1f}.en".format(set_key,
+                                                                     min_len,
+                                                                     max_len,
+                                                                     N,
+                                                                     K,
+                                                                     W))
+    print("writing len norm hyps to: {0:s}".format(len_norm_path))
+    with open(len_norm_path, "w", encoding="utf-8") as out_f:
+        for u in filt_utts:
+            if len(utts_beam[u]) > 0:
+                new_hyps = rerank_hypothesis(utts_beam[u], weight=W)
+
+                hyp = [v_dict['i2w'][i].decode() for i in new_hyps[0][0] if i >= 4]
+            else:
+                hyp = []
+            out_str = get_out_str(hyp)
+            out_f.write("{0:s}\n".format(out_str))
+    print("Written len norm utts")
 
 # In[51]:
 

@@ -516,8 +516,8 @@ def feed_model(model, optimizer, m_dict, b_dict,
     # print(drop_input_frames)
 
     # check for switchboard
-    if (("swbd1" in m_cfg["train_set"]) or 
-        ("mboshi" in m_cfg["train_set"]) or 
+    if (("swbd1" in m_cfg["train_set"]) or
+        ("mboshi" in m_cfg["train_set"]) or
         ("gpfr" in m_cfg["info_path"])):
         switchboard = True
     else:
@@ -757,6 +757,17 @@ def check_model(cfg_path):
         print("------ Adding gradient noise")
         optimizer.add_hook(chainer.optimizer.GradientNoise(eta=t_cfg['grad_noise_eta']))
         print("Finished adding gradient noise")
+
+    # freeze weights
+    if "freeze" in t_cfg:
+        for l in t_cfg['freeze']:
+            if l in model.__dict__:
+                print("freezing: {0:s}".format(l))
+                model[l].disable_update()
+            else:
+                print("layer {0:s} not in model".format(l))
+        # end for
+    # end if freeze
     # -------------------------------------------------------------------------
     # check last saved model
     # -------------------------------------------------------------------------
@@ -783,12 +794,12 @@ def check_model(cfg_path):
         print("finished loading ..")
         max_epoch = int(max_model_fil.split('_')[-1].split('.')[0])
         # load optimizer
-        if os.path.exists(m_cfg['opt_fname']):
-            print("optimizer found = {0:s}".format(m_cfg['opt_fname']))
-            serializers.load_npz(m_cfg['opt_fname'], optimizer)
-            print("finished loading optimizer ...")
-        else:
-            print("optimizer not found")
+        # if os.path.exists(m_cfg['opt_fname']):
+        #     print("optimizer found = {0:s}".format(m_cfg['opt_fname']))
+        #     serializers.load_npz(m_cfg['opt_fname'], optimizer)
+        #     print("finished loading optimizer ...")
+        # else:
+        #     print("optimizer not found")
     else:
         print("-"*80)
         print('model not found')
@@ -989,9 +1000,9 @@ def train_loop(cfg_path, epochs):
                 print("Saving model")
                 serializers.save_npz(model_fil.replace(".model", "_{0:d}.model".format(last_epoch+i+1)), model)
                 print("Finished saving model")
-                print("Saving optimizer")
-                serializers.save_npz(m_cfg['opt_fname'], optimizer)
-                print("Finished saving optimizer")
+                # print("Saving optimizer")
+                # serializers.save_npz(m_cfg['opt_fname'], optimizer)
+                # print("Finished saving optimizer")
             # end if save model
             # -----------------------------------------------------------------
         # end for epochs
