@@ -335,6 +335,7 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
                                                u.split('_',1)[0],
                                                "{0:s}.npy".format(u))
                 if os.path.exists(utt_sp_path):
+                    # print(utt_sp_path)
                     x_data = xp.load(utt_sp_path)[:max_enc]
                     # Drop input frames logic
                     if drop_input_frames > 0:
@@ -904,6 +905,9 @@ def train_loop(cfg_path, epochs):
             #     print("using mboshi mfccs")
             #     input_path = os.path.join(m_cfg['data_path'],
             #                               "mboshi_mfccs")
+            elif "in_path" in m_cfg:
+                input_path = os.path.join(m_cfg['in_path'],
+                                          m_cfg['train_set'])
             else:
                 input_path = os.path.join(m_cfg['data_path'],
                                           m_cfg['train_set'])
@@ -937,13 +941,13 @@ def train_loop(cfg_path, epochs):
                 print("using ainu mfccs")
                 input_path = os.path.join(m_cfg['data_path'],
                                           "ainu_mfccs")
-            # elif "mboshi" in m_cfg['train_set']:
-            #     print("using mboshi mfccs")
-            #     input_path = os.path.join(m_cfg['data_path'],
-            #                               "mboshi_mfccs")
+            elif "in_path" in m_cfg:
+                input_path = os.path.join(m_cfg['in_path'],
+                                          m_cfg['dev_set'])
             else:
                 input_path = os.path.join(m_cfg['data_path'],
                                           m_cfg['dev_set'])
+            
             pred_sents, ref_sents, utts, dev_loss, _ = feed_model(model,
                                               optimizer=optimizer,
                                               m_dict=map_dict[dev_key],

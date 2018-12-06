@@ -116,7 +116,10 @@ def get_batch(m_dict, x_key, y_key, utt_list, vocab_dict,
 
 def get_utt_data(eg_utt, curr_set):
     # get shape
-    local_input_path = os.path.join(m_cfg['data_path'], curr_set)
+    if "in_path" in m_cfg:
+        local_input_path = os.path.join(m_cfg['in_path'], curr_set)
+    else:
+        local_input_path = os.path.join(m_cfg['data_path'], curr_set)
 
     width_b = bucket_dict[dev_key]["width_b"]
     num_b = bucket_dict[dev_key]["num_b"]
